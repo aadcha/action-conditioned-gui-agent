@@ -1,7 +1,7 @@
+# Stretch-run config: same smoke test on the 7B base.
+# Only run this after the 2B ablation table is in hand and credits are healthy.
 model:
-  # 2B is the default; ablations run on 2B. The stretch 7B run uses
-  # configs/smoke_test_7b.yaml (overrides this id only).
-  id: Qwen/Qwen2-VL-2B-Instruct
+  id: Qwen/Qwen2-VL-7B-Instruct
   dtype: bfloat16
   device_map: auto
 

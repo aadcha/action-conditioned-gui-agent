@@ -1,6 +1,10 @@
-"""Qwen2-VL-7B loader with LoRA applied.
+"""Qwen2-VL loader with LoRA applied.
 
 The roadmap calls for a single loader function — no abstract base classes.
+
+Default base is Qwen2-VL-2B-Instruct (chosen for compute budget: every ablation
+runs on 2B; 7B is a stretch run on the winning variant). Pass `model_id` to
+override (see configs/smoke_test_7b.yaml for the 7B path).
 """
 
 from __future__ import annotations
@@ -9,7 +13,7 @@ import torch
 from peft import LoraConfig, PeftModel, get_peft_model
 from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
 
-DEFAULT_MODEL_ID = "Qwen/Qwen2-VL-7B-Instruct"
+DEFAULT_MODEL_ID = "Qwen/Qwen2-VL-2B-Instruct"
 DEFAULT_TARGET_MODULES = ("q_proj", "k_proj", "v_proj", "o_proj")
 
 

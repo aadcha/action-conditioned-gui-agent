@@ -11,8 +11,17 @@ Day estimates assume one person working a few hours a day. Adjust for the team.
 _As of May 28, 2026 — see [`../README.md`](../README.md#status) for the live checklist._
 
 - ✅ **Phase 0 — repo + env** (commit `d5ec466`). Directory tree per spec, `uv` + `pyproject.toml` + `uv.lock`, `.gitignore`, `.python-version` (3.11), W&B in deps but not yet wired.
-- ✅ **Phase 1 — Qwen2-VL + LoRA smoke test** (commits `d5ec466`, `d7a2f53`). `src/models/base.py:load_qwen2vl_with_lora()` + `scripts/smoke_test.py` (synthesizes a placeholder UI so it runs without any dataset). Import test passes locally; **GPU run on the cluster is still pending**. Caught `torchvision` as a missing transitive dep of `qwen_vl_utils` before the cluster did.
+- ✅ **Phase 1 — Qwen2-VL + LoRA smoke test** (commits `d5ec466`, `d7a2f53`). `src/models/base.py:load_qwen2vl_with_lora()` + `scripts/smoke_test.py` (synthesizes a placeholder UI so it runs without any dataset). Import test passes locally; **GPU run still pending**. Caught `torchvision` as a missing transitive dep of `qwen_vl_utils` before the cloud did.
 - ⏳ **Phase 2 — data pipeline** is the next chunk. Start with one Mind2Web example end-to-end before touching the taxonomy.
+
+### Scope changes from the original roadmap (compute-budget driven)
+
+Cloud-only setup with **$750 total credits across Modal/GCP/AWS/Azure** (no on-prem cluster). See [`../COMPUTE.md`](../COMPUTE.md) for the full plan. Key deltas:
+
+- **Default base model: Qwen2-VL-2B-Instruct** (was 7B). All ablations run on 2B. A single 7B run on the winning variant is the stretch goal. Architecture, processor, LoRA targets, and every ablation comparison (A/B/C/D) are identical — only absolute numbers change.
+- **Data scope cut to Mind2Web only** (balanced ~25k subset) for the first end-to-end ablation table. AITW / AndroidControl / Wave-UI-25K deferred — added only if the story needs them.
+- **Primary cloud: Modal** for iteration ($0.80/hr L4 serverless, no idle cost). **Bulk training on GCP spot A100s** ($1.50/hr) in Phase 6. AWS/Azure held as overflow.
+- **Local Mac dev path now viable**: 2B in bf16 fits in 24 GB unified memory, so smoke test and small-batch debug runs work locally on M4 Pro via MPS.
 
 ---
 
