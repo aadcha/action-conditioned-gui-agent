@@ -6,6 +6,16 @@ Day estimates assume one person working a few hours a day. Adjust for the team.
 
 ---
 
+## Build Progress
+
+_As of May 28, 2026 — see [`../README.md`](../README.md#status) for the live checklist._
+
+- ✅ **Phase 0 — repo + env** (commit `d5ec466`). Directory tree per spec, `uv` + `pyproject.toml` + `uv.lock`, `.gitignore`, `.python-version` (3.11), W&B in deps but not yet wired.
+- ✅ **Phase 1 — Qwen2-VL + LoRA smoke test** (commits `d5ec466`, `d7a2f53`). `src/models/base.py:load_qwen2vl_with_lora()` + `scripts/smoke_test.py` (synthesizes a placeholder UI so it runs without any dataset). Import test passes locally; **GPU run on the cluster is still pending**. Caught `torchvision` as a missing transitive dep of `qwen_vl_utils` before the cluster did.
+- ⏳ **Phase 2 — data pipeline** is the next chunk. Start with one Mind2Web example end-to-end before touching the taxonomy.
+
+---
+
 ## High-Level: What We're Doing
 
 We're building a GUI agent (a model that looks at a screenshot and decides where to click/type/scroll) that's better than current ones at one specific thing: not confusing *what* to do with *where* to do it.

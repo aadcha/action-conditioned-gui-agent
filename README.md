@@ -93,11 +93,13 @@ RESPONSE:
 
 ## Status
 
-- [x] Phase 0 — repo, deps, .gitignore
-- [x] Phase 1 — Qwen2-VL + LoRA smoke test
-- [ ] Phase 2 — data pipeline (Mind2Web first, then AITW / AndroidControl / Wave-UI-25K)
-- [ ] Phase 3 — Stage 1 action-type classifier (+ vision-ablated sanity check)
-- [ ] Phase 4 — Stage 2 conditioned grounding
-- [ ] Phase 5 — eval harness
-- [ ] Phase 6 — ablations A–D
-- [ ] Phase 7 — analysis, attention viz, writeup
+_Last updated: May 28, 2026._
+
+- [x] **Phase 0 — repo, deps, .gitignore.** Layout from roadmap §Phase 0, uv-managed (`pyproject.toml` + `uv.lock`), Python 3.11 pinned. `tests/test_imports.py` passes locally with no GPU.
+- [x] **Phase 1 — Qwen2-VL + LoRA smoke test.** `src/models/base.py:load_qwen2vl_with_lora()` + `scripts/smoke_test.py`. Synthesizes a placeholder UI screenshot so it runs on the cluster with zero datasets downloaded. _Still needs one successful run on the cluster GPU to confirm the 7B forward pass + LoRA attach work end-to-end (see [Smoke test](#smoke-test) for the exact invocation)._
+- [ ] **Phase 2 — data pipeline** (Mind2Web first, then AITW / AndroidControl / Wave-UI-25K).
+- [ ] **Phase 3 — Stage 1 action-type classifier** (+ vision-ablated sanity check on day 1).
+- [ ] **Phase 4 — Stage 2 conditioned grounding** (action-type embedding prepended).
+- [ ] **Phase 5 — eval harness** (Mind2Web type-F1 / step-SR + Showdown Clicks top-1).
+- [ ] **Phase 6 — ablations A–D** (flat baseline / aux loss / hard routing / type embedding).
+- [ ] **Phase 7 — analysis, attention viz, writeup.**
