@@ -1,0 +1,39 @@
+# Data — large and not ours to redistribute
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Model checkpoints / weights
+*.pt
+*.ckpt
+*.safetensors
+*.bin
+
+# Experiment tracking
+wandb/
+runs/
+outputs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Jupyter
+.ipynb_checkpoints/

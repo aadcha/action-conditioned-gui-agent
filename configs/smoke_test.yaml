@@ -1,0 +1,16 @@
+model:
+  id: Qwen/Qwen2-VL-7B-Instruct
+  dtype: bfloat16
+  device_map: auto
+
+lora:
+  rank: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj]
+
+generation:
+  max_new_tokens: 64
+  prompt: "Where should I click to submit this form? Respond with click(x, y)."
+
+seed: 42
