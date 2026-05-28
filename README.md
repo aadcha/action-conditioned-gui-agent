@@ -1,6 +1,6 @@
 # Action-Type-Conditioned Grounding for GUI Agents
 
-CS 231N, Spring 2026 — Aadi Chauhan, Arthur Ilyasov, Nevin Kunampuram.
+CS 231N, Spring 2026 — Aadi Chauhan, Arthur Ilyasov.
 
 Current GUI agents (UI-TARS, OS-Atlas, SeeClick, ShowUI) decode *what action* and *where to act* in one entangled stream. The documented failure mode is committing to the wrong action type (scrolling past a visible target instead of clicking) then grounding coherently but wrongly within that incorrect type. Errors compound on long-horizon tasks.
 
