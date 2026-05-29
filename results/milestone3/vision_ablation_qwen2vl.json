@@ -1,0 +1,110 @@
+{
+  "model_id": "Qwen/Qwen2-VL-2B-Instruct",
+  "dataset": "osunlp/Multimodal-Mind2Web",
+  "split": "test_task",
+  "n_eval_steps": 499,
+  "skipped_unmapped": 0,
+  "skipped_no_image": 1,
+  "max_image_pixels": 1000000,
+  "seed": 42,
+  "results": {
+    "text_only": {
+      "mode": "text_only",
+      "accuracy": 0.8777555110220441,
+      "macro_f1": 0.46744930629669157,
+      "weighted_f1": 0.8206124094507051,
+      "confusion_matrix": [
+        [
+          438,
+          0
+        ],
+        [
+          61,
+          0
+        ]
+      ],
+      "confusion_matrix_labels": [
+        "click",
+        "type"
+      ],
+      "first_token_distribution": {
+        "SELECT": 464,
+        "CLICK": 32,
+        "BOOKMARK": 3
+      },
+      "sample_outputs": [
+        "SELECT",
+        "SELECT",
+        "CLICK",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT"
+      ]
+    },
+    "vision_text": {
+      "mode": "vision_text",
+      "accuracy": 0.8777555110220441,
+      "macro_f1": 0.46744930629669157,
+      "weighted_f1": 0.8206124094507051,
+      "confusion_matrix": [
+        [
+          438,
+          0
+        ],
+        [
+          61,
+          0
+        ]
+      ],
+      "confusion_matrix_labels": [
+        "click",
+        "type"
+      ],
+      "first_token_distribution": {
+        "SELECT": 493,
+        "CLICK": 5,
+        "SEARCH": 1
+      },
+      "sample_outputs": [
+        "SELECT",
+        "SELECT",
+        "CLICK",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT",
+        "SELECT"
+      ]
+    }
+  },
+  "vision_delta": {
+    "macro_f1": 0.0,
+    "accuracy": 0.0
+  }
+}

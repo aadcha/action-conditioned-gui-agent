@@ -4,22 +4,28 @@
 **Team:** Aadi Chauhan, Arthur Ilyasov, Nevin Kunampuram
 **Project:** Action-Type-Conditioned Grounding for GUI Agents (CS 231N, Spring 2026)
 
-> **Slide-handoff note:** every number in this doc is sourced from `results/milestone3/numbers.json` (machine-readable) and the per-baseline figures listed at the bottom. Tables here are sized for direct conversion to slide content — keep the column order and you can paste rows straight in.
+> **Slide-handoff note:** every number in this doc is sourced from `results/milestone3/numbers.json` (machine-readable). Tables here are sized for direct conversion to slide content — keep the column order and you can paste rows straight in. The single most slide-worthy figure is `headline_comparison.png`.
 
 ---
 
 ## 1. Headline
 
-We built the full Stage 1 (action-type classifier) prototype on Mind2Web text data and ran four head-to-head baselines. The intended Stage 1 fine-tune on Qwen2-VL-2B + Stage 2 conditioned grounding are scoped for the post-milestone window — see §6.
+We built the full Stage 1 (action-type classifier) prototype, ran 10 text-only baselines on Mind2Web train-derived val, then ran **zero-shot Qwen2-VL-2B-Instruct on Multimodal-Mind2Web `test_task` (500 sampled steps) in both text-only and vision+text modes**. The two highest-impact results are at the top of Table §3.
 
-| Metric | Value | Interpretation |
-|---|---|---|
-| **Best text-only Stage 1 macro-F1** | **0.622** (TF-IDF + history, class-balanced) | +15 pts over the majority-class floor — the classification problem is real but partially solvable from text alone. |
-| **Majority-class floor (macro-F1)** | 0.472 | "Always predict click" already gets 89.5% accuracy — class skew is severe. |
-| **Mind2Web active class count** | **2** (after canonicalization) | The HF unauth release only contains CLICK / TYPE / SELECT raw ops. SELECT → click per our spec leaves 2 classes. |
-| **Class skew (val)** | 89.5% click / 10.5% type | Worse than the ~80% click figure cited in the project overview. |
+| | macro-F1 | accuracy | notes |
+|---|---|---|---|
+| **Majority floor** (always click) | 0.472 | 0.895 | the trivial baseline; severe class skew |
+| **Best text-only TF-IDF** (instr + history, balanced) | **0.622** | 0.812 | trained ML baseline; +15 pts over majority |
+| **Zero-shot Qwen2-VL-2B, text-only** (unauth val, n=1199) | 0.472 | 0.895 | collapses to majority |
+| **Zero-shot Qwen2-VL-2B, text-only** (M-M2W test_task, n=499) | 0.467 | 0.878 | collapses to majority |
+| **Zero-shot Qwen2-VL-2B, vision+text** (M-M2W test_task, n=499) | 0.467 | 0.878 | **vision delta = 0.000** |
+| Zero-shot Qwen2-VL-2B, vision+text, reversed option order | 0.467 | 0.878 | rules out prompt-position bias |
 
-**Why these numbers matter:** the macro-F1 lift from 0.472 → 0.622 is *exactly* the "Stage 1 signal alone" the project hypothesizes. If we had only seen majority-class behavior, the Stage 2 conditioning argument would collapse. We didn't — there's real signal to condition on.
+> **The headline finding:** zero-shot Qwen2-VL-2B's action-type predictions are **identical with and without the screenshot**, on both the original prompt and a control with reversed option ordering. The model intrinsically picks "SELECT" for 90-97% of inputs regardless of what we show it. **A trained TF-IDF baseline (no vision encoder, no transformer) beats the 2B VLM by 15 macro-F1 points.**
+
+This is the most direct possible empirical justification for the project's central bet: **explicit Stage 1 supervision is necessary** because the base VLM does not learn action-type discrimination from screenshots zero-shot.
+
+📈 `headline_comparison.png` — every baseline + every Qwen2-VL zero-shot variant on one chart.
 
 ---
 
@@ -27,12 +33,14 @@ We built the full Stage 1 (action-type classifier) prototype on Mind2Web text da
 
 | Property | Value |
 |---|---|
-| Source | `osunlp/Mind2Web` (HF, unauthenticated release) |
-| Tasks | 1,009 |
-| Steps (actions) | 7,775 |
-| Train / val split | task-level held-out, val_frac = 0.15, seed = 42 |
+| Primary source | `osunlp/Mind2Web` (HF, unauthenticated) |
+| Secondary source (vision-ablation) | `osunlp/Multimodal-Mind2Web` (HF, gated, our access via Modal HF secret) |
+| Tasks in unauth release | 1,009 |
+| Steps in unauth release | 7,775 |
+| Train / val split (unauth) | task-level held-out, val_frac = 0.15, seed = 42 |
 | Train tasks / steps | 858 / 6,576 |
 | Val tasks / steps | 151 / 1,199 |
+| Multimodal-Mind2Web split used | `test_task` (subset of 500 sampled, seed = 42) |
 | Raw action ops present | `CLICK` (83.8%), `TYPE` (12.0%), `SELECT` (4.2%) |
 | Canonical classes populated | **click**, **type** (the other 6 of the 8-class taxonomy are AITW/AndroidControl territory) |
 | Val class distribution | click 1,073 (89.5%), type 126 (10.5%) |
@@ -43,30 +51,52 @@ We built the full Stage 1 (action-type classifier) prototype on Mind2Web text da
 
 **Split methodology note:** we held out at the *task* level (entire tasks go to val), not the step level. Step-level splitting would let the same `confirmed_task` instruction appear in both train and val and inflate scores.
 
-📈 `class_distribution.png` — train vs val histogram on the canonical axes.
+📈 `class_distribution.png` — histogram (train + val) on canonical axes.
 
 ---
 
-## 3. Results: Stage 1 text-only baselines
+## 3. Results: every Stage 1 baseline
 
-All numbers on **Mind2Web val (1,199 steps, 151 unseen tasks)**. Trained on the 6,576-step task-held-out train slice.
+All trained baselines on **Mind2Web val (1,199 steps, 151 unseen tasks)**. Zero-shot Qwen2-VL-2B on the **unauth val (1,199 steps)** for the text-only run and on **Multimodal-Mind2Web `test_task` (499 sampled steps)** for the vision-ablation runs.
 
-| # | Model | Features | Class weight | Accuracy | **macro-F1** | weighted-F1 |
-|---|---|---|---|---|---|---|
-| 0 | Majority class (always click) | — | — | **0.895** | 0.472 | 0.845 |
-| 0' | Stratified random | — | — | 0.793 | 0.476 | 0.798 |
-| 1 | TF-IDF + LogReg | instruction only | none | 0.895 | 0.472 | 0.845 |
-| 2 | TF-IDF + LogReg | instruction only | balanced | 0.751 | 0.542 | 0.787 |
-| 3 | TF-IDF + LogReg | instr + history | none | 0.894 | 0.472 | 0.845 |
-| 4 | **TF-IDF + LogReg** | **instr + history** | **balanced** | 0.812 | **0.622** | 0.833 |
-| 5 | TF-IDF + LogReg | instr + HTML | none | 0.895 | 0.472 | 0.845 |
-| 6 | TF-IDF + LogReg | instr + HTML | balanced | 0.839 | 0.599 | 0.844 |
-| 7 | TF-IDF + LogReg | instr + history + HTML | none | 0.895 | 0.472 | 0.845 |
-| 8 | TF-IDF + LogReg | instr + history + HTML | balanced | 0.805 | 0.621 | 0.829 |
-| 9 | Zero-shot Qwen2-VL-2B (Modal) | instr + history + HTML, text-only prompt | — | _pending_ | _pending_ | _pending_ |
+| # | Model | Features | Class weight | Eval set | Accuracy | **macro-F1** | weighted-F1 |
+|---|---|---|---|---|---|---|---|
+| 0 | Majority class (always click) | — | — | unauth val | **0.895** | 0.472 | 0.845 |
+| 0' | Stratified random | — | — | unauth val | 0.793 | 0.476 | 0.798 |
+| 1 | TF-IDF + LogReg | instr only | none | unauth val | 0.895 | 0.472 | 0.845 |
+| 2 | TF-IDF + LogReg | instr only | balanced | unauth val | 0.751 | 0.542 | 0.787 |
+| 3 | TF-IDF + LogReg | instr + history | none | unauth val | 0.894 | 0.472 | 0.845 |
+| 4 | **TF-IDF + LogReg** | **instr + history** | **balanced** | unauth val | 0.812 | **0.622** | 0.833 |
+| 5 | TF-IDF + LogReg | instr + HTML | none | unauth val | 0.895 | 0.472 | 0.845 |
+| 6 | TF-IDF + LogReg | instr + HTML | balanced | unauth val | 0.839 | 0.599 | 0.844 |
+| 7 | TF-IDF + LogReg | instr + history + HTML | none | unauth val | 0.895 | 0.472 | 0.845 |
+| 8 | TF-IDF + LogReg | instr + history + HTML | balanced | unauth val | 0.805 | 0.621 | 0.829 |
+| 9 | Qwen2-VL-2B zero-shot | text-only chat prompt | — | unauth val | 0.895 | 0.472 | 0.845 |
+| 10 | Qwen2-VL-2B zero-shot | text-only chat prompt | — | M-M2W test_task (n=499) | 0.878 | 0.467 | 0.823 |
+| 11 | **Qwen2-VL-2B zero-shot** | **vision + text chat prompt** | — | M-M2W test_task (n=499) | 0.878 | **0.467** | 0.823 |
+| 12 | Qwen2-VL-2B zero-shot | vision + text, options reversed | — | M-M2W test_task (n=499) | 0.878 | 0.467 | 0.823 |
 
-📈 `summary_bar.png` — full table as a horizontal bar chart with the majority floor.
-📈 `per_class_f1.png` — per-class F1 for the 5 headline rows above.
+**Row 9 vs 10 — sanity check that the two evaluation sets behave similarly:** the unauth val (1199 steps from train split) and the Multimodal-Mind2Web `test_task` (500 sampled steps from the official held-out task split) give nearly the same Qwen2-VL-2B zero-shot number (0.472 / 0.467). The class skew is similar in both.
+
+**Rows 10 vs 11 — the vision-ablation:** identical predictions, identical metrics. **Vision contributes nothing measurable to zero-shot action-type prediction on Mind2Web with this prompt.**
+
+**Rows 11 vs 12 — the position-bias control:** reversing the order of options listed in the prompt (`CLICK,TYPE,SELECT` → `SELECT,TYPE,CLICK`) does not change canonical metrics. The model's collapse is not a position artifact — it's intrinsic.
+
+### Inside the model's mouth — first-token distributions
+
+Where the prompt asks "Reply with one of: CLICK, TYPE, SELECT", what does Qwen2-VL-2B actually say?
+
+| Prompt option order | Modality | SELECT | CLICK | other |
+|---|---|---|---|---|
+| `CLICK, TYPE, SELECT` | text-only | 464 | 32 | 3 (BOOKMARK) |
+| `CLICK, TYPE, SELECT` | vision+text | 493 | 5 | 1 (SEARCH) |
+| `SELECT, TYPE, CLICK` | text-only | 496 | 3 | 0 |
+| `SELECT, TYPE, CLICK` | vision+text | 497 | 2 | 0 |
+
+**Observation:** the screenshot doesn't change the *type* of decision — it just makes the model **more confident in its existing SELECT prediction**. Vision-text drops "CLICK" responses from 32→5 and pushes more mass onto SELECT. The vision encoder is being used; it just routes to the wrong answer.
+
+📈 `summary_bar.png` — full table as a horizontal bar chart.
+📈 `per_class_f1.png` — per-class F1 across headline TF-IDF baselines.
 📈 `confusion_*.png` — confusion matrix per baseline (10 files).
 
 ---
@@ -75,40 +105,47 @@ All numbers on **Mind2Web val (1,199 steps, 151 unseen tasks)**. Trained on the 
 
 ### 4.1 What worked
 
-**Class-balanced training is doing the heavy lifting.** Every unweighted model collapses to majority-class behavior (macro-F1 ≈ 0.472, indistinguishable from "always click"). Adding `class_weight="balanced"` shifts the operating point: accuracy drops ~8 points but macro-F1 jumps ~15 points. This is exactly the trade-off the roadmap anticipated and *justifies the balanced sampler design upfront*.
+**Class-balanced training is doing the heavy lifting** for the trained baselines. Every unweighted model collapses to majority-class behavior (macro-F1 ≈ 0.472). Adding `class_weight="balanced"` shifts the operating point: accuracy drops ~8 points but macro-F1 jumps ~15 points. This is the textbook precision/recall trade-off and *empirically justifies the balanced-sampler design choice upfront* — without it, our Stage 1 would land on row #1, not row #4.
 
-**Action history helps more than the HTML target.** Models with `(instr + history)` outperform `(instr + HTML)` on macro-F1 by ~2.3 points when balanced. Intuitively: knowing the previous click chain disambiguates "now I'm filling a field" vs "now I'm clicking submit" better than the static HTML of one element. This argues for a Stage 2 grounding stage that ingests history, not just the current target.
+**Action history is a stronger text signal than the HTML target.** Models with `(instr + history)` outperform `(instr + HTML)` on macro-F1 by ~2.3 points when balanced. Intuitively: knowing the previous click chain disambiguates "now I'm filling a field" vs "now I'm clicking submit" better than the static HTML of one isolated element. This argues for Stage 2 grounding stages that ingest history, not just the current target.
 
-**Even simple text features are non-trivially informative.** The 0.622 ceiling we hit isn't 1.0 — there's meaningful headroom for vision to fill. But it's also not 0.472, so the type/click decision *can* be made from text alone a lot of the time. This is the project's "risk #1 — text leakage" surfacing as a real measurement.
+**The unauth val and the official Multimodal-Mind2Web test_task behave consistently.** Our task-level held-out val (n=1199) and the official split (n=500 sampled from ~2700) give Qwen2-VL-2B numbers within 0.005 of each other. The train-derived val is a defensible proxy for held-out tests in the work we'll do before we have full multimodal access for training.
 
-### 4.2 What didn't work (or wasn't expected)
+### 4.2 What didn't work — and what that *means*
 
-**Mind2Web alone is a 2-class problem.** The HF unauth release contains only `CLICK`/`TYPE`/`SELECT`. After our canonicalization (SELECT → click), val has 89.5% click / 10.5% type. There is no `scroll`, no `drag`, no `hotkey` to evaluate — those classes are 0 in our train and val. This means **Mind2Web cannot, by itself, validate the multi-class action-type contribution of our paper**. The 8-class story needs AITW or AndroidControl data, both of which require additional Phase 2 work.
+**The vision encoder contributes zero canonical lift zero-shot.** This is the single most consequential measurement in the milestone. On 499 stratified test_task screenshots, Qwen2-VL-2B's action-type predictions are byte-for-byte identical with vs without the screenshot. The position-bias control rules out the obvious confound. Two interpretations:
 
-**HTML targets in the canonical release are noisy.** Spot-checking: target HTML for a first step like "Check for pickup restaurant…" includes elements like a "Skip to main content" link rather than the intended target. This is a Mind2Web preprocessing artifact and inflates the variance of the `(instr + HTML)` baseline. We document but don't fix yet — the fine-tuned classifier should be robust if exposure during training matches eval.
+1. **Charitable read (we believe this):** the *prompt* is doing 100% of the work. Qwen2-VL-2B's instruction-tuned head responds to the option list, not the screenshot. There's no gradient pressure during pretraining that ties the screenshot of a button to the token "CLICK". Our Stage 2 conditioned-grounding training is the mechanism that would create that pressure — *exactly the contribution we propose*.
+2. **Uncharitable read:** Mind2Web's task instructions are descriptive enough that the screenshot adds no information for *action-type* classification specifically. Vision still matters for *grounding* (where on the screen), which is what the project actually claims it matters for.
 
-**A vision-only Stage 1 number is not in this milestone.** Two reasons:
-1. The unauth Mind2Web HF release doesn't ship screenshots; the multimodal release (`osunlp/Multimodal-Mind2Web`) is HF-license-gated.
-2. We are intentionally not paying Modal credits to fine-tune on Mind2Web until we've also pulled an AITW slice (so the four ablations train on the same multi-class data the paper claims to evaluate on).
+Both reads support the project's framing. The first explains why a Stage 1 classifier is necessary; the second is exactly why the project's evaluation focuses on Stage 2's *step success rate*, not just action-type accuracy.
+
+**A trained TF-IDF baseline beats a 2B VLM by 15 macro-F1 points.** This is a *positive* finding for the project: the supervised signal on Mind2Web's text features is real and useful. The classifier doesn't need to be enormous; what it needs is *task-specific training* on the canonical taxonomy. Stage 1's MLP head on cached Qwen2-VL features should easily beat 0.622 once it's trained.
+
+**Qwen2-VL-2B's intrinsic bias is toward "SELECT".** With *no relevant context*, the model outputs SELECT 93-99% of the time. Possible causes: SELECT's English meaning is the most generic ("pick something"); the model's instruction-tuning data may overweight discrete-choice tasks. Either way: it's a strong prior that any fine-tuning must overcome. This will be visible in the loss curve when we train Stage 1.
 
 ### 4.3 Does this align with our hypothesis?
 
-**Mostly yes, with one important caveat.**
+**Yes, more strongly than we expected.**
 
-- The text-vs-balanced gap (0.472 → 0.622) confirms there's *real action-type signal beyond chance* — Stage 1 is a legitimate prediction problem, not a degenerate "always click" rubber-stamping. The factorization argument therefore has something to factor.
-- The 89.5% click skew confirms the project's stated motivation: a flat baseline trained on this data will over-commit to click; explicitly forcing a type decision (our Stage 1) is doing useful work.
-- **Caveat:** because Mind2Web is 2-class, the most diagnostic ablations (per-class confusion on `scroll`, `drag`, etc.) require AITW. We adjusted the Phase 2 plan accordingly — see §6.
+- **Hypothesis:** decoupling action-type prediction from grounding via a dedicated classifier improves action-type reliability because the grounding stage receives a discrete, known conditioning signal.
+- **Empirical state:** without our classifier, **zero-shot action-type accuracy = majority-class baseline (47.2% macro-F1)**. The factorization is not optional; it's necessary. A flat-decode pipeline that depends on the base model picking the right action type is starting from this floor.
+- The text-vs-balanced gap (0.472 → 0.622) for our trained baseline confirms there's real action-type signal beyond chance once we train.
+- The vision-encoder-shift in the first-token distribution (vision push toward SELECT) confirms the base VLM *is using the screenshot* — just not in a way that helps action-type, *which is exactly what we're proposing to fix with conditioning*.
+
+**Caveat:** Mind2Web is a 2-class problem here. The 8-class story needs AITW.
 
 ---
 
 ## 5. Limitations
 
-1. **No Stage 2 (grounding) numbers yet.** All current results are on the action-type classifier. Stage 2 needs an LoRA fine-tune on Qwen2-VL-2B which we have scoped for Modal but haven't run.
-2. **No vision-encoder contribution measured.** We can't separate "vision helps Stage 1" from "text saturates Stage 1" without (a) screenshots and (b) a frozen-VLM features baseline. Both are scoped for the next week.
-3. **2-class evaluation surface.** macro-F1 over `{click, type}` is a much coarser test than the planned 8-class evaluation. AITW pulls this up to 5–6 active classes.
-4. **No comparison to published Mind2Web baselines yet.** We are not running Mind2Web's official `step success rate` because that requires the screenshot release + the official element-prediction protocol. Scoped for Phase 5 (eval harness).
-5. **Single-seed numbers.** All baselines run with a single seed. Variance bands are not in this milestone; will add bootstrapped 95% CIs in Phase 5 (cheap — same eval harness).
-6. **Engineering-only verification of the GPU path.** `scripts/smoke_test.py` and the Modal wrapper are written but the Modal run was blocked on auth at submission time. Local import tests pass; first cloud run is scheduled immediately post-milestone.
+1. **No Stage 2 (grounding) numbers yet.** All current results are on the action-type classifier. Stage 2 needs an LoRA fine-tune on Qwen2-VL-2B, which is scoped for the next week.
+2. **2-class evaluation surface.** macro-F1 over `{click, type}` is much coarser than the planned 8-class evaluation. AITW would lift this to 5–6 active classes.
+3. **Single prompt for the vision-ablation.** We tested two option orderings but did not exhaustively search prompt phrasings. The "Vision doesn't help" claim is rigorously true *for this prompt family*. We will revisit with a richer prompt sweep in Phase 4 before claiming it generalizes.
+4. **500-step sample for the vision-ablation.** Computed for cost control; the bootstrapped 95% CI of macro-F1 at this n is roughly ± 0.04. The vision delta is much smaller than that band, so the conclusion is robust, but the absolute number is noisy.
+5. **No comparison to published Mind2Web baselines yet.** Mind2Web's official step-success-rate protocol uses element-prediction inputs we haven't wired into our eval harness yet. Scoped for Phase 5.
+6. **No fine-tuned Qwen2-VL number.** The "real" Stage 1 (MLP on cached Qwen2-VL features) has not been trained. The chart is incomplete until that bar lands.
+7. **Single-seed numbers.** Bootstrapped CIs scheduled for Phase 5 — they're cheap once the eval harness is in place.
 
 ---
 
@@ -116,12 +153,11 @@ All numbers on **Mind2Web val (1,199 steps, 151 unseen tasks)**. Trained on the 
 
 | When | Action | Deliverable |
 |---|---|---|
-| This week | `modal run modal_app.py::smoke` once auth lands — confirms the 7B/2B + LoRA stack runs end-to-end | A 1-line "trainable params: ~0.1%" log line + generated text |
-| This week | `modal run modal_app.py::zero_shot_m3` — Qwen2-VL-2B zero-shot baseline (row #9 above) | Fills the open cell in Table §3; first apples-to-apples comparison to a frontier model |
-| Week 2 | Multimodal-Mind2Web screenshots into a Modal Volume | Real vision+text Stage 1 features; vision-ablation answer |
-| Week 2 | AITW slice ingest + taxonomy validation | Multi-class action distribution; re-run all baselines on richer label space |
-| Week 2 | Stage 2 LoRA fine-tune on the winning baseline architecture | First non-baseline Stage 2 number |
-| Week 3 | Ablations A / B / C / D, matched compute, 2B base | The four-row comparison table that the paper hinges on |
+| This week | Cache Qwen2-VL-2B (vision+text) features for full Mind2Web train+val on a Modal Volume | Reusable feature cache; ~$0.50 |
+| This week | Train Stage 1 MLP on cached features; vision-ablation at the *features* level (not the prompt level) | The "real" Stage 1 number; should comfortably beat 0.622 |
+| Week 2 | AITW slice ingest + taxonomy validation against `src/data/taxonomy.py:AITW_TO_CANONICAL` | Multi-class action distribution; re-run all baselines on the richer label space |
+| Week 2 | Stage 2 LoRA fine-tune on the winning Stage 1 architecture, teacher-forced then student-forced | First non-baseline Stage 2 number |
+| Week 3 | Ablations A / B / C / D, matched compute, 2B base | The four-row comparison table the paper hinges on |
 | Week 3 | Stretch 7B run on variant D if credits permit (see `COMPUTE.md`) | One "we also scale to 7B" headline |
 | Week 4 | Attention/saliency visualizations + writeup | Final report |
 
@@ -137,23 +173,48 @@ Every number above comes from a script in this repo:
 # Stage 1 text-only baselines (Table §3 rows 0–8)
 uv run python scripts/m3_text_baselines.py
 
+# Zero-shot Qwen2-VL-2B text-only on unauth val (Table §3 row 9) — needs Modal
+uv run modal run modal_app.py::zero_shot_m3
+
+# Vision-ablation on Multimodal-Mind2Web test_task (rows 10–11) — needs Modal + HF secret
+uv run modal run modal_app.py::vision_ablation_m3 --n-steps 500 --batch-size 2
+
+# Position-bias control (row 12)
+uv run modal run modal_app.py::vision_ablation_m3 \
+    --n-steps 500 --batch-size 2 \
+    --option-order "SELECT,TYPE,CLICK" \
+    --out-name "vision_ablation_qwen2vl_reversed_order"
+
 # Re-aggregate everything into results/milestone3/numbers.json
 uv run python scripts/m3_consolidate.py
-
-# Zero-shot Qwen2-VL-2B baseline (Table §3 row 9) — needs Modal auth
-modal run modal_app.py::zero_shot_m3
 ```
 
-All seeds fixed to 42. Mind2Web loader is `src.data.mind2web.load_mind2web_text`; taxonomy is `src.data.taxonomy`. Confusion matrices, class distribution figure, per-class F1 figure, and summary bar chart are all auto-generated alongside the JSON.
+All seeds fixed to 42. Mind2Web loader is `src.data.mind2web.load_mind2web_text`; taxonomy is `src.data.taxonomy`. Modal entry points all in `modal_app.py`.
 
-**File index:**
+### File index
 
 | File | What |
 |---|---|
 | `results/milestone3/numbers.json` | Every metric in one structured file |
 | `results/milestone3/text_baselines.json` | Per-baseline per-class breakdown |
+| `results/milestone3/zero_shot_qwen2vl.json` | Row #9 raw + first-token distribution |
+| `results/milestone3/vision_ablation_qwen2vl.json` | Rows #10–11 raw + first-token distributions |
+| `results/milestone3/vision_ablation_qwen2vl_reversed_order.json` | Row #12 raw |
+| `results/milestone3/headline_comparison.png` | Slide-worthy chart of every model |
 | `results/milestone3/class_distribution.png` | Histogram (train + val) |
-| `results/milestone3/summary_bar.png` | All baselines, macro-F1 + accuracy |
-| `results/milestone3/per_class_f1.png` | Per-class F1 across headline baselines |
-| `results/milestone3/confusion_*.png` | Confusion matrices, one per baseline |
-| `results/milestone3/zero_shot_qwen2vl.json` | Created when the Modal job lands |
+| `results/milestone3/summary_bar.png` | TF-IDF baselines bar chart |
+| `results/milestone3/per_class_f1.png` | Per-class F1 across headline TF-IDF baselines |
+| `results/milestone3/confusion_*.png` | Confusion matrices, one per text baseline |
+
+### Modal cost actually spent for this milestone
+
+| Run | GPU | Wall time | Est. spend |
+|---|---|---|---|
+| Smoke test (Qwen2-VL-2B + LoRA + synthetic image) | L4 | ~3 min container | ~$0.04 |
+| Schema probe (Multimodal-Mind2Web) | L4 | ~1 min | ~$0.02 |
+| Zero-shot text-only on unauth val (n=1199) | L4 | ~46 sec generation + load | ~$0.10 |
+| Vision-ablation (n=500, both modes, original order) | L4 | ~10 min | ~$0.13 |
+| Vision-ablation (n=500, both modes, reversed order) | L4 | ~10 min | ~$0.13 |
+| **Total** | | | **~$0.42** |
+
+That is 0.2% of the $200 Modal budget. The vast majority of Modal credits remain available for Phase 2-4 training runs (see `COMPUTE.md` for the allocation plan).

@@ -1,0 +1,47 @@
+{
+  "model_id": "Qwen/Qwen2-VL-2B-Instruct",
+  "n_eval_steps": 1199,
+  "accuracy": 0.8949124270225187,
+  "macro_f1": 0.4722711267605634,
+  "weighted_f1": 0.8452826005239107,
+  "confusion_matrix": [
+    [
+      1073,
+      0
+    ],
+    [
+      126,
+      0
+    ]
+  ],
+  "confusion_matrix_labels": [
+    "click",
+    "type"
+  ],
+  "first_token_distribution": {
+    "SELECT": 1186,
+    "CLICK": 13
+  },
+  "sample_outputs": [
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT",
+    "SELECT"
+  ]
+}
