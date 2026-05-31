@@ -13,28 +13,28 @@
   "3_embed_replacement_localized": true,
   "3b_slot_value_equals_action_embedding": true,
   "4_action_changes_logits": {
-    "max_abs_delta": 6.171875,
-    "mean_abs_delta": 0.8018540143966675,
-    "cosine_similarity": 0.9351193904876709,
-    "top1_token_differs_at_random_init": true,
+    "max_abs_delta": 6.4296875,
+    "mean_abs_delta": 1.4743268489837646,
+    "cosine_similarity": 0.8318146467208862,
+    "top1_token_differs_at_random_init": false,
     "top5_click": [
       40,
-      785,
       2121,
-      1249,
-      2132
+      2132,
+      785,
+      1249
     ],
     "top5_scroll": [
-      785,
       40,
-      1249,
-      53544,
-      5002
+      2132,
+      2121,
+      785,
+      28715
     ]
   },
   "5_grad_populated": true,
   "5_grad_norms_per_class": {
-    "click": 6.03125,
+    "click": 5.40625,
     "double_click": 0.0,
     "type": 0.0,
     "scroll": 0.0,
@@ -44,8 +44,28 @@
     "finished": 0.0
   },
   "6_grad_localized_to_active_classes": {
-    "click_grad_norm": 6.03125,
+    "click_grad_norm": 5.40625,
     "max_inactive_grad_norm": 0.0,
     "ok": true
+  },
+  "6b_label_masking": {
+    "im_start_id": 151644,
+    "assistant_id_via_convert": 77091,
+    "im_start_positions": [
+      0,
+      11,
+      25
+    ],
+    "computed_cut": 28,
+    "trained_tokens_text": "(500, 400)<|im_end|>"
+  },
+  "7_generation": {
+    "prompt_input_ids_len": 28,
+    "generated_shape": [
+      1,
+      12
+    ],
+    "decoded_full": "I'm sorry, but I'm not sure what you're",
+    "decoded_trimmed": "(generated shorter than prompt \u2014 not the full-sequence return mode)"
   }
 }
