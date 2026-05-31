@@ -13,28 +13,28 @@
   "3_embed_replacement_localized": true,
   "3b_slot_value_equals_action_embedding": true,
   "4_action_changes_logits": {
-    "max_abs_delta": 6.4296875,
-    "mean_abs_delta": 1.4743268489837646,
-    "cosine_similarity": 0.8318146467208862,
+    "max_abs_delta": 3.5703125,
+    "mean_abs_delta": 0.8358693718910217,
+    "cosine_similarity": 0.9453625082969666,
     "top1_token_differs_at_random_init": false,
     "top5_click": [
       40,
+      785,
       2121,
       2132,
-      785,
-      1249
+      5002
     ],
     "top5_scroll": [
       40,
-      2132,
-      2121,
       785,
-      28715
+      2121,
+      2132,
+      1249
     ]
   },
   "5_grad_populated": true,
   "5_grad_norms_per_class": {
-    "click": 5.40625,
+    "click": 4.25,
     "double_click": 0.0,
     "type": 0.0,
     "scroll": 0.0,
@@ -44,7 +44,7 @@
     "finished": 0.0
   },
   "6_grad_localized_to_active_classes": {
-    "click_grad_norm": 5.40625,
+    "click_grad_norm": 4.25,
     "max_inactive_grad_norm": 0.0,
     "ok": true
   },
@@ -59,13 +59,28 @@
     "computed_cut": 28,
     "trained_tokens_text": "(500, 400)<|im_end|>"
   },
+  "9_image_affects_output": {
+    "max_abs_delta": 7.15625,
+    "cosine": 0.831984281539917,
+    "white_logits_shape": [
+      1,
+      354,
+      151658
+    ],
+    "ui_logits_shape": [
+      1,
+      354,
+      151658
+    ],
+    "image_is_used": true
+  },
   "7_generation": {
     "prompt_input_ids_len": 28,
     "generated_shape": [
       1,
       12
     ],
-    "decoded_full": "I'm sorry, but I'm not sure what you're",
+    "decoded_full": "I'm sorry, but as an AI language model, I",
     "decoded_trimmed": "(generated shorter than prompt \u2014 not the full-sequence return mode)"
   }
 }
