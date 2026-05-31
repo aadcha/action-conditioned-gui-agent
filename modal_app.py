@@ -1453,7 +1453,7 @@ def stage2_smoke(n_examples: int = 2) -> None:
 @app.function(
     image=image,
     gpu="L4",
-    volumes={HF_CACHE_PATH: hf_cache},
+    volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
     secrets=[hf_secret],
     timeout=14400,
 )
