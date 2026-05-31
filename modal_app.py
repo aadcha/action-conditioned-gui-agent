@@ -1566,16 +1566,73 @@ def _stage2_train_remote(
         print(f"[s2-train] val: hit@0.05={eval_metrics['hit_at_005']:.3f}  hit@0.10={eval_metrics['hit_at_010']:.3f}  hit@0.25={eval_metrics['hit_at_025']:.3f}")
         print(f"[s2-train] val sample outputs: {eval_metrics.get('raw_outputs', [])[:5]}")
 
-    return {
+    summary = {
         "n_train": len(train_examples),
         "n_val": len(val_examples),
         "epochs": epochs,
         "lr": lr,
         "batch_size": batch_size,
         "coord_scale": coord_scale,
+        "seed": seed,
+        "aitw_split": aitw_split,
+        "only_taps": only_taps,
         "history": history,
         "final_val_metrics": history[-1] if history else None,
     }
+    # Persist to the stage1-cache Volume so detached runs are recoverable —
+    # the local entrypoint exits before the remote function returns when
+    # `modal run --detach` is used.
+    import json as _json
+    from pathlib import Path as _Path
+    cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    out_path = cache_dir / f"train_seed{seed}_n{n_train}_ep{epochs}_lr{lr}.json"
+    out_path.write_text(_json.dumps(summary, indent=2))
+    stage1_cache.commit()
+    print(f"[s2-train] persisted result to {out_path}")
+    return summary
+
+
+@app.function(
+    image=image,
+    volumes={STAGE1_CACHE_PATH: stage1_cache},
+    timeout=120,
+)
+def _list_stage2_runs() -> list[dict]:
+    """List persisted Stage 2 run summaries on the Volume."""
+    import json as _json
+    from pathlib import Path as _Path
+    runs_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
+    if not runs_dir.exists():
+        return []
+    out = []
+    for p in sorted(runs_dir.glob("*.json")):
+        try:
+            data = _json.loads(p.read_text())
+            data["_file"] = str(p.name)
+            out.append(data)
+        except Exception as e:
+            out.append({"_file": str(p.name), "_error": str(e)})
+    return out
+
+
+@app.local_entrypoint()
+def list_stage2_runs() -> None:
+    """Pull Stage 2 training results persisted on the Volume into results/phase4/."""
+    runs = _list_stage2_runs.remote()
+    print(f"[s2] found {len(runs)} runs on Volume:")
+    import json
+    from pathlib import Path
+    for r in runs:
+        f = r.get("final_val_metrics") or {}
+        print(f"\n--- {r.get('_file')} ---")
+        print(f"  n_train={r.get('n_train')}  epochs={r.get('epochs')}  lr={r.get('lr')}")
+        if f:
+            print(f"  final train_loss={f.get('train_loss', 'n/a')}  hit@0.10={f.get('hit_at_010', 'n/a')}  norm_L2={f.get('mean_normalized_l2', 'n/a')}")
+        local = Path("results/phase4") / r.get("_file", "unknown.json")
+        local.parent.mkdir(parents=True, exist_ok=True)
+        local.write_text(json.dumps(r, indent=2))
+        print(f"  saved -> {local}")
 
 
 @app.local_entrypoint()

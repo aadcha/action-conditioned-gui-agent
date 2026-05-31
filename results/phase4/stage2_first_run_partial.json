@@ -1,0 +1,50 @@
+{
+  "_note": "Partial epoch-1 result captured from Modal app logs for run ap-uLIbAP17IummdgvYgc6iJp. The run completed epoch 1 + eval successfully, then was cancelled when the local Modal client disconnected partway through epoch 2 (step 350/500). Future runs use `modal run --detach` to survive disconnects.",
+  "config": {
+    "n_train": 500,
+    "n_val": 100,
+    "epochs_requested": 2,
+    "epochs_completed": 1,
+    "lr": 2e-5,
+    "batch_size": 1,
+    "coord_scale": 1000,
+    "only_taps": true,
+    "seed": 42
+  },
+  "epoch1": {
+    "train_loss_avg": 1.071,
+    "val": {
+      "n_parsed": 100,
+      "n_total": 100,
+      "parse_rate": 1.0,
+      "mean_normalized_l2": 0.268,
+      "hit_at_005": 0.100,
+      "hit_at_010": 0.210,
+      "hit_at_025": 0.660,
+      "sample_outputs": [
+        "user\n(609, 570)",
+        "user\n(411, 551)",
+        "user\n(606, 572)",
+        "user\n(459, 179)",
+        "user\n(609, 586)"
+      ]
+    }
+  },
+  "epoch2_partial_train_loss_samples": {
+    "step_25": 0.8074,
+    "step_50": 1.1410,
+    "step_75": 1.0970,
+    "step_100": 1.3566,
+    "step_125": 1.0133,
+    "step_150": 1.0561,
+    "step_175": 0.9078,
+    "step_200": 0.8057,
+    "step_225": 0.8293,
+    "step_250": 0.5692,
+    "step_275": 0.9015,
+    "step_300": 0.8734,
+    "step_325": 0.6828,
+    "step_350": 0.8847
+  },
+  "interpretation": "After 1 epoch of LoRA + action-embedding training on 500 AITW taps: 100% parse rate, hit@0.10 = 0.21 (vs random ~0.03 for a 2D ball of radius 0.1 in [0,1]^2 — about 7x better than chance), hit@0.25 = 0.66. Loss decreases from ~1.5 early to ~0.9-1.1 by epoch 1 end and continues dropping in epoch 2 partial samples. Pipeline works end-to-end."
+}
