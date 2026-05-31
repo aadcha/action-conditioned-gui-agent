@@ -29,10 +29,11 @@ __pycache__/
 venv/
 env/
 
-# Editor / OS
+# Editor / OS / agent tooling
 .DS_Store
 .vscode/
 .idea/
+.claude/
 *.swp
 
 # Jupyter
