@@ -1,0 +1,43 @@
+{
+  "n_train": 500,
+  "n_val": 100,
+  "epochs": 2,
+  "lr": 2e-05,
+  "batch_size": 1,
+  "coord_scale": 1000,
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.071213210105896,
+      "n_total": 100,
+      "n_parsed": 100,
+      "parse_rate": 1.0,
+      "mean_normalized_l2": 0.2687924236655633,
+      "hit_at_005": 0.1,
+      "hit_at_010": 0.23,
+      "hit_at_025": 0.65
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.943534931063652,
+      "n_total": 100,
+      "n_parsed": 100,
+      "parse_rate": 1.0,
+      "mean_normalized_l2": 0.26017569657910045,
+      "hit_at_005": 0.17,
+      "hit_at_010": 0.38,
+      "hit_at_025": 0.65
+    }
+  ],
+  "final_val_metrics": {
+    "epoch": 2,
+    "train_loss": 0.943534931063652,
+    "n_total": 100,
+    "n_parsed": 100,
+    "parse_rate": 1.0,
+    "mean_normalized_l2": 0.26017569657910045,
+    "hit_at_005": 0.17,
+    "hit_at_010": 0.38,
+    "hit_at_025": 0.65
+  }
+}
