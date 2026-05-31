@@ -248,6 +248,81 @@ def main() -> dict:
         "trained_tokens_text": tokenizer.decode(row[cut:]) if cut > 0 else tokenizer.decode(row),
     }
 
+    # ---- 8. SUSPECT BUG: Qwen2-VL needs input_ids to merge vision features
+    # at <|image_pad|> positions. D's forward currently passes inputs_embeds
+    # but drops input_ids. Test: compare D's logits (zero action embedding)
+    # against A's pathway (input_ids, no replacement) on the SAME image+text.
+    # If outputs differ off the slot position, image fusion is being mishandled.
+    print("\n[debug-8] image-fusion-pathway comparison (D vs A code paths)")
+    # Build a real image+text batch
+    img_examples = [
+        Stage2Example(image=make_synthetic_pil_image(), goal_info="open chrome",
+                      action_type_id=CANONICAL_ACTIONS["click"], target_xy=(0.5, 0.4)),
+    ]
+    img_batch = build_batch(model, img_examples, device, include_labels=False)
+    # Zero out the action embedding so the only diff is the code path
+    with torch.no_grad():
+        saved_ae = model.action_embeddings.weight.data.clone()
+        model.action_embeddings.weight.data.zero_()
+
+    # D's pathway (inputs_embeds, NO input_ids)
+    inputs_embeds_d = model._embed_with_action(img_batch["input_ids"], img_batch["action_type_id"])
+    with torch.inference_mode():
+        out_d = model.vlm(
+            inputs_embeds=inputs_embeds_d,
+            attention_mask=img_batch["attention_mask"],
+            pixel_values=img_batch.get("pixel_values"),
+            image_grid_thw=img_batch.get("image_grid_thw"),
+            return_dict=True,
+        )
+
+    # A's pathway (input_ids, no slot replacement). For fairness, use the same
+    # batch (slot token still in input_ids, but the model uses the table's
+    # current row for it, which we just zeroed — so the slot is also a zero
+    # vector in both paths).
+    with torch.inference_mode():
+        out_a = model.vlm(
+            input_ids=img_batch["input_ids"],
+            attention_mask=img_batch["attention_mask"],
+            pixel_values=img_batch.get("pixel_values"),
+            image_grid_thw=img_batch.get("image_grid_thw"),
+            return_dict=True,
+        )
+
+    # Restore action embeddings
+    model.action_embeddings.weight.data.copy_(saved_ae)
+
+    # Compare logits position-by-position
+    logits_d = out_d.logits.float()
+    logits_a = out_a.logits.float()
+    print(f"  D logits shape: {tuple(logits_d.shape)}")
+    print(f"  A logits shape: {tuple(logits_a.shape)}")
+    if logits_d.shape == logits_a.shape:
+        per_pos_max = (logits_d - logits_a).abs().max(dim=-1).values  # [B, T]
+        for b in range(logits_d.shape[0]):
+            # Find slot position for this row
+            slot_pos = (img_batch["input_ids"][b] == model.action_slot_token_id).nonzero(as_tuple=True)[0]
+            slot_pos = slot_pos.item() if len(slot_pos) else -1
+            non_slot_max = per_pos_max[b].clone()
+            if slot_pos >= 0:
+                non_slot_max[slot_pos] = 0.0
+            print(f"  row {b}: max |D-A| at slot position {slot_pos}: {per_pos_max[b, slot_pos].item() if slot_pos>=0 else 'n/a':.5f}")
+            print(f"  row {b}: max |D-A| at any OTHER position: {non_slot_max.max().item():.5f}")
+            results["8_image_fusion_check"] = {
+                "logits_shape_d": list(logits_d.shape),
+                "logits_shape_a": list(logits_a.shape),
+                "slot_position": int(slot_pos),
+                "max_abs_delta_at_slot": float(per_pos_max[b, slot_pos].item() if slot_pos >= 0 else float("nan")),
+                "max_abs_delta_off_slot": float(non_slot_max.max().item()),
+            }
+    else:
+        print(f"  WARNING: logits shapes differ — image fusion clearly different")
+        results["8_image_fusion_check"] = {
+            "logits_shape_d": list(logits_d.shape),
+            "logits_shape_a": list(logits_a.shape),
+            "shapes_differ": True,
+        }
+
     # ---- 7. Generation shape check ---------------------------------------
     # When using inputs_embeds via Stage2ConditionedGrounding.generate,
     # does the returned tensor include the prompt tokens or only new ones?
