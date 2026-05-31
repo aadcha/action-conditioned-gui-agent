@@ -205,6 +205,89 @@ def main() -> dict:
             "ok": active_norms > 1e-8 and inactive_max < 1e-8,
         }
 
+    # ---- 6b. Label masking sanity ----------------------------------------
+    # Verify build_batch's label-masking actually masks user-turn tokens.
+    print("\n[debug-6b] label masking sanity check")
+    txt_input_with_assistant = proc(
+        text=[rendered_txt + "(500, 400)<|im_end|>"],
+        return_tensors="pt", padding=True,
+    ).to(device)
+    # Run the SAME masking logic used in build_batch
+    tokenizer = proc.tokenizer
+    im_start_id = tokenizer.convert_tokens_to_ids("<|im_start|>")
+    assistant_id = tokenizer.convert_tokens_to_ids("assistant")
+    print(f"  <|im_start|> token id: {im_start_id}")
+    print(f"  'assistant' token id (raw): {assistant_id}")
+    row = txt_input_with_assistant["input_ids"][0]
+    starts = (row == im_start_id).nonzero(as_tuple=True)[0].tolist()
+    print(f"  <|im_start|> positions: {starts}")
+    cut = 0
+    for idx in reversed(starts):
+        if idx + 1 < row.shape[0]:
+            next_tok = row[idx + 1].item()
+            print(f"  at position {idx}: next token id = {next_tok} (assistant? {next_tok == assistant_id})")
+            if next_tok == assistant_id:
+                cut = idx + 2
+                if cut < row.shape[0]:
+                    cut += 1
+                break
+    print(f"  computed cut: {cut}")
+    if cut == 0:
+        print(f"  WARNING: no cut -> labels include entire sequence (user turn would be trained on)")
+    # Decode the un-masked portion (what loss actually fires on)
+    if cut > 0:
+        print(f"  masked tokens [:cut]:    {tokenizer.decode(row[:cut])!r}")
+        print(f"  trained tokens [cut:]:   {tokenizer.decode(row[cut:])!r}")
+    else:
+        print(f"  full sequence (no mask): {tokenizer.decode(row)!r}")
+    results["6b_label_masking"] = {
+        "im_start_id": int(im_start_id),
+        "assistant_id_via_convert": int(assistant_id) if assistant_id is not None else None,
+        "im_start_positions": starts,
+        "computed_cut": int(cut),
+        "trained_tokens_text": tokenizer.decode(row[cut:]) if cut > 0 else tokenizer.decode(row),
+    }
+
+    # ---- 7. Generation shape check ---------------------------------------
+    # When using inputs_embeds via Stage2ConditionedGrounding.generate,
+    # does the returned tensor include the prompt tokens or only new ones?
+    # If it's the full sequence, evaluate_grounding's `batch_decode(generated, ...)`
+    # is leaking prompt content into the parser.
+    print("\n[debug-7] generation shape check (text-only):")
+    model.eval()
+    txt_inputs = proc(text=[rendered_txt], return_tensors="pt", padding=True).to(device)
+    a_click = torch.tensor([CANONICAL_ACTIONS["click"]], device=device)
+    prompt_len = txt_inputs["input_ids"].shape[1]
+    with torch.inference_mode():
+        gen = model.generate(
+            action_type_id=a_click,
+            input_ids=txt_inputs["input_ids"],
+            attention_mask=txt_inputs["attention_mask"],
+            max_new_tokens=12, do_sample=False,
+            pad_token_id=proc.tokenizer.eos_token_id,
+        )
+    print(f"  prompt input_ids length: {prompt_len}")
+    print(f"  generated.shape: {tuple(gen.shape)}")
+    print(f"  returned >= prompt: {gen.shape[1] >= prompt_len}")
+    decoded_full = proc.batch_decode(gen, skip_special_tokens=True)[0]
+    print(f"  decoded full: {decoded_full!r}")
+    if gen.shape[1] >= prompt_len:
+        decoded_trimmed = proc.batch_decode(gen[:, prompt_len:], skip_special_tokens=True)[0]
+        print(f"  decoded trimmed-by-prompt-len: {decoded_trimmed!r}")
+        results["7_generation"] = {
+            "prompt_input_ids_len": int(prompt_len),
+            "generated_shape": list(gen.shape),
+            "decoded_full": decoded_full,
+            "decoded_trimmed": decoded_trimmed,
+        }
+    else:
+        results["7_generation"] = {
+            "prompt_input_ids_len": int(prompt_len),
+            "generated_shape": list(gen.shape),
+            "decoded_full": decoded_full,
+            "decoded_trimmed": "(generated shorter than prompt — not the full-sequence return mode)",
+        }
+
     return results
 
 

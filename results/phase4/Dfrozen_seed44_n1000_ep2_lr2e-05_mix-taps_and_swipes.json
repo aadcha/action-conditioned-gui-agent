@@ -1,0 +1,96 @@
+{
+  "variant": "D_frozen_diagnostic",
+  "n_train": 1000,
+  "n_val": 200,
+  "epochs": 2,
+  "lr": 2e-05,
+  "batch_size": 1,
+  "coord_scale": 1000,
+  "seed": 44,
+  "aitw_split": "train",
+  "data_mix": "taps_and_swipes",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.0793030108809472,
+      "n_total": 200,
+      "n_parsed": 200,
+      "parse_rate": 1.0,
+      "mean_normalized_l2": 0.24387637679727625,
+      "hit_at_005": 0.125,
+      "hit_at_010": 0.27,
+      "hit_at_025": 0.565,
+      "per_class": {
+        "click": {
+          "n": 157,
+          "mean_normalized_l2": 0.255812076861056,
+          "hit_at_005": 0.15286624203821655,
+          "hit_at_010": 0.267515923566879,
+          "hit_at_025": 0.5031847133757962
+        },
+        "scroll": {
+          "n": 43,
+          "mean_normalized_l2": 0.20029719284347622,
+          "hit_at_005": 0.023255813953488372,
+          "hit_at_010": 0.27906976744186046,
+          "hit_at_025": 0.7906976744186046
+        }
+      }
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.9884073330163956,
+      "n_total": 200,
+      "n_parsed": 200,
+      "parse_rate": 1.0,
+      "mean_normalized_l2": 0.20727218276023507,
+      "hit_at_005": 0.155,
+      "hit_at_010": 0.34,
+      "hit_at_025": 0.665,
+      "per_class": {
+        "click": {
+          "n": 157,
+          "mean_normalized_l2": 0.2118486128663229,
+          "hit_at_005": 0.19745222929936307,
+          "hit_at_010": 0.33121019108280253,
+          "hit_at_025": 0.6305732484076433
+        },
+        "scroll": {
+          "n": 43,
+          "mean_normalized_l2": 0.19056289144265862,
+          "hit_at_005": 0.0,
+          "hit_at_010": 0.37209302325581395,
+          "hit_at_025": 0.7906976744186046
+        }
+      }
+    }
+  ],
+  "final_val_metrics": {
+    "epoch": 2,
+    "train_loss": 0.9884073330163956,
+    "n_total": 200,
+    "n_parsed": 200,
+    "parse_rate": 1.0,
+    "mean_normalized_l2": 0.20727218276023507,
+    "hit_at_005": 0.155,
+    "hit_at_010": 0.34,
+    "hit_at_025": 0.665,
+    "per_class": {
+      "click": {
+        "n": 157,
+        "mean_normalized_l2": 0.2118486128663229,
+        "hit_at_005": 0.19745222929936307,
+        "hit_at_010": 0.33121019108280253,
+        "hit_at_025": 0.6305732484076433
+      },
+      "scroll": {
+        "n": 43,
+        "mean_normalized_l2": 0.19056289144265862,
+        "hit_at_005": 0.0,
+        "hit_at_010": 0.37209302325581395,
+        "hit_at_025": 0.7906976744186046
+      }
+    }
+  },
+  "_file": "Dfrozen_seed44_n1000_ep2_lr2e-05_mix-taps_and_swipes.json"
+}

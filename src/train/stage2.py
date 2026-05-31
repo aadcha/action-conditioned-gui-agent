@@ -91,10 +91,20 @@ def build_batch(
         messages_batch.append(messages)
         answers.append(coord_to_string(ex.target_xy, coord_scale))
 
-    # Apply chat template; for training we include the assistant turn so the
-    # answer tokens are part of the sequence (their loss will be the LM loss).
+    # Apply chat template. Two modes:
+    #   - include_labels=True (training): the assistant turn is in messages_batch
+    #     and the chat template renders the full conversation; add_generation_prompt
+    #     would add a stray empty assistant header on top of the existing turn.
+    #   - include_labels=False (eval/inference): no assistant turn in the messages,
+    #     so we MUST add_generation_prompt=True or the model has no `<|im_start|>
+    #     assistant\n` cue and tries to invent the chat structure itself
+    #     (this manifested as Variant D's generated outputs starting with
+    #     "user\n(x, y)" — the model predicting a new user turn instead of
+    #     emitting an assistant answer).
     texts = [
-        processor.apply_chat_template(m, tokenize=False, add_generation_prompt=False)
+        processor.apply_chat_template(
+            m, tokenize=False, add_generation_prompt=(not include_labels)
+        )
         for m in messages_batch
     ]
     image_inputs, video_inputs = process_vision_info(messages_batch)
@@ -242,6 +252,7 @@ def evaluate_grounding(
     for start in range(0, len(examples), batch_size):
         batch = examples[start : start + batch_size]
         inputs = build_batch(model, batch, device, coord_scale=coord_scale, include_labels=False)
+        prompt_len = inputs["input_ids"].shape[1]
         with torch.inference_mode():
             generated = model.generate(
                 action_type_id=inputs["action_type_id"],
@@ -253,7 +264,16 @@ def evaluate_grounding(
                 do_sample=False,
                 pad_token_id=model.processor.tokenizer.eos_token_id,
             )
-        decoded = model.processor.batch_decode(generated, skip_special_tokens=True)
+        # When the underlying generate() is given input_ids alongside our
+        # inputs_embeds, it returns the full sequence (prompt prepended).
+        # When it's given only inputs_embeds, it returns just new tokens.
+        # Detect at runtime and trim if needed so the parser only sees the
+        # actual answer span.
+        if generated.shape[1] > prompt_len:
+            new_tokens = generated[:, prompt_len:]
+        else:
+            new_tokens = generated
+        decoded = model.processor.batch_decode(new_tokens, skip_special_tokens=True)
         for ex, raw in zip(batch, decoded):
             raw_outputs.append(raw)
             parsed = string_to_coord(raw, scale=coord_scale)
