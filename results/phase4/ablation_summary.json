@@ -1,4 +1,51 @@
 {
+  "D__taps_and_swipes": {
+    "variant": "D",
+    "data_mix": "taps_and_swipes",
+    "n_seeds": 2,
+    "seeds": [
+      43,
+      44
+    ],
+    "n_train": 1000,
+    "epochs": 2,
+    "hit_at_005": {
+      "mean": 0.1625,
+      "std": 0.0035355339059327407,
+      "seeds": [
+        0.16,
+        0.165
+      ]
+    },
+    "hit_at_010": {
+      "mean": 0.2875,
+      "std": 0.010606601717798184,
+      "seeds": [
+        0.295,
+        0.28
+      ]
+    },
+    "hit_at_025": {
+      "mean": 0.6225,
+      "std": 0.010606601717798222,
+      "seeds": [
+        0.615,
+        0.63
+      ]
+    },
+    "mean_norm_l2": {
+      "mean": 0.21151144801730537,
+      "std": 0.0033061580372271532
+    },
+    "final_loss": {
+      "mean": 0.984845336407423,
+      "std": 0.0033828168234022625
+    },
+    "files": [
+      "train_seed44_n1000_ep2_lr2e-05_mix-taps_and_swipes.json",
+      "train_seed43_n1000_ep2_lr2e-05_mix-taps_and_swipes.json"
+    ]
+  },
   "D__taps_only": {
     "variant": "D",
     "data_mix": "taps_only",
@@ -49,6 +96,58 @@
       "train_seed42_n500_ep2_lr2e-05.json",
       "train_seed43_n500_ep2_lr2e-05.json",
       "train_seed44_n500_ep2_lr2e-05.json"
+    ]
+  },
+  "A__taps_and_swipes": {
+    "variant": "A",
+    "data_mix": "taps_and_swipes",
+    "n_seeds": 3,
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "n_train": 1000,
+    "epochs": 2,
+    "hit_at_005": {
+      "mean": 0.2333333333333333,
+      "std": 0.010408329997330656,
+      "seeds": [
+        0.245,
+        0.225,
+        0.23
+      ]
+    },
+    "hit_at_010": {
+      "mean": 0.38999999999999996,
+      "std": 0.010000000000000009,
+      "seeds": [
+        0.39,
+        0.38,
+        0.4
+      ]
+    },
+    "hit_at_025": {
+      "mean": 0.7266666666666666,
+      "std": 0.02309401076758505,
+      "seeds": [
+        0.7,
+        0.74,
+        0.74
+      ]
+    },
+    "mean_norm_l2": {
+      "mean": 0.18351863059350468,
+      "std": 0.0018272472561114026
+    },
+    "final_loss": {
+      "mean": 0.9759384769201279,
+      "std": 0.0021376928997724905
+    },
+    "files": [
+      "variantA_seed42_n1000_ep2_lr2e-05_mix-taps_and_swipes.json",
+      "variantA_seed43_n1000_ep2_lr2e-05_mix-taps_and_swipes.json",
+      "variantA_seed44_n1000_ep2_lr2e-05_mix-taps_and_swipes.json"
     ]
   },
   "A__taps_only": {

@@ -1,12 +1,12 @@
 {
-  "variant": "D_action_conditioned",
+  "variant": "A_flat_baseline",
   "n_train": 1000,
   "n_val": 200,
   "epochs": 2,
   "lr": 2e-05,
   "batch_size": 1,
   "coord_scale": 1000,
-  "seed": 44,
+  "seed": 42,
   "aitw_split": "train",
   "only_taps": false,
   "data_mix": "taps_and_swipes",
@@ -18,39 +18,41 @@
     "3": 43,
     "0": 157
   },
+  "trainable_params": 4358144,
+  "all_params": 2213343744,
   "history": [
     {
       "epoch": 1,
-      "train_loss": 1.0790751851201057,
+      "train_loss": 1.064114043354988,
       "n_total": 200,
       "n_parsed": 200,
       "parse_rate": 1.0,
-      "mean_normalized_l2": 0.24797305626356864,
-      "hit_at_005": 0.11,
-      "hit_at_010": 0.26,
-      "hit_at_025": 0.55
+      "mean_normalized_l2": 0.21811307049216455,
+      "hit_at_005": 0.13,
+      "hit_at_010": 0.255,
+      "hit_at_025": 0.58
     },
     {
       "epoch": 2,
-      "train_loss": 0.9872373491227627,
+      "train_loss": 0.97407324847579,
       "n_total": 200,
       "n_parsed": 200,
       "parse_rate": 1.0,
-      "mean_normalized_l2": 0.2138492547851031,
-      "hit_at_005": 0.16,
-      "hit_at_010": 0.295,
-      "hit_at_025": 0.615
+      "mean_normalized_l2": 0.1815149828972486,
+      "hit_at_005": 0.245,
+      "hit_at_010": 0.39,
+      "hit_at_025": 0.7
     }
   ],
   "final_val_metrics": {
     "epoch": 2,
-    "train_loss": 0.9872373491227627,
+    "train_loss": 0.97407324847579,
     "n_total": 200,
     "n_parsed": 200,
     "parse_rate": 1.0,
-    "mean_normalized_l2": 0.2138492547851031,
-    "hit_at_005": 0.16,
-    "hit_at_010": 0.295,
-    "hit_at_025": 0.615
+    "mean_normalized_l2": 0.1815149828972486,
+    "hit_at_005": 0.245,
+    "hit_at_010": 0.39,
+    "hit_at_025": 0.7
   }
 }
