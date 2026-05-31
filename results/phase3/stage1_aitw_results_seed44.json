@@ -1,0 +1,526 @@
+{
+  "dataset": "cjfcsjt/AITW_General",
+  "config": "standard",
+  "train_split": "train",
+  "val_split": "test",
+  "n_train": 5000,
+  "n_val": 1000,
+  "hidden_size": 1536,
+  "variants": {
+    "text_only": {
+      "best_epoch": 8,
+      "best_val_macro_f1": 0.10458187845431147,
+      "best_val_metrics": {
+        "accuracy": 0.137,
+        "macro_f1": 0.10458187845431147,
+        "weighted_f1": 0.06808881595001087,
+        "per_class": {
+          "click": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1-score": 0.0,
+            "support": 536.0
+          },
+          "type": {
+            "precision": 0.13559322033898305,
+            "recall": 0.5950413223140496,
+            "f1-score": 0.22085889570552147,
+            "support": 121.0
+          },
+          "scroll": {
+            "precision": 0.13930348258706468,
+            "recall": 0.38620689655172413,
+            "f1-score": 0.20475319926873858,
+            "support": 145.0
+          },
+          "hotkey": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1-score": 0.0,
+            "support": 78.0
+          },
+          "finished": {
+            "precision": 0.13846153846153847,
+            "recall": 0.075,
+            "f1-score": 0.0972972972972973,
+            "support": 120.0
+          }
+        },
+        "confusion_matrix": [
+          [
+            0,
+            271,
+            223,
+            1,
+            41
+          ],
+          [
+            0,
+            72,
+            44,
+            0,
+            5
+          ],
+          [
+            0,
+            83,
+            56,
+            0,
+            6
+          ],
+          [
+            0,
+            42,
+            32,
+            0,
+            4
+          ],
+          [
+            0,
+            63,
+            47,
+            1,
+            9
+          ]
+        ],
+        "confusion_matrix_labels": [
+          "click",
+          "type",
+          "scroll",
+          "hotkey",
+          "finished"
+        ],
+        "labels_present": [
+          0,
+          2,
+          3,
+          5,
+          7
+        ],
+        "prediction_distribution": {
+          "scroll": 402,
+          "type": 531,
+          "finished": 65,
+          "hotkey": 2
+        },
+        "ground_truth_distribution": {
+          "hotkey": 78,
+          "click": 536,
+          "type": 121,
+          "scroll": 145,
+          "finished": 120
+        }
+      },
+      "history": [
+        {
+          "epoch": 1,
+          "train_loss": 1.6826978772878647,
+          "val_macro_f1": 0.05449080760373161,
+          "val_accuracy": 0.135
+        },
+        {
+          "epoch": 2,
+          "train_loss": 1.6172586739063264,
+          "val_macro_f1": 0.09369517306944383,
+          "val_accuracy": 0.194
+        },
+        {
+          "epoch": 3,
+          "train_loss": 1.6204309284687042,
+          "val_macro_f1": 0.02894248608534323,
+          "val_accuracy": 0.078
+        },
+        {
+          "epoch": 4,
+          "train_loss": 1.6119753926992417,
+          "val_macro_f1": 0.07785820598866608,
+          "val_accuracy": 0.129
+        },
+        {
+          "epoch": 5,
+          "train_loss": 1.5987941563129424,
+          "val_macro_f1": 0.08625515996338044,
+          "val_accuracy": 0.134
+        },
+        {
+          "epoch": 6,
+          "train_loss": 1.607635846734047,
+          "val_macro_f1": 0.08784792696374495,
+          "val_accuracy": 0.129
+        },
+        {
+          "epoch": 7,
+          "train_loss": 1.6101795226335525,
+          "val_macro_f1": 0.10363273870311436,
+          "val_accuracy": 0.174
+        },
+        {
+          "epoch": 8,
+          "train_loss": 1.5947757750749587,
+          "val_macro_f1": 0.10458187845431147,
+          "val_accuracy": 0.137
+        }
+      ],
+      "train_cfg": {
+        "epochs": 8,
+        "lr": 0.0001,
+        "weight_decay": 0.01,
+        "batch_size": 128,
+        "class_weighted": true,
+        "seed": 44
+      },
+      "model_cfg": {
+        "feature_dim": 1536,
+        "hidden_dim": 1024,
+        "num_classes": 8,
+        "dropout": 0.1
+      },
+      "num_trainable_params": 1838344
+    },
+    "vision_text": {
+      "best_epoch": 4,
+      "best_val_macro_f1": 0.5639248686989685,
+      "best_val_metrics": {
+        "accuracy": 0.59,
+        "macro_f1": 0.5639248686989685,
+        "weighted_f1": 0.6025312091249,
+        "per_class": {
+          "click": {
+            "precision": 0.7591240875912408,
+            "recall": 0.582089552238806,
+            "f1-score": 0.6589229144667371,
+            "support": 536.0
+          },
+          "type": {
+            "precision": 0.7522123893805309,
+            "recall": 0.7024793388429752,
+            "f1-score": 0.7264957264957265,
+            "support": 121.0
+          },
+          "scroll": {
+            "precision": 0.3981042654028436,
+            "recall": 0.5793103448275863,
+            "f1-score": 0.47191011235955055,
+            "support": 145.0
+          },
+          "hotkey": {
+            "precision": 0.45871559633027525,
+            "recall": 0.6410256410256411,
+            "f1-score": 0.5347593582887701,
+            "support": 78.0
+          },
+          "finished": {
+            "precision": 0.3782051282051282,
+            "recall": 0.49166666666666664,
+            "f1-score": 0.427536231884058,
+            "support": 120.0
+          }
+        },
+        "confusion_matrix": [
+          [
+            312,
+            27,
+            88,
+            40,
+            69
+          ],
+          [
+            23,
+            85,
+            2,
+            5,
+            6
+          ],
+          [
+            34,
+            0,
+            84,
+            6,
+            21
+          ],
+          [
+            19,
+            1,
+            7,
+            50,
+            1
+          ],
+          [
+            23,
+            0,
+            30,
+            8,
+            59
+          ]
+        ],
+        "confusion_matrix_labels": [
+          "click",
+          "type",
+          "scroll",
+          "hotkey",
+          "finished"
+        ],
+        "labels_present": [
+          0,
+          2,
+          3,
+          5,
+          7
+        ],
+        "prediction_distribution": {
+          "hotkey": 109,
+          "scroll": 211,
+          "type": 113,
+          "click": 411,
+          "finished": 156
+        },
+        "ground_truth_distribution": {
+          "hotkey": 78,
+          "click": 536,
+          "type": 121,
+          "scroll": 145,
+          "finished": 120
+        }
+      },
+      "history": [
+        {
+          "epoch": 1,
+          "train_loss": 1.3892689257860185,
+          "val_macro_f1": 0.41008160485277684,
+          "val_accuracy": 0.398
+        },
+        {
+          "epoch": 2,
+          "train_loss": 1.0898576855659485,
+          "val_macro_f1": 0.4373298423724522,
+          "val_accuracy": 0.404
+        },
+        {
+          "epoch": 3,
+          "train_loss": 0.9862122341990471,
+          "val_macro_f1": 0.45373859928039495,
+          "val_accuracy": 0.424
+        },
+        {
+          "epoch": 4,
+          "train_loss": 0.9158895805478096,
+          "val_macro_f1": 0.5639248686989685,
+          "val_accuracy": 0.59
+        },
+        {
+          "epoch": 5,
+          "train_loss": 0.874584025144577,
+          "val_macro_f1": 0.5023481582758758,
+          "val_accuracy": 0.463
+        },
+        {
+          "epoch": 6,
+          "train_loss": 0.8410437390208244,
+          "val_macro_f1": 0.555630296247936,
+          "val_accuracy": 0.54
+        },
+        {
+          "epoch": 7,
+          "train_loss": 0.8040753573179245,
+          "val_macro_f1": 0.5211513666982559,
+          "val_accuracy": 0.505
+        },
+        {
+          "epoch": 8,
+          "train_loss": 0.7715212747454643,
+          "val_macro_f1": 0.5278901387985828,
+          "val_accuracy": 0.52
+        }
+      ],
+      "train_cfg": {
+        "epochs": 8,
+        "lr": 0.0001,
+        "weight_decay": 0.01,
+        "batch_size": 128,
+        "class_weighted": true,
+        "seed": 44
+      },
+      "model_cfg": {
+        "feature_dim": 1536,
+        "hidden_dim": 1024,
+        "num_classes": 8,
+        "dropout": 0.1
+      },
+      "num_trainable_params": 1838344
+    },
+    "vision_zeroed": {
+      "best_epoch": 1,
+      "best_val_macro_f1": 0.050655021834061134,
+      "best_val_metrics": {
+        "accuracy": 0.145,
+        "macro_f1": 0.050655021834061134,
+        "weighted_f1": 0.036724890829694316,
+        "per_class": {
+          "click": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1-score": 0.0,
+            "support": 536.0
+          },
+          "type": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1-score": 0.0,
+            "support": 121.0
+          },
+          "scroll": {
+            "precision": 0.145,
+            "recall": 1.0,
+            "f1-score": 0.25327510917030566,
+            "support": 145.0
+          },
+          "hotkey": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1-score": 0.0,
+            "support": 78.0
+          },
+          "finished": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1-score": 0.0,
+            "support": 120.0
+          }
+        },
+        "confusion_matrix": [
+          [
+            0,
+            0,
+            536,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            121,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            145,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            78,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            120,
+            0,
+            0
+          ]
+        ],
+        "confusion_matrix_labels": [
+          "click",
+          "type",
+          "scroll",
+          "hotkey",
+          "finished"
+        ],
+        "labels_present": [
+          0,
+          2,
+          3,
+          5,
+          7
+        ],
+        "prediction_distribution": {
+          "scroll": 1000
+        },
+        "ground_truth_distribution": {
+          "hotkey": 78,
+          "click": 536,
+          "type": 121,
+          "scroll": 145,
+          "finished": 120
+        }
+      },
+      "history": [
+        {
+          "epoch": 1,
+          "train_loss": 2.061334878206253,
+          "val_macro_f1": 0.050655021834061134,
+          "val_accuracy": 0.145
+        },
+        {
+          "epoch": 2,
+          "train_loss": 1.9974643886089325,
+          "val_macro_f1": 0.050655021834061134,
+          "val_accuracy": 0.145
+        },
+        {
+          "epoch": 3,
+          "train_loss": 1.8794850647449493,
+          "val_macro_f1": 0.050655021834061134,
+          "val_accuracy": 0.145
+        },
+        {
+          "epoch": 4,
+          "train_loss": 1.7482581347227097,
+          "val_macro_f1": 0.050655021834061134,
+          "val_accuracy": 0.145
+        },
+        {
+          "epoch": 5,
+          "train_loss": 1.6714055955410003,
+          "val_macro_f1": 0.050655021834061134,
+          "val_accuracy": 0.145
+        },
+        {
+          "epoch": 6,
+          "train_loss": 1.641517561674118,
+          "val_macro_f1": 0.04285714285714286,
+          "val_accuracy": 0.12
+        },
+        {
+          "epoch": 7,
+          "train_loss": 1.628043594956398,
+          "val_macro_f1": 0.043175735950044605,
+          "val_accuracy": 0.121
+        },
+        {
+          "epoch": 8,
+          "train_loss": 1.6222212851047515,
+          "val_macro_f1": 0.050655021834061134,
+          "val_accuracy": 0.145
+        }
+      ],
+      "train_cfg": {
+        "epochs": 8,
+        "lr": 0.0001,
+        "weight_decay": 0.01,
+        "batch_size": 128,
+        "class_weighted": true,
+        "seed": 44
+      },
+      "model_cfg": {
+        "feature_dim": 1536,
+        "hidden_dim": 1024,
+        "num_classes": 8,
+        "dropout": 0.1
+      },
+      "num_trainable_params": 1838344
+    }
+  },
+  "headline_macro_f1": {
+    "text_only": 0.10458187845431147,
+    "vision_text": 0.5639248686989685,
+    "vision_zeroed": 0.050655021834061134
+  },
+  "delta_vision_minus_text_only": 0.4593429902446571,
+  "delta_vision_minus_zeroed": 0.5132698468649074
+}

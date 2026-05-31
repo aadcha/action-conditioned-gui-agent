@@ -1,0 +1,527 @@
+[
+  {
+    "name": "majority_class",
+    "accuracy": 0.536,
+    "macro_f1": 0.13958333333333334,
+    "weighted_f1": 0.3740833333333333,
+    "per_class": {
+      "click": {
+        "precision": 0.536,
+        "recall": 1.0,
+        "f1-score": 0.6979166666666666,
+        "support": 536.0
+      },
+      "type": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 121.0
+      },
+      "scroll": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 145.0
+      },
+      "hotkey": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 78.0
+      },
+      "finished": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 120.0
+      }
+    },
+    "confusion_matrix": [
+      [
+        536,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        121,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        145,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        78,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        120,
+        0,
+        0,
+        0,
+        0
+      ]
+    ],
+    "confusion_matrix_labels": [
+      "click",
+      "type",
+      "scroll",
+      "hotkey",
+      "finished"
+    ],
+    "prediction_distribution": {
+      "click": 1000
+    }
+  },
+  {
+    "name": "stratified_random",
+    "accuracy": 0.313,
+    "macro_f1": 0.17395381956831402,
+    "weighted_f1": 0.3173900286660543,
+    "per_class": {
+      "click": {
+        "precision": 0.5233463035019456,
+        "recall": 0.5018656716417911,
+        "f1-score": 0.5123809523809524,
+        "support": 536.0
+      },
+      "type": {
+        "precision": 0.05454545454545454,
+        "recall": 0.049586776859504134,
+        "f1-score": 0.05194805194805195,
+        "support": 121.0
+      },
+      "scroll": {
+        "precision": 0.10666666666666667,
+        "recall": 0.1103448275862069,
+        "f1-score": 0.10847457627118644,
+        "support": 145.0
+      },
+      "hotkey": {
+        "precision": 0.0625,
+        "recall": 0.07692307692307693,
+        "f1-score": 0.06896551724137931,
+        "support": 78.0
+      },
+      "finished": {
+        "precision": 0.12307692307692308,
+        "recall": 0.13333333333333333,
+        "f1-score": 0.128,
+        "support": 120.0
+      }
+    },
+    "confusion_matrix": [
+      [
+        269,
+        66,
+        79,
+        52,
+        70
+      ],
+      [
+        66,
+        6,
+        22,
+        12,
+        15
+      ],
+      [
+        83,
+        13,
+        16,
+        15,
+        18
+      ],
+      [
+        39,
+        12,
+        10,
+        6,
+        11
+      ],
+      [
+        57,
+        13,
+        23,
+        11,
+        16
+      ]
+    ],
+    "confusion_matrix_labels": [
+      "click",
+      "type",
+      "scroll",
+      "hotkey",
+      "finished"
+    ],
+    "prediction_distribution": {
+      "finished": 130,
+      "click": 514,
+      "scroll": 150,
+      "type": 110,
+      "hotkey": 96
+    }
+  },
+  {
+    "name": "tfidf_logreg/goal_only/cw=None",
+    "accuracy": 0.518,
+    "macro_f1": 0.14155855051903377,
+    "weighted_f1": 0.3703884096438841,
+    "per_class": {
+      "click": {
+        "precision": 0.5314109165808445,
+        "recall": 0.9626865671641791,
+        "f1-score": 0.6848042468480424,
+        "support": 536.0
+      },
+      "type": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 121.0
+      },
+      "scroll": {
+        "precision": 0.06896551724137931,
+        "recall": 0.013793103448275862,
+        "f1-score": 0.022988505747126436,
+        "support": 145.0
+      },
+      "hotkey": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 78.0
+      },
+      "finished": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 120.0
+      }
+    },
+    "confusion_matrix": [
+      [
+        516,
+        0,
+        20,
+        0,
+        0
+      ],
+      [
+        118,
+        0,
+        3,
+        0,
+        0
+      ],
+      [
+        143,
+        0,
+        2,
+        0,
+        0
+      ],
+      [
+        77,
+        0,
+        1,
+        0,
+        0
+      ],
+      [
+        117,
+        0,
+        3,
+        0,
+        0
+      ]
+    ],
+    "confusion_matrix_labels": [
+      "click",
+      "type",
+      "scroll",
+      "hotkey",
+      "finished"
+    ],
+    "prediction_distribution": {
+      "click": 971,
+      "scroll": 29
+    }
+  },
+  {
+    "name": "tfidf_logreg/goal_only/cw=balanced",
+    "accuracy": 0.197,
+    "macro_f1": 0.1680196440012408,
+    "weighted_f1": 0.20987634895141344,
+    "per_class": {
+      "click": {
+        "precision": 0.5,
+        "recall": 0.1865671641791045,
+        "f1-score": 0.2717391304347826,
+        "support": 536.0
+      },
+      "type": {
+        "precision": 0.14912280701754385,
+        "recall": 0.4214876033057851,
+        "f1-score": 0.2203023758099352,
+        "support": 121.0
+      },
+      "scroll": {
+        "precision": 0.07514450867052024,
+        "recall": 0.0896551724137931,
+        "f1-score": 0.08176100628930817,
+        "support": 145.0
+      },
+      "hotkey": {
+        "precision": 0.10091743119266056,
+        "recall": 0.28205128205128205,
+        "f1-score": 0.14864864864864866,
+        "support": 78.0
+      },
+      "finished": {
+        "precision": 0.16417910447761194,
+        "recall": 0.09166666666666666,
+        "f1-score": 0.11764705882352941,
+        "support": 120.0
+      }
+    },
+    "confusion_matrix": [
+      [
+        100,
+        175,
+        109,
+        116,
+        36
+      ],
+      [
+        22,
+        51,
+        20,
+        24,
+        4
+      ],
+      [
+        40,
+        47,
+        13,
+        34,
+        11
+      ],
+      [
+        18,
+        24,
+        9,
+        22,
+        5
+      ],
+      [
+        20,
+        45,
+        22,
+        22,
+        11
+      ]
+    ],
+    "confusion_matrix_labels": [
+      "click",
+      "type",
+      "scroll",
+      "hotkey",
+      "finished"
+    ],
+    "prediction_distribution": {
+      "click": 200,
+      "type": 342,
+      "hotkey": 218,
+      "scroll": 173,
+      "finished": 67
+    }
+  },
+  {
+    "name": "tfidf_logreg/goal_plus_typed/cw=None",
+    "accuracy": 0.628,
+    "macro_f1": 0.3425831244778613,
+    "weighted_f1": 0.5137384795321638,
+    "per_class": {
+      "click": {
+        "precision": 0.5972222222222222,
+        "recall": 0.9626865671641791,
+        "f1-score": 0.7371428571428571,
+        "support": 536.0
+      },
+      "type": {
+        "precision": 1.0,
+        "recall": 0.9090909090909091,
+        "f1-score": 0.9523809523809523,
+        "support": 121.0
+      },
+      "scroll": {
+        "precision": 0.07692307692307693,
+        "recall": 0.013793103448275862,
+        "f1-score": 0.023391812865497075,
+        "support": 145.0
+      },
+      "hotkey": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 78.0
+      },
+      "finished": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 120.0
+      }
+    },
+    "confusion_matrix": [
+      [
+        516,
+        0,
+        20,
+        0,
+        0
+      ],
+      [
+        11,
+        110,
+        0,
+        0,
+        0
+      ],
+      [
+        143,
+        0,
+        2,
+        0,
+        0
+      ],
+      [
+        77,
+        0,
+        1,
+        0,
+        0
+      ],
+      [
+        117,
+        0,
+        3,
+        0,
+        0
+      ]
+    ],
+    "confusion_matrix_labels": [
+      "click",
+      "type",
+      "scroll",
+      "hotkey",
+      "finished"
+    ],
+    "prediction_distribution": {
+      "click": 864,
+      "type": 110,
+      "scroll": 26
+    }
+  },
+  {
+    "name": "tfidf_logreg/goal_plus_typed/cw=balanced",
+    "accuracy": 0.324,
+    "macro_f1": 0.35345886743936916,
+    "weighted_f1": 0.35411585154614983,
+    "per_class": {
+      "click": {
+        "precision": 0.5433070866141733,
+        "recall": 0.2574626865671642,
+        "f1-score": 0.3493670886075949,
+        "support": 536.0
+      },
+      "type": {
+        "precision": 1.0,
+        "recall": 0.9090909090909091,
+        "f1-score": 0.9523809523809523,
+        "support": 121.0
+      },
+      "scroll": {
+        "precision": 0.09523809523809523,
+        "recall": 0.1103448275862069,
+        "f1-score": 0.10223642172523961,
+        "support": 145.0
+      },
+      "hotkey": {
+        "precision": 0.10357142857142858,
+        "recall": 0.3717948717948718,
+        "f1-score": 0.16201117318435754,
+        "support": 78.0
+      },
+      "finished": {
+        "precision": 0.16489361702127658,
+        "recall": 0.25833333333333336,
+        "f1-score": 0.2012987012987013,
+        "support": 120.0
+      }
+    },
+    "confusion_matrix": [
+      [
+        138,
+        0,
+        118,
+        171,
+        109
+      ],
+      [
+        4,
+        110,
+        0,
+        4,
+        3
+      ],
+      [
+        60,
+        0,
+        16,
+        40,
+        29
+      ],
+      [
+        23,
+        0,
+        10,
+        29,
+        16
+      ],
+      [
+        29,
+        0,
+        24,
+        36,
+        31
+      ]
+    ],
+    "confusion_matrix_labels": [
+      "click",
+      "type",
+      "scroll",
+      "hotkey",
+      "finished"
+    ],
+    "prediction_distribution": {
+      "click": 254,
+      "type": 110,
+      "finished": 188,
+      "hotkey": 280,
+      "scroll": 168
+    }
+  }
+]
