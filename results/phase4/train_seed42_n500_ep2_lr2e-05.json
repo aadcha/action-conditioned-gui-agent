@@ -1,0 +1,47 @@
+{
+  "n_train": 500,
+  "n_val": 100,
+  "epochs": 2,
+  "lr": 2e-05,
+  "batch_size": 1,
+  "coord_scale": 1000,
+  "seed": 42,
+  "aitw_split": "train",
+  "only_taps": true,
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.0714629759788514,
+      "n_total": 100,
+      "n_parsed": 100,
+      "parse_rate": 1.0,
+      "mean_normalized_l2": 0.26688603236861375,
+      "hit_at_005": 0.1,
+      "hit_at_010": 0.24,
+      "hit_at_025": 0.67
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.9437408257722855,
+      "n_total": 100,
+      "n_parsed": 100,
+      "parse_rate": 1.0,
+      "mean_normalized_l2": 0.27148513059972007,
+      "hit_at_005": 0.15,
+      "hit_at_010": 0.35,
+      "hit_at_025": 0.63
+    }
+  ],
+  "final_val_metrics": {
+    "epoch": 2,
+    "train_loss": 0.9437408257722855,
+    "n_total": 100,
+    "n_parsed": 100,
+    "parse_rate": 1.0,
+    "mean_normalized_l2": 0.27148513059972007,
+    "hit_at_005": 0.15,
+    "hit_at_010": 0.35,
+    "hit_at_025": 0.63
+  },
+  "_file": "train_seed42_n500_ep2_lr2e-05.json"
+}
