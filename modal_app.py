@@ -1045,3 +1045,312 @@ def train_stage1(
         print(f"  {variant:<14} macro-F1 = {macro:.4f}")
     print(f"\nvision_text - text_only:    {result['delta_vision_minus_text_only']:+.4f}")
     print(f"vision_text - vision_zeroed: {result['delta_vision_minus_zeroed']:+.4f}")
+
+
+# ---- Phase 3.5: AITW feature extraction + Stage 1 MLP -----------------------
+#
+# Same shape as the Multimodal-Mind2Web pipeline, but the source data is
+# google-research/android_in_the_wild via cjfcsjt/AITW_General. The schema is
+# different (DUAL_POINT splits into tap/swipe_* based on touch/lift delta), so
+# we route through src.data.aitw which handles all of that.
+#
+# Crucially: AITW populates 5 canonical action classes (click, scroll, finished,
+# type, hotkey), unlike Mind2Web's effective 2 (click, type). This is the data
+# the project actually claims to evaluate on.
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret],
+    timeout=21600,
+)
+def _extract_aitw_features(
+    model_id: str,
+    split: str,             # "train" or "test"
+    config_name: str,       # "standard" — AITW_General config
+    mode: str,              # "text_only" | "vision_text"
+    n_steps: int,           # 0 = all
+    batch_size: int,
+    max_image_pixels: int,
+    seed: int,
+    force_recompute: bool,
+) -> dict:
+    """Forward-pass Qwen2-VL-2B over an AITW slice, cache pooled features."""
+    import os
+    import sys
+    import json as _json
+    from collections import Counter
+    from pathlib import Path
+
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+
+    import torch
+    from qwen_vl_utils import process_vision_info
+    from tqdm import tqdm
+    from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+
+    from src.data.aitw import iter_aitw_steps
+
+    assert mode in ("text_only", "vision_text"), f"bad mode: {mode}"
+
+    cache_dir = Path(STAGE1_CACHE_PATH)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    tag = f"aitw_{config_name}_{split}_{mode}_n{n_steps}_seed{seed}"
+    cache_file = cache_dir / f"features_{tag}.pt"
+    meta_file = cache_dir / f"features_{tag}.meta.json"
+
+    if cache_file.exists() and not force_recompute:
+        print(f"[aitw-extract] cached at {cache_file}; skipping")
+        meta = _json.loads(meta_file.read_text()) if meta_file.exists() else {}
+        meta["cache_file"] = str(cache_file)
+        meta["from_cache"] = True
+        return meta
+
+    print(f"[aitw-extract] loading {model_id}...")
+    model = Qwen2VLForConditionalGeneration.from_pretrained(
+        model_id, torch_dtype=torch.bfloat16, device_map="auto"
+    )
+    processor = AutoProcessor.from_pretrained(model_id)
+    model.eval()
+    hf_cache.commit()
+
+    PROMPT_TMPL = (
+        "Predict the next action type for this mobile UI task.\n"
+        "Goal: {goal}\n"
+        "Action type:"
+    )
+
+    # Stream from AITW; materialize the slice as we go (need images for vision).
+    print(f"[aitw-extract] streaming AITW_General/{config_name}/{split} up to {n_steps or 'all'} steps...")
+    steps = list(iter_aitw_steps(
+        config=config_name, split=split, n_max=n_steps, include_images=(mode == "vision_text"),
+    ))
+    print(f"[aitw-extract] kept {len(steps)} steps after taxonomy mapping")
+
+    all_features: list[torch.Tensor] = []
+    all_labels: list[int] = []
+    hidden_size: int | None = None
+
+    pbar = tqdm(range(0, len(steps), batch_size), desc=f"aitw-extract({mode})")
+    for start in pbar:
+        batch = steps[start : start + batch_size]
+        messages_batch = []
+        for s in batch:
+            content = []
+            if mode == "vision_text":
+                img = s.open_image()
+                if max_image_pixels > 0 and img.width * img.height > max_image_pixels:
+                    r = (max_image_pixels / (img.width * img.height)) ** 0.5
+                    img = img.resize((max(1, int(img.width * r)), max(1, int(img.height * r))))
+                content.append({"type": "image", "image": img})
+            content.append({"type": "text", "text": PROMPT_TMPL.format(goal=s.goal_info)})
+            messages_batch.append([{"role": "user", "content": content}])
+        texts = [
+            processor.apply_chat_template(m, tokenize=False, add_generation_prompt=True)
+            for m in messages_batch
+        ]
+        image_inputs, video_inputs = (
+            process_vision_info(messages_batch) if mode == "vision_text" else (None, None)
+        )
+        inputs = processor(
+            text=texts, images=image_inputs, videos=video_inputs,
+            padding=True, return_tensors="pt",
+        ).to(model.device)
+
+        with torch.inference_mode():
+            out = model(**inputs, output_hidden_states=True, return_dict=True)
+            last_hidden = out.hidden_states[-1]
+            if hidden_size is None:
+                hidden_size = int(last_hidden.shape[-1])
+                print(f"[aitw-extract] hidden_size = {hidden_size}")
+            attention_mask = inputs["attention_mask"].unsqueeze(-1).to(last_hidden.dtype)
+            pooled = (last_hidden * attention_mask).sum(dim=1) / attention_mask.sum(dim=1).clamp(min=1)
+            pooled = pooled.to(torch.float32).cpu()
+
+        all_features.append(pooled)
+        all_labels.extend([s.canonical_action_id for s in batch])
+
+    features = torch.cat(all_features, dim=0)
+    labels = torch.tensor(all_labels, dtype=torch.long)
+    print(f"[aitw-extract] features shape: {features.shape}  labels shape: {labels.shape}")
+
+    torch.save({"features": features, "labels": labels, "hidden_size": hidden_size}, cache_file)
+    label_dist = {int(k): int(v) for k, v in Counter(all_labels).items()}
+    meta = {
+        "model_id": model_id,
+        "dataset": "cjfcsjt/AITW_General",
+        "config": config_name,
+        "split": split,
+        "mode": mode,
+        "n_steps_requested": n_steps,
+        "n_steps_used": len(steps),
+        "seed": seed,
+        "hidden_size": hidden_size,
+        "features_shape": list(features.shape),
+        "label_distribution_by_id": label_dist,
+        "feature_norm_mean": float(features.norm(dim=1).mean()),
+        "feature_norm_std": float(features.norm(dim=1).std()),
+        "cache_file": str(cache_file),
+        "from_cache": False,
+    }
+    meta_file.write_text(_json.dumps(meta, indent=2))
+    stage1_cache.commit()
+    return meta
+
+
+@app.local_entrypoint()
+def extract_aitw_features(
+    model_id: str = "Qwen/Qwen2-VL-2B-Instruct",
+    split: str = "train",
+    config_name: str = "standard",
+    mode: str = "vision_text",
+    n_steps: int = 5000,
+    batch_size: int = 2,
+    max_image_pixels: int = 1_000_000,
+    seed: int = 42,
+    force_recompute: bool = False,
+) -> None:
+    """Extract AITW features for one (split, mode) pair, cache to Modal Volume."""
+    import json
+    from pathlib import Path
+
+    meta = _extract_aitw_features.remote(
+        model_id, split, config_name, mode, n_steps, batch_size,
+        max_image_pixels, seed, force_recompute,
+    )
+    out = Path(f"results/phase3/aitw_feature_meta_{split}_{mode}.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(meta, indent=2))
+    print(f"[aitw-extract] meta saved to {out}")
+    print(f"[aitw-extract] cached: {meta.get('cache_file')}")
+    print(f"[aitw-extract] kept {meta.get('n_steps_used')} steps, label dist by id = {meta.get('label_distribution_by_id')}")
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={STAGE1_CACHE_PATH: stage1_cache},
+    timeout=1800,
+)
+def _train_stage1_aitw_remote(
+    train_split: str,
+    val_split: str,
+    config_name: str,
+    n_train: int,
+    n_val: int,
+    seed: int,
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    hidden_dim: int,
+    dropout: float,
+    class_weighted: bool,
+    batch_size: int,
+    train_seed: int,
+) -> dict:
+    """Train Stage 1 MLP variants on cached AITW features."""
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, "/root/repo")
+    import torch
+
+    from src.models.stage1_classifier import Stage1Config
+    from src.train.stage1 import TrainConfig, train_stage1
+
+    cache_dir = Path(STAGE1_CACHE_PATH)
+
+    def _load(split: str, mode: str, n: int):
+        p = cache_dir / f"features_aitw_{config_name}_{split}_{mode}_n{n}_seed{seed}.pt"
+        if not p.exists():
+            raise FileNotFoundError(f"missing: {p}")
+        blob = torch.load(p, map_location="cpu")
+        return blob["features"], blob["labels"], int(blob["hidden_size"])
+
+    ftt, lt, h1 = _load(train_split, "text_only", n_train)
+    fvt, lt2, _ = _load(train_split, "vision_text", n_train)
+    fvalt, lv, h2 = _load(val_split, "text_only", n_val)
+    fvalv, lv2, _ = _load(val_split, "vision_text", n_val)
+    assert torch.equal(lt, lt2) and torch.equal(lv, lv2), "labels diverge across modes"
+    assert h1 == h2
+
+    print(f"[aitw-train] train n={ftt.shape[0]}, val n={fvalt.shape[0]}, hidden={h1}")
+
+    def _run(name: str, ft: torch.Tensor, fv: torch.Tensor) -> dict:
+        print(f"\n[aitw-train] === {name} ===")
+        return train_stage1(
+            features_train=ft, labels_train=lt,
+            features_val=fv, labels_val=lv,
+            model_cfg=Stage1Config(feature_dim=h1, hidden_dim=hidden_dim, num_classes=8, dropout=dropout),
+            train_cfg=TrainConfig(epochs=epochs, lr=lr, weight_decay=weight_decay,
+                                  batch_size=batch_size, class_weighted=class_weighted, seed=train_seed),
+            device="cuda" if torch.cuda.is_available() else "cpu",
+        )
+
+    results = {
+        "text_only": _run("text_only", ftt, fvalt),
+        "vision_text": _run("vision_text", fvt, fvalv),
+        "vision_zeroed": _run("vision_zeroed", torch.zeros_like(fvt), torch.zeros_like(fvalv)),
+    }
+
+    def _slim(r): return {k: v for k, v in r.items() if k != "best_state"}
+    return {
+        "dataset": "cjfcsjt/AITW_General",
+        "config": config_name,
+        "train_split": train_split,
+        "val_split": val_split,
+        "n_train": int(ftt.shape[0]),
+        "n_val": int(fvalt.shape[0]),
+        "hidden_size": h1,
+        "variants": {k: _slim(v) for k, v in results.items()},
+        "headline_macro_f1": {k: results[k]["best_val_macro_f1"] for k in results},
+        "delta_vision_minus_text_only": (
+            results["vision_text"]["best_val_macro_f1"] - results["text_only"]["best_val_macro_f1"]
+        ),
+        "delta_vision_minus_zeroed": (
+            results["vision_text"]["best_val_macro_f1"] - results["vision_zeroed"]["best_val_macro_f1"]
+        ),
+    }
+
+
+@app.local_entrypoint()
+def train_stage1_aitw(
+    train_split: str = "train",
+    val_split: str = "test",
+    config_name: str = "standard",
+    n_train: int = 5000,
+    n_val: int = 1000,
+    seed: int = 42,
+    epochs: int = 8,
+    lr: float = 1e-4,
+    weight_decay: float = 0.01,
+    hidden_dim: int = 1024,
+    dropout: float = 0.1,
+    class_weighted: bool = True,
+    batch_size: int = 128,
+    train_seed: int = 42,
+    out_name: str = "stage1_aitw_results",
+) -> None:
+    """Train Stage 1 MLP on cached AITW features. Results to results/phase3/."""
+    import json
+    from pathlib import Path
+
+    result = _train_stage1_aitw_remote.remote(
+        train_split, val_split, config_name, n_train, n_val, seed,
+        epochs, lr, weight_decay, hidden_dim, dropout, class_weighted,
+        batch_size, train_seed,
+    )
+    out = Path(f"results/phase3/{out_name}.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2))
+    print(f"[aitw-train] wrote {out}")
+
+    print("\n=== AITW Stage 1 headline ===")
+    print(f"train n={result['n_train']}  val n={result['n_val']}  hidden={result['hidden_size']}")
+    for v, mf1 in result["headline_macro_f1"].items():
+        print(f"  {v:<14} macro-F1 = {mf1:.4f}")
+    print(f"\nvision_text - text_only:    {result['delta_vision_minus_text_only']:+.4f}")
+    print(f"vision_text - vision_zeroed: {result['delta_vision_minus_zeroed']:+.4f}")
