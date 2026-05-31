@@ -1467,8 +1467,15 @@ def _stage2_train_remote(
     aitw_split: str,
     coord_scale: int,
     only_taps: bool,
+    data_mix: str = "taps_only",
 ) -> dict:
-    """Teacher-forced Stage 2 grounding training on AITW DUAL_POINT actions."""
+    """Teacher-forced Stage 2 grounding training on AITW DUAL_POINT actions.
+
+    `data_mix` controls which step types are eligible for the training/eval slice:
+      - "taps_only"        : tap actions only (canonical class: click)
+      - "taps_and_swipes"  : taps + 4 swipe directions (canonical: click + scroll)
+      - "all_with_coords"  : taps + swipes + types (canonical: click, scroll, type)
+    """
     import os
     import sys
     import random
@@ -1489,14 +1496,23 @@ def _stage2_train_remote(
     torch.manual_seed(seed)
     random.seed(seed)
 
-    print(f"[s2-train] streaming AITW {aitw_split} for {n_train + n_val} taps...")
+    print(f"[s2-train] streaming AITW {aitw_split} for {n_train + n_val} examples (data_mix={data_mix})...")
     examples_all: list[Stage2Example] = []
     target_needed = n_train + n_val
-    # Pull more rows than needed because we filter to taps with valid coordinates.
-    for step in iter_aitw_steps(split=aitw_split, n_max=max(target_needed * 3, 500), include_images=True):
-        if only_taps and step.string_label != "tap":
-            continue
-        if not only_taps and step.canonical_action_id not in (0, 1, 2, 3, 4, 5, 6, 7):
+    # `data_mix` decides which AITW string_labels are eligible. Each level adds
+    # action types that have a meaningful (x, y) touch coordinate to learn from.
+    _DATA_MIX_LABELS = {
+        "taps_only": {"tap"},
+        "taps_and_swipes": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right"},
+        "all_with_coords": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"},
+    }
+    allowed_labels = _DATA_MIX_LABELS.get(data_mix, {"tap"})
+    if only_taps:
+        # Back-compat: legacy callers set only_taps=True/False without data_mix.
+        allowed_labels = {"tap"}
+    # Pull more rows than needed because we filter and AITW string_labels are skewed.
+    for step in iter_aitw_steps(split=aitw_split, n_max=max(target_needed * 4, 1000), include_images=True):
+        if step.string_label not in allowed_labels:
             continue
         examples_all.append(Stage2Example(
             image=step.open_image(),
@@ -1567,6 +1583,7 @@ def _stage2_train_remote(
         print(f"[s2-train] val sample outputs: {eval_metrics.get('raw_outputs', [])[:5]}")
 
     summary = {
+        "variant": "D_action_conditioned",
         "n_train": len(train_examples),
         "n_val": len(val_examples),
         "epochs": epochs,
@@ -1576,6 +1593,9 @@ def _stage2_train_remote(
         "seed": seed,
         "aitw_split": aitw_split,
         "only_taps": only_taps,
+        "data_mix": data_mix,
+        "train_action_distribution": dict(Counter(e.action_type_id for e in train_examples)),
+        "val_action_distribution": dict(Counter(e.action_type_id for e in val_examples)),
         "history": history,
         "final_val_metrics": history[-1] if history else None,
     }
@@ -1586,7 +1606,7 @@ def _stage2_train_remote(
     from pathlib import Path as _Path
     cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    out_path = cache_dir / f"train_seed{seed}_n{n_train}_ep{epochs}_lr{lr}.json"
+    out_path = cache_dir / f"train_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[s2-train] persisted result to {out_path}")
@@ -1646,13 +1666,19 @@ def train_stage2(
     aitw_split: str = "train",
     coord_scale: int = 1000,
     only_taps: bool = True,
+    data_mix: str = "taps_only",
     out_name: str = "stage2_train_results",
 ) -> None:
     import json
     from pathlib import Path
 
+    # If caller picks a non-tap-only mix, drop the only_taps default so it
+    # doesn't override the data_mix filter inside the remote function.
+    if data_mix != "taps_only":
+        only_taps = False
+
     result = _stage2_train_remote.remote(
-        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, only_taps,
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, only_taps, data_mix,
     )
     out = Path(f"results/phase4/{out_name}.json")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -1689,8 +1715,12 @@ def _stage2_variantA_train_remote(
     aitw_split: str,
     coord_scale: int,
     only_taps: bool,
+    data_mix: str = "taps_only",
 ) -> dict:
-    """Flat-baseline Stage 2 — plain Qwen2-VL-2B + LoRA, no action conditioning."""
+    """Flat-baseline Stage 2 — plain Qwen2-VL-2B + LoRA, no action conditioning.
+
+    `data_mix` controls eligible step types; mirror of `_stage2_train_remote`.
+    """
     import os
     import sys
     import random
@@ -1715,8 +1745,16 @@ def _stage2_variantA_train_remote(
     print(f"[A-train] streaming AITW {aitw_split} for {n_train + n_val} taps...")
     examples_all: list[Stage2Example] = []
     target_needed = n_train + n_val
-    for step in iter_aitw_steps(split=aitw_split, n_max=max(target_needed * 3, 500), include_images=True):
-        if only_taps and step.string_label != "tap":
+    _DATA_MIX_LABELS = {
+        "taps_only": {"tap"},
+        "taps_and_swipes": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right"},
+        "all_with_coords": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"},
+    }
+    allowed_labels = _DATA_MIX_LABELS.get(data_mix, {"tap"})
+    if only_taps:
+        allowed_labels = {"tap"}
+    for step in iter_aitw_steps(split=aitw_split, n_max=max(target_needed * 4, 1000), include_images=True):
+        if step.string_label not in allowed_labels:
             continue
         examples_all.append(Stage2Example(
             image=step.open_image(),
@@ -1729,7 +1767,7 @@ def _stage2_variantA_train_remote(
 
     train_examples = examples_all[:n_train]
     val_examples = examples_all[n_train:n_train + n_val]
-    print(f"[A-train] train n={len(train_examples)}  val n={len(val_examples)}")
+    print(f"[A-train] data_mix={data_mix}  train n={len(train_examples)}  val n={len(val_examples)}")
     print(f"[A-train] train action dist: {Counter(e.action_type_id for e in train_examples)}")
 
     print("[A-train] loading flat Qwen2-VL-2B + LoRA (no action conditioning)...")
@@ -1860,6 +1898,9 @@ def _stage2_variantA_train_remote(
         "seed": seed,
         "aitw_split": aitw_split,
         "only_taps": only_taps,
+        "data_mix": data_mix,
+        "train_action_distribution": dict(Counter(e.action_type_id for e in train_examples)),
+        "val_action_distribution": dict(Counter(e.action_type_id for e in val_examples)),
         "trainable_params": int(n_trainable),
         "all_params": int(n_all),
         "history": history,
@@ -1867,7 +1908,7 @@ def _stage2_variantA_train_remote(
     }
     cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    out_path = cache_dir / f"variantA_seed{seed}_n{n_train}_ep{epochs}_lr{lr}.json"
+    out_path = cache_dir / f"variantA_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[A-train] persisted result to {out_path}")
@@ -1885,10 +1926,13 @@ def train_stage2_variantA(
     aitw_split: str = "train",
     coord_scale: int = 1000,
     only_taps: bool = True,
+    data_mix: str = "taps_only",
 ) -> None:
     """Train variant A (flat baseline, no action conditioning). Use `modal run --detach`."""
+    if data_mix != "taps_only":
+        only_taps = False
     result = _stage2_variantA_train_remote.remote(
-        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, only_taps,
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, only_taps, data_mix,
     )
     if result is not None and result.get("final_val_metrics"):
         import json
