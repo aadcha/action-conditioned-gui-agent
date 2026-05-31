@@ -1,0 +1,70 @@
+{
+  "_note": "Reconstructed from Modal app logs for run ap-oBkXopYqg7M9bS9C2tKgRT. The run used the pre-Volume-persistence version of modal_app.py, so the JSON summary was not auto-saved to the Volume — captured by parsing the print-output of _stage2_train_remote. Future detached runs will land on the stage1-cache Volume directly.",
+  "config": {
+    "n_train": 500,
+    "n_val": 100,
+    "epochs": 2,
+    "lr": 2e-5,
+    "batch_size": 1,
+    "coord_scale": 1000,
+    "only_taps": true,
+    "seed": 42,
+    "aitw_split": "train"
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.071,
+      "n_total": 100,
+      "n_parsed": 100,
+      "parse_rate": 1.0,
+      "mean_normalized_l2": 0.269,
+      "hit_at_005": 0.100,
+      "hit_at_010": 0.230,
+      "hit_at_025": 0.650,
+      "_sample_train_losses": {
+        "step_25": 1.2203, "step_50": 1.1983, "step_75": 1.0848,
+        "step_100": 1.0344, "step_500": 0.9947
+      }
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.9435,
+      "n_total": 100,
+      "n_parsed": 100,
+      "parse_rate": 1.0,
+      "mean_normalized_l2": 0.260,
+      "hit_at_005": 0.170,
+      "hit_at_010": 0.380,
+      "hit_at_025": 0.650,
+      "_sample_train_losses": {
+        "step_25": 0.8112, "step_250": 0.5710, "step_500": 0.7120
+      }
+    }
+  ],
+  "final_val_metrics": {
+    "epoch": 2,
+    "train_loss": 0.9435,
+    "n_total": 100,
+    "n_parsed": 100,
+    "parse_rate": 1.0,
+    "mean_normalized_l2": 0.260,
+    "hit_at_005": 0.170,
+    "hit_at_010": 0.380,
+    "hit_at_025": 0.650
+  },
+  "sample_predictions_epoch2": [
+    "(489, 510)",
+    "(414, 58)",
+    "(489, 511)",
+    "(456, 108)",
+    "(500, 511)"
+  ],
+  "random_baseline_estimates": {
+    "_explanation": "Random uniform over [0,1]^2; chance of landing within Euclidean radius r is min(1, pi*r^2).",
+    "hit_at_005_random": 0.00785,
+    "hit_at_010_random": 0.0314,
+    "hit_at_025_random": 0.196
+  },
+  "interpretation": "After 2 epochs of teacher-forced LoRA + action-embedding fine-tuning on 500 AITW DUAL_POINT taps: parse rate 100%, hit@0.10 = 0.380 (~12x random), hit@0.25 = 0.650 (~3.3x random), normalized L2 = 0.260. Loss decreases monotonically by epoch: 1.07 -> 0.94. The Stage 2 pipeline (action-type embedding + LoRA + coordinate-string LM head) is learning to ground taps."
+}
