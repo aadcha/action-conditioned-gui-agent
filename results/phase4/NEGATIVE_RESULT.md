@@ -19,14 +19,14 @@ batch_size=1.
 | hit@0.25 | 0.667 ± 0.021 | 0.623 ± 0.021 | -0.043 | 1.47 |
 | mean norm L2 | 0.236 ± 0.011 | 0.271 ± 0.009 | +0.034 (A wins) | 2.40 |
 
-### taps_and_swipes (n_train=1000, 3 seeds A, 2-3 seeds D)
+### taps_and_swipes (n_train=1000, 3 seeds each — FINAL)
 
 |  | A (flat) | D (action-conditioned) | (D - A) | n_sigma |
 |---|---|---|---|---|
-| hit@0.05 | 0.233 ± 0.010 | 0.163 ± 0.004 | -0.070 | 6.85 |
-| **hit@0.10** | **0.390 ± 0.010** | **0.287 ± 0.011** | **-0.103** | **7.03** |
-| hit@0.25 | 0.727 ± 0.023 | 0.623 ± 0.011 | -0.103 | 4.50 |
-| mean norm L2 | 0.184 ± 0.002 | 0.212 ± 0.003 | +0.028 (A wins) | 7.41 |
+| hit@0.05 | 0.233 ± 0.010 | 0.163 ± 0.003 | -0.070 | 6.85 |
+| **hit@0.10** | **0.390 ± 0.010** | **0.288 ± 0.008** | **-0.102** | **8.08** |
+| hit@0.25 | 0.727 ± 0.023 | 0.612 ± 0.020 | -0.115 | 5.50 |
+| mean norm L2 | 0.184 ± 0.002 | 0.215 ± 0.006 | +0.031 (A wins) | 5.05 |
 
 The **multi-action** result is the experimentally clean one — the one designed
 to give variant D's action-conditioning signal something to do. It is
@@ -100,8 +100,14 @@ a SOTA claim. Concretely:
 
 ## What we still need
 
-- 3rd D seed (D 42 retry) for multi-action — in flight as of writing.
-- 1-seed all_with_coords runs (data_mix with type added as a 3rd class) — in flight.
+- [x] 3rd D seed for multi-action — **landed**, headline updated above.
+- [ ] 1-seed `all_with_coords` smoke (3 active classes: click+scroll+type) — in flight.
+- [ ] 3-seed `Dfrozen` diagnostic (action_embeddings frozen at random init) — in flight.
+  - If Dfrozen ≈ D: the slot disrupts the prompt regardless of embedding training.
+  - If Dfrozen ≪ D: the embedding *was* doing useful work; D just couldn't
+    learn it fast enough.
+  - If Dfrozen ≈ A: shouldn't happen given the slot disruption, but if it
+    does, the slot at this position is benign and our embedding training
+    actively harmed things.
 
-When those land, update the ablation_summary.json + this writeup. The
-headline result will not change.
+The headline result (taps_and_swipes 8σ gap) will not change.
