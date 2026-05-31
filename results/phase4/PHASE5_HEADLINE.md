@@ -11,6 +11,22 @@ same data, same hyperparameters, same eval.
   At forward time the slot's embedding is replaced by the row for the gold
   action type.
 
+## data_mix = `taps_and_swipes`
+
+- n_train: 1000  ·  epochs: 2  ·  seeds: 3
+
+| Variant | final train loss | hit@0.05 | hit@0.10 | hit@0.25 | mean norm L2 |
+|---|---|---|---|---|---|
+| **A (flat baseline)** | 0.976 ± 0.002 | 0.233 ± 0.010 | **0.390 ± 0.010** | 0.727 ± 0.023 | 0.184 ± 0.002 |
+| **D (action-conditioned)** | 0.985 ± 0.003 | 0.163 ± 0.004 | **0.287 ± 0.011** | 0.623 ± 0.011 | 0.212 ± 0.003 |
+
+Deltas (D − A; positive = D better for hit@r, negative = D better for L2):
+
+- **hit@0.05**: -0.0708  ·  pooled std = 0.0110  ·  6.44σ (≥2σ — meaningful)
+- **hit@0.10**: -0.1025  ·  pooled std = 0.0146  ·  7.03σ (≥2σ — meaningful)
+- **hit@0.25**: -0.1042  ·  pooled std = 0.0254  ·  4.10σ (≥2σ — meaningful)
+- **mean norm L2**: +0.0280  ·  pooled std = 0.0038  ·  7.41σ (≥2σ — meaningful)
+
 ## data_mix = `taps_only`
 
 - n_train: 500  ·  epochs: 2  ·  seeds: 3
