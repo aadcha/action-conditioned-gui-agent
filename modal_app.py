@@ -1661,3 +1661,240 @@ def train_stage2(
     if result.get("final_val_metrics"):
         m = result["final_val_metrics"]
         print(f"[s2-train] final: loss={m['train_loss']:.4f}  hit@0.10={m['hit_at_010']:.3f}  norm L2={m['mean_normalized_l2']:.3f}")
+
+
+# ---- Phase 5.1: Variant A (flat baseline) Stage 2 grounding -----------------
+#
+# Identical to variant D except: no action embedding table, no <|action_slot|>
+# token in the prompt, no slot replacement at forward time. Same Qwen2-VL-2B
+# backbone + LoRA on (q,k,v,o), same coordinate-string output. Same data,
+# same compute, same eval set. The only diff is the action-type conditioning
+# signal — so any quality delta is attributable to that.
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret],
+    timeout=14400,
+)
+def _stage2_variantA_train_remote(
+    n_train: int,
+    n_val: int,
+    epochs: int,
+    lr: float,
+    batch_size: int,
+    seed: int,
+    aitw_split: str,
+    coord_scale: int,
+    only_taps: bool,
+) -> dict:
+    """Flat-baseline Stage 2 — plain Qwen2-VL-2B + LoRA, no action conditioning."""
+    import os
+    import sys
+    import random
+    from collections import Counter
+    from pathlib import Path as _Path
+    import json as _json
+
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+
+    import torch
+    from peft import LoraConfig, get_peft_model
+    from qwen_vl_utils import process_vision_info
+    from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+
+    from src.data.aitw import iter_aitw_steps
+    from src.train.stage2 import Stage2Example, coord_to_string, string_to_coord
+
+    torch.manual_seed(seed)
+    random.seed(seed)
+
+    print(f"[A-train] streaming AITW {aitw_split} for {n_train + n_val} taps...")
+    examples_all: list[Stage2Example] = []
+    target_needed = n_train + n_val
+    for step in iter_aitw_steps(split=aitw_split, n_max=max(target_needed * 3, 500), include_images=True):
+        if only_taps and step.string_label != "tap":
+            continue
+        examples_all.append(Stage2Example(
+            image=step.open_image(),
+            goal_info=step.goal_info,
+            action_type_id=step.canonical_action_id,
+            target_xy=(step.touch_yx[1], step.touch_yx[0]),
+        ))
+        if len(examples_all) >= target_needed:
+            break
+
+    train_examples = examples_all[:n_train]
+    val_examples = examples_all[n_train:n_train + n_val]
+    print(f"[A-train] train n={len(train_examples)}  val n={len(val_examples)}")
+    print(f"[A-train] train action dist: {Counter(e.action_type_id for e in train_examples)}")
+
+    print("[A-train] loading flat Qwen2-VL-2B + LoRA (no action conditioning)...")
+    base = Qwen2VLForConditionalGeneration.from_pretrained(
+        "Qwen/Qwen2-VL-2B-Instruct", torch_dtype=torch.bfloat16, device_map="auto",
+    )
+    processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")
+    lora_config = LoraConfig(
+        r=16, lora_alpha=32, target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+        lora_dropout=0.05, task_type="CAUSAL_LM",
+    )
+    model = get_peft_model(base, lora_config)
+    hf_cache.commit()
+    n_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    n_all = sum(p.numel() for p in model.parameters())
+    print(f"[A-train] trainable {n_trainable:,} / {n_all:,} = {100*n_trainable/n_all:.4f}%")
+
+    device = next(model.parameters()).device
+
+    def build_batch(examples: list[Stage2Example], include_labels: bool):
+        messages_batch = []
+        for ex in examples:
+            messages = [{
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": ex.image},
+                    {"type": "text", "text": f"Goal: {ex.goal_info}\nPredict the action coordinate."},
+                ],
+            }]
+            if include_labels:
+                messages.append({"role": "assistant",
+                                 "content": [{"type": "text", "text": coord_to_string(ex.target_xy, coord_scale)}]})
+            messages_batch.append(messages)
+        texts = [processor.apply_chat_template(m, tokenize=False, add_generation_prompt=(not include_labels)) for m in messages_batch]
+        image_inputs, video_inputs = process_vision_info(messages_batch)
+        inputs = processor(text=texts, images=image_inputs, videos=video_inputs,
+                           padding=True, return_tensors="pt").to(device)
+        if include_labels:
+            labels = inputs["input_ids"].clone()
+            im_start = processor.tokenizer.convert_tokens_to_ids("<|im_start|>")
+            assistant_id = processor.tokenizer.convert_tokens_to_ids("assistant")
+            for b in range(labels.shape[0]):
+                row = inputs["input_ids"][b]
+                starts = (row == im_start).nonzero(as_tuple=True)[0].tolist()
+                cut = 0
+                for idx in reversed(starts):
+                    if idx + 1 < row.shape[0] and row[idx + 1].item() == assistant_id:
+                        cut = idx + 2
+                        if cut < row.shape[0]:
+                            cut += 1
+                        break
+                labels[b, :cut] = -100
+            inputs["labels"] = labels
+        return inputs
+
+    def evaluate(examples: list[Stage2Example]) -> dict:
+        model.eval()
+        preds, targets, raw_outs = [], [], []
+        for start in range(0, len(examples), batch_size):
+            batch = examples[start:start + batch_size]
+            inputs = build_batch(batch, include_labels=False)
+            with torch.inference_mode():
+                generated = model.generate(**inputs, max_new_tokens=16, do_sample=False,
+                                           pad_token_id=processor.tokenizer.eos_token_id)
+            trimmed = [g[len(i):] for i, g in zip(inputs["input_ids"], generated)]
+            decoded = processor.batch_decode(trimmed, skip_special_tokens=True)
+            for ex, raw in zip(batch, decoded):
+                raw_outs.append(raw)
+                parsed = string_to_coord(raw, scale=coord_scale)
+                preds.append(parsed)
+                targets.append(ex.target_xy)
+        ok = [(p, t) for p, t in zip(preds, targets) if p is not None]
+        if not ok:
+            return {"n_total": len(examples), "n_parsed": 0,
+                    "mean_normalized_l2": float("nan"),
+                    "hit_at_005": 0.0, "hit_at_010": 0.0, "hit_at_025": 0.0,
+                    "raw_outputs": raw_outs[:20]}
+        import math
+        dists = [math.hypot(p[0]-t[0], p[1]-t[1]) for p, t in ok]
+        return {"n_total": len(examples), "n_parsed": len(ok),
+                "parse_rate": len(ok) / len(examples),
+                "mean_normalized_l2": float(sum(dists)/len(dists)),
+                "hit_at_005": float(sum(1 for d in dists if d <= 0.05) / len(ok)),
+                "hit_at_010": float(sum(1 for d in dists if d <= 0.10) / len(ok)),
+                "hit_at_025": float(sum(1 for d in dists if d <= 0.25) / len(ok)),
+                "raw_outputs": raw_outs[:20]}
+
+    optimizer = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad],
+                                  lr=lr, weight_decay=0.01)
+    history = []
+    for epoch in range(1, epochs + 1):
+        print(f"\n[A-train] === epoch {epoch}/{epochs} ===")
+        rng = random.Random(seed + epoch)
+        order = list(range(len(train_examples)))
+        rng.shuffle(order)
+        model.train()
+        epoch_loss, n_steps = 0.0, 0
+        for i in range(0, len(order), batch_size):
+            batch_examples = [train_examples[j] for j in order[i:i + batch_size]]
+            batch = build_batch(batch_examples, include_labels=True)
+            out = model(**batch)
+            loss = out.loss
+            optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad], max_norm=1.0)
+            optimizer.step()
+            epoch_loss += float(loss.item())
+            n_steps += 1
+            if (n_steps % 25) == 0:
+                print(f"[A-train]   step {n_steps}  loss={loss.item():.4f}")
+        avg = epoch_loss / max(n_steps, 1)
+        eval_m = evaluate(val_examples)
+        history.append({"epoch": epoch, "train_loss": avg,
+                        **{k: v for k, v in eval_m.items() if k != "raw_outputs"}})
+        print(f"[A-train] epoch {epoch} avg loss = {avg:.4f}")
+        print(f"[A-train] val: parsed {eval_m['n_parsed']}/{eval_m['n_total']}")
+        print(f"[A-train] val: hit@0.05={eval_m['hit_at_005']:.3f}  hit@0.10={eval_m['hit_at_010']:.3f}  hit@0.25={eval_m['hit_at_025']:.3f}")
+        print(f"[A-train] val sample outputs: {eval_m['raw_outputs'][:5]}")
+
+    summary = {
+        "variant": "A_flat_baseline",
+        "n_train": len(train_examples),
+        "n_val": len(val_examples),
+        "epochs": epochs,
+        "lr": lr,
+        "batch_size": batch_size,
+        "coord_scale": coord_scale,
+        "seed": seed,
+        "aitw_split": aitw_split,
+        "only_taps": only_taps,
+        "trainable_params": int(n_trainable),
+        "all_params": int(n_all),
+        "history": history,
+        "final_val_metrics": history[-1] if history else None,
+    }
+    cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    out_path = cache_dir / f"variantA_seed{seed}_n{n_train}_ep{epochs}_lr{lr}.json"
+    out_path.write_text(_json.dumps(summary, indent=2))
+    stage1_cache.commit()
+    print(f"[A-train] persisted result to {out_path}")
+    return summary
+
+
+@app.local_entrypoint()
+def train_stage2_variantA(
+    n_train: int = 500,
+    n_val: int = 100,
+    epochs: int = 2,
+    lr: float = 2e-5,
+    batch_size: int = 1,
+    seed: int = 42,
+    aitw_split: str = "train",
+    coord_scale: int = 1000,
+    only_taps: bool = True,
+) -> None:
+    """Train variant A (flat baseline, no action conditioning). Use `modal run --detach`."""
+    result = _stage2_variantA_train_remote.remote(
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, only_taps,
+    )
+    if result is not None and result.get("final_val_metrics"):
+        import json
+        from pathlib import Path
+        out = Path(f"results/phase4/variantA_seed{seed}_n{n_train}_ep{epochs}_lr{lr}.json")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(result, indent=2))
+        m = result["final_val_metrics"]
+        print(f"[A-train] final: loss={m['train_loss']:.4f}  hit@0.10={m['hit_at_010']:.3f}  hit@0.25={m['hit_at_025']:.3f}")
