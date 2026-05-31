@@ -1824,8 +1824,9 @@ def _stage2_variantA_train_remote(
         return inputs
 
     def evaluate(examples: list[Stage2Example]) -> dict:
+        from src.train.stage2 import _metrics_from_predictions
         model.eval()
-        preds, targets, raw_outs = [], [], []
+        preds, targets, action_ids, raw_outs = [], [], [], []
         for start in range(0, len(examples), batch_size):
             batch = examples[start:start + batch_size]
             inputs = build_batch(batch, include_labels=False)
@@ -1836,24 +1837,12 @@ def _stage2_variantA_train_remote(
             decoded = processor.batch_decode(trimmed, skip_special_tokens=True)
             for ex, raw in zip(batch, decoded):
                 raw_outs.append(raw)
-                parsed = string_to_coord(raw, scale=coord_scale)
-                preds.append(parsed)
+                preds.append(string_to_coord(raw, scale=coord_scale))
                 targets.append(ex.target_xy)
-        ok = [(p, t) for p, t in zip(preds, targets) if p is not None]
-        if not ok:
-            return {"n_total": len(examples), "n_parsed": 0,
-                    "mean_normalized_l2": float("nan"),
-                    "hit_at_005": 0.0, "hit_at_010": 0.0, "hit_at_025": 0.0,
-                    "raw_outputs": raw_outs[:20]}
-        import math
-        dists = [math.hypot(p[0]-t[0], p[1]-t[1]) for p, t in ok]
-        return {"n_total": len(examples), "n_parsed": len(ok),
-                "parse_rate": len(ok) / len(examples),
-                "mean_normalized_l2": float(sum(dists)/len(dists)),
-                "hit_at_005": float(sum(1 for d in dists if d <= 0.05) / len(ok)),
-                "hit_at_010": float(sum(1 for d in dists if d <= 0.10) / len(ok)),
-                "hit_at_025": float(sum(1 for d in dists if d <= 0.25) / len(ok)),
-                "raw_outputs": raw_outs[:20]}
+                action_ids.append(ex.action_type_id)
+        m = _metrics_from_predictions(targets, preds, action_ids)
+        m["raw_outputs"] = raw_outs[:20]
+        return m
 
     optimizer = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad],
                                   lr=lr, weight_decay=0.01)
