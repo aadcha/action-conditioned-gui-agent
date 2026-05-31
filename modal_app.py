@@ -2354,3 +2354,169 @@ def train_stage2_Dhook(
     """Variant D-hook (additive conditioning, true superset of A). Use --detach."""
     _stage2_variantDhook_train_remote.remote(
         n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, init_std)
+
+
+# ---- Phase 5 variant D-text: action type as natural language in the prompt -
+#
+# Instead of a learned embedding, state the action type as a word the frozen
+# model already understands. Prompt: "Action: {word}. Goal: {goal} ...".
+# This is strictly more information than A in a model-native format, so it
+# should match or beat A. Different mechanism from D-hook (text vs embedding),
+# so it's an independent test of "does action conditioning help grounding".
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret],
+    timeout=14400,
+)
+def _stage2_variantDtext_train_remote(
+    n_train: int, n_val: int, epochs: int, lr: float, batch_size: int,
+    seed: int, aitw_split: str, coord_scale: int, data_mix: str,
+) -> dict:
+    import os, sys, random, json as _json
+    from collections import Counter
+    from pathlib import Path as _Path
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+
+    import torch
+    from peft import LoraConfig, get_peft_model
+    from qwen_vl_utils import process_vision_info
+    from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+    from src.data.aitw import iter_aitw_steps
+    from src.data.taxonomy import ID_TO_ACTION
+    from src.train.stage2 import Stage2Example, coord_to_string, string_to_coord, _metrics_from_predictions
+
+    torch.manual_seed(seed); random.seed(seed)
+    _DATA_MIX_LABELS = {
+        "taps_only": {"tap"},
+        "taps_and_swipes": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right"},
+        "all_with_coords": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"},
+    }
+    allowed = _DATA_MIX_LABELS.get(data_mix, {"tap"})
+
+    print(f"[Dtext] streaming AITW {aitw_split} (data_mix={data_mix})...")
+    examples_all = []
+    need = n_train + n_val
+    for step in iter_aitw_steps(split=aitw_split, n_max=max(need * 4, 1000), include_images=True):
+        if step.string_label not in allowed:
+            continue
+        examples_all.append(Stage2Example(
+            image=step.open_image(), goal_info=step.goal_info,
+            action_type_id=step.canonical_action_id,
+            target_xy=(step.touch_yx[1], step.touch_yx[0])))
+        if len(examples_all) >= need:
+            break
+    train_examples = examples_all[:n_train]
+    val_examples = examples_all[n_train:n_train + n_val]
+    print(f"[Dtext] train n={len(train_examples)} val n={len(val_examples)}")
+    print(f"[Dtext] train action dist: {Counter(e.action_type_id for e in train_examples)}")
+
+    base = Qwen2VLForConditionalGeneration.from_pretrained(
+        "Qwen/Qwen2-VL-2B-Instruct", torch_dtype=torch.bfloat16, device_map="auto")
+    processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")
+    model = get_peft_model(base, LoraConfig(r=16, lora_alpha=32,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], lora_dropout=0.05, task_type="CAUSAL_LM"))
+    hf_cache.commit()
+    device = next(model.parameters()).device
+
+    # The action word the model conditions on. ID_TO_ACTION gives canonical names.
+    def prompt_for(ex):
+        word = ID_TO_ACTION[ex.action_type_id]  # click / scroll / type / ...
+        return f"Action: {word}. Goal: {ex.goal_info}\nPredict the action coordinate."
+
+    def build(examples, include_labels):
+        msgs = []
+        for ex in examples:
+            content = [{"type": "image", "image": ex.image},
+                       {"type": "text", "text": prompt_for(ex)}]
+            m = [{"role": "user", "content": content}]
+            if include_labels:
+                m.append({"role": "assistant", "content": [{"type": "text", "text": coord_to_string(ex.target_xy, coord_scale)}]})
+            msgs.append(m)
+        texts = [processor.apply_chat_template(m, tokenize=False, add_generation_prompt=(not include_labels)) for m in msgs]
+        image_inputs, video_inputs = process_vision_info(msgs)
+        inputs = processor(text=texts, images=image_inputs, videos=video_inputs, padding=True, return_tensors="pt").to(device)
+        if include_labels:
+            labels = inputs["input_ids"].clone()
+            im_start = processor.tokenizer.convert_tokens_to_ids("<|im_start|>")
+            assistant_id = processor.tokenizer.convert_tokens_to_ids("assistant")
+            for b in range(labels.shape[0]):
+                row = inputs["input_ids"][b]
+                starts = (row == im_start).nonzero(as_tuple=True)[0].tolist()
+                cut = 0
+                for idx in reversed(starts):
+                    if idx + 1 < row.shape[0] and row[idx + 1].item() == assistant_id:
+                        cut = idx + 2
+                        if cut < row.shape[0]: cut += 1
+                        break
+                labels[b, :cut] = -100
+            inputs["labels"] = labels
+        return inputs
+
+    def evaluate(examples):
+        model.eval()
+        preds, targets, aids, raws = [], [], [], []
+        for s in range(0, len(examples), batch_size):
+            chunk = examples[s:s + batch_size]
+            inputs = build(chunk, include_labels=False)
+            prompt_len = inputs["input_ids"].shape[1]
+            with torch.inference_mode():
+                gen = model.generate(**inputs, max_new_tokens=16, do_sample=False,
+                                     pad_token_id=processor.tokenizer.eos_token_id)
+            new = gen[:, prompt_len:] if gen.shape[1] > prompt_len else gen
+            for ex, raw in zip(chunk, processor.batch_decode(new, skip_special_tokens=True)):
+                raws.append(raw); preds.append(string_to_coord(raw, scale=coord_scale))
+                targets.append(ex.target_xy); aids.append(ex.action_type_id)
+        m = _metrics_from_predictions(targets, preds, aids); m["raw_outputs"] = raws[:20]
+        return m
+
+    optimizer = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=lr, weight_decay=0.01)
+    history = []
+    for epoch in range(1, epochs + 1):
+        print(f"\n[Dtext] === epoch {epoch}/{epochs} ===")
+        rng = random.Random(seed + epoch); order = list(range(len(train_examples))); rng.shuffle(order)
+        model.train(); ep_loss, nstep = 0.0, 0
+        for i in range(0, len(order), batch_size):
+            chunk = [train_examples[j] for j in order[i:i + batch_size]]
+            inputs = build(chunk, include_labels=True)
+            out = model(**inputs); loss = out.loss
+            optimizer.zero_grad(); loss.backward()
+            torch.nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad], 1.0)
+            optimizer.step(); ep_loss += float(loss.item()); nstep += 1
+            if nstep % 25 == 0:
+                print(f"[Dtext]   step {nstep}  loss={loss.item():.4f}")
+        avg = ep_loss / max(nstep, 1)
+        em = evaluate(val_examples)
+        history.append({"epoch": epoch, "train_loss": avg, **{k: v for k, v in em.items() if k != "raw_outputs"}})
+        print(f"[Dtext] epoch {epoch} loss={avg:.4f} hit@0.10={em['hit_at_010']:.3f} hit@0.25={em['hit_at_025']:.3f}")
+        print(f"[Dtext] val sample: {em.get('raw_outputs', [])[:5]}")
+
+    summary = {
+        "variant": "D_text_prompt",
+        "n_train": len(train_examples), "n_val": len(val_examples),
+        "epochs": epochs, "lr": lr, "batch_size": batch_size, "coord_scale": coord_scale,
+        "seed": seed, "aitw_split": aitw_split, "data_mix": data_mix,
+        "history": history, "final_val_metrics": history[-1] if history else None,
+    }
+    cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    out_path = cache_dir / f"Dtext_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}.json"
+    out_path.write_text(_json.dumps(summary, indent=2))
+    stage1_cache.commit()
+    print(f"[Dtext] persisted result to {out_path}")
+    return summary
+
+
+@app.local_entrypoint()
+def train_stage2_Dtext(
+    n_train: int = 1000, n_val: int = 200, epochs: int = 2, lr: float = 2e-5,
+    batch_size: int = 1, seed: int = 42, aitw_split: str = "train",
+    coord_scale: int = 1000, data_mix: str = "taps_and_swipes",
+) -> None:
+    """Variant D-text (action word in prompt). Use --detach."""
+    _stage2_variantDtext_train_remote.remote(
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix)
