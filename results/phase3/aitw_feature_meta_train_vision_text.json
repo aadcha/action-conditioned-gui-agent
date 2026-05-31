@@ -1,0 +1,26 @@
+{
+  "model_id": "Qwen/Qwen2-VL-2B-Instruct",
+  "dataset": "cjfcsjt/AITW_General",
+  "config": "standard",
+  "split": "train",
+  "mode": "vision_text",
+  "n_steps_requested": 5000,
+  "n_steps_used": 5000,
+  "seed": 42,
+  "hidden_size": 1536,
+  "features_shape": [
+    5000,
+    1536
+  ],
+  "label_distribution_by_id": {
+    "0": 2747,
+    "7": 597,
+    "5": 439,
+    "3": 664,
+    "2": 553
+  },
+  "feature_norm_mean": 98.95956420898438,
+  "feature_norm_std": 7.342303276062012,
+  "cache_file": "/root/cache/stage1/features_aitw_standard_train_vision_text_n5000_seed42.pt",
+  "from_cache": false
+}
