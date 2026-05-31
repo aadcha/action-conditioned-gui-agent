@@ -112,13 +112,15 @@ RESPONSE:
 
 ## Status
 
-_Last updated: May 28, 2026._
+_Last updated: May 31, 2026._
 
-- [x] **Phase 0 — repo, deps, .gitignore.** Layout from roadmap §Phase 0, uv-managed (`pyproject.toml` + `uv.lock`), Python 3.11 pinned. `tests/test_imports.py` passes locally with no GPU.
-- [x] **Phase 1 — Qwen2-VL + LoRA smoke test.** `src/models/base.py:load_qwen2vl_with_lora()` + `scripts/smoke_test.py`. Default base switched to **Qwen2-VL-2B-Instruct** for compute-budget reasons (see [COMPUTE.md](COMPUTE.md)); 7B path lives in `configs/smoke_test_7b.yaml`. Synthesizes a placeholder UI screenshot so it runs with zero datasets downloaded. **Modal entry point** at `modal_app.py::smoke` for cloud verification. _Still needs one successful end-to-end run (local on Mac via MPS or on Modal L4)._
-- [ ] **Phase 2 — data pipeline** (Mind2Web first, balanced ~25k subset; AITW / AndroidControl / Wave-UI-25K deferred).
-- [ ] **Phase 3 — Stage 1 action-type classifier** (+ vision-ablated sanity check on day 1).
-- [ ] **Phase 4 — Stage 2 conditioned grounding** (action-type embedding prepended).
-- [ ] **Phase 5 — eval harness** (Mind2Web type-F1 / step-SR + Showdown Clicks top-1).
-- [ ] **Phase 6 — ablations A–D** (flat baseline / aux loss / hard routing / type embedding).
-- [ ] **Phase 7 — analysis, attention viz, writeup.**
+- [x] **Phase 0 — repo, deps.** uv-managed (`pyproject.toml` + `uv.lock`), Python 3.11 pinned. 22 tests passing.
+- [x] **Phase 1 — Qwen2-VL + LoRA smoke test.** Default base switched to Qwen2-VL-2B-Instruct ([COMPUTE.md](COMPUTE.md)). Verified on Modal L4.
+- [x] **Phase 2 — Stage 1 classifier on Mind2Web** (text + vision features). 3-seed result: vision_text macro-F1 = **0.605 ± 0.016** vs majority floor 0.472; vision delta +0.009. Sanity check (vision_zeroed) collapses to majority. [`results/phase2/PHASE2_RESULTS.md`](results/phase2/PHASE2_RESULTS.md).
+- [x] **Phase 3 — Stage 1 classifier on AITW** (the multi-class story). 3-seed result: vision_text macro-F1 = **0.555 ± 0.036**, text_only 0.141 ± 0.032, vision_zeroed 0.110. **Vision delta = +0.414 ± 0.052 macro-F1** (40× larger than Mind2Web). [`results/phase3/PHASE3_RESULTS.md`](results/phase3/PHASE3_RESULTS.md).
+- [x] **Phase 4 — Stage 2 conditioned grounding architecture.** `src/models/stage2_grounding.py` works end-to-end on Modal. First training (n=500 taps × 2 epochs): hit@0.10 = 0.380, hit@0.25 = 0.650 (~12× random). [`results/phase4/PHASE4_RESULTS.md`](results/phase4/PHASE4_RESULTS.md).
+- [~] **Phase 5 — A vs D ablation.** First cut: taps-only 3-seed comparison ([`results/phase4/ABLATION_v_A_vs_D.md`](results/phase4/ABLATION_v_A_vs_D.md)) — A 0.363 ± 0.040 vs D 0.320 ± 0.036 hit@0.10 (within noise; A slightly ahead). Mechanism understood: taps-only training has no action-type variance for D's embedding to learn from. Multi-action-type retry (`data_mix=taps_and_swipes`, n_train=1000, 3 seeds × 2 variants) in flight; auto-rendered headline at [`results/phase4/PHASE5_HEADLINE.md`](results/phase4/PHASE5_HEADLINE.md).
+- [x] **Milestone 3** (May 29) — submitted. Slide-handoff doc: [`results/milestone3/MILESTONE3.md`](results/milestone3/MILESTONE3.md). Headline: zero-shot Qwen2-VL-2B has vision-delta = 0.000 on Mind2Web action-type; TF-IDF beats the 2B VLM by 15 macro-F1.
+- [ ] **Phase 6 — stretch + writeup** (7B run, soft routing, attention viz, final report, poster).
+
+Cumulative Modal spend: **~$6 of $200 (3%).**
