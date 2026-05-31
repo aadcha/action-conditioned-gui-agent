@@ -42,5 +42,6 @@
     "hit_at_005": 0.14,
     "hit_at_010": 0.28,
     "hit_at_025": 0.6
-  }
+  },
+  "_file": "train_seed44_n500_ep2_lr2e-05.json"
 }
