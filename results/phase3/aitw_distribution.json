@@ -1,0 +1,75 @@
+{
+  "source": "cjfcsjt/AITW_General",
+  "config": "standard",
+  "split": "train",
+  "rows_streamed": 10000,
+  "rows_kept_after_taxonomy": 10000,
+  "unique_episodes": 1207,
+  "raw_int_distribution": {
+    "4": 6861,
+    "10": 1205,
+    "6": 568,
+    "3": 1139,
+    "5": 74,
+    "7": 152,
+    "11": 1
+  },
+  "string_label_distribution": {
+    "tap": 5496,
+    "status_task_complete": 1205,
+    "press_home": 568,
+    "swipe_up": 1178,
+    "type": 1139,
+    "swipe_down": 108,
+    "press_back": 74,
+    "swipe_left": 28,
+    "press_enter": 152,
+    "swipe_right": 51,
+    "status_task_impossible": 1
+  },
+  "canonical_distribution_count": {
+    "click": 5496,
+    "scroll": 1365,
+    "finished": 1206,
+    "type": 1139,
+    "hotkey": 794
+  },
+  "canonical_distribution_pct": {
+    "click": 54.96,
+    "scroll": 13.65,
+    "finished": 12.06,
+    "type": 11.39,
+    "hotkey": 7.94
+  },
+  "active_canonical_classes": [
+    "click",
+    "finished",
+    "hotkey",
+    "scroll",
+    "type"
+  ],
+  "canonical_axes": {
+    "click": 0,
+    "double_click": 1,
+    "type": 2,
+    "scroll": 3,
+    "drag": 4,
+    "hotkey": 5,
+    "wait": 6,
+    "finished": 7
+  },
+  "typed_text_examples": [
+    "How much does a 2x4x8 board cost at Lowes?",
+    "Google the capital of Mexico",
+    "What time is it in Berlin?",
+    "Play the latest video from the Wall Street Journal",
+    "What's the news this weekend?"
+  ],
+  "goal_examples": [
+    "Search for the best burger restaurants on Maps",
+    "Play the new Selena Gomez video on YouTube",
+    "Search for a new bronzer",
+    "Open a new incognito window in Chrome",
+    "What is the capital of Canada?"
+  ]
+}
