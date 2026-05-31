@@ -34,18 +34,50 @@ assumes — and that Mind2Web cannot provide (2 active classes, 88/12 skew).
 - **MLP** — same recipe as Phase 2: hidden=1024, dropout=0.1, balanced CE,
   AdamW lr=1e-4, 8 epochs, batch_size=128, seed=42.
 
-## Headline numbers
+## Headline numbers (3-seed mean ± std)
 
-| Variant | macro-F1 | accuracy |
+| Variant | macro-F1 |
+|---|---|
+| **vision_text** | **0.555 ± 0.036** |
+| text_only | 0.141 ± 0.032 |
+| vision_zeroed (sanity check) | 0.110 ± 0.051 |
+
+**Vision delta (vision_text – text_only): +0.414 ± 0.052 macro-F1.**
+
+For context, single-seed (seed=42) numbers used elsewhere in this doc:
+0.515 / 0.159 / 0.140. The 3-seed mean is slightly higher because seed 44
+peaked at 0.640. The +0.357 delta reported in the original commit message
+is the seed-42 number; the multi-seed mean delta is +0.414.
+
+## Phase 3.4 — TF-IDF baselines on AITW (text-only sanity check)
+
+To confirm the "vision is essential" claim isn't an artifact of the Stage 1
+MLP being a weak text-only learner, we ran the Milestone-3 TF-IDF + LogReg
+recipe on AITW too:
+
+| Model | macro-F1 | notes |
 |---|---|---|
-| **vision_text** | **0.515** | 0.529 |
-| text_only | 0.159 | 0.223 |
-| vision_zeroed (sanity check) | 0.140 | 0.536 |
+| majority class (predicts click) | 0.140 | the floor |
+| stratified random | 0.174 | |
+| TF-IDF + LogReg, goal_only, balanced | **0.168** | what text alone can do |
+| TF-IDF + LogReg, goal_only, unweighted | 0.142 | collapses to majority |
+| TF-IDF + LogReg, goal_plus_typed, balanced | 0.353 | **leaky** — `typed_text` is non-empty *only* for TYPE actions |
+| TF-IDF + LogReg, goal_plus_typed, unweighted | 0.343 | also leaky |
 
-**Vision delta (vision_text – text_only): +0.357 macro-F1.**
-**Vision delta vs zeroed sanity check: +0.376 macro-F1.**
+The honest text-only ceiling on AITW is **macro-F1 ≈ 0.17**. TF-IDF cannot
+beat the majority baseline meaningfully — there is simply no
+action-type-predictive signal in the goal text on AITW. (The Milestone-3
+result on Mind2Web of 0.622 macro-F1 comes from the instruction text
+literally containing the action verb. AITW goals describe what the user
+wants to *accomplish*, not what physical input they need to do next.)
 
-📈 `aitw_stage1_variants.png` — bar chart.
+The "leaky" goal_plus_typed configuration is a useful upper bound to
+illustrate the point: even when given a field that perfectly tags TYPE
+actions, TF-IDF only reaches 0.35 — still ~20 macro-F1 points below the
+Stage 1 MLP with vision (0.555).
+
+📈 `aitw_stage1_headline.png` — multi-seed bar chart with TF-IDF columns.
+📈 `aitw_stage1_variants.png` — single-seed bar chart.
 📈 `aitw_stage1_per_class_f1.png` — per-class F1 for text vs vision+text.
 📈 `aitw_stage1_confusion.png` — three confusion matrices side-by-side.
 📈 `stage1_mind2web_vs_aitw.png` — Mind2Web vs AITW comparison.

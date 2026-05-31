@@ -133,6 +133,82 @@ def plot_mind2web_vs_aitw(out_path: Path) -> None:
     plt.close(fig)
 
 
+def aggregate_aitw_seeds(seed_files: list[Path]) -> dict:
+    seed_results = [json.loads(p.read_text()) for p in seed_files]
+    per_variant: dict[str, dict] = {}
+    for v in ("text_only", "vision_text", "vision_zeroed"):
+        macros = [r["variants"][v]["best_val_macro_f1"] for r in seed_results]
+        accs = [r["variants"][v]["best_val_metrics"]["accuracy"] for r in seed_results]
+        per_variant[v] = {
+            "macro_f1_mean": float(np.mean(macros)),
+            "macro_f1_std": float(np.std(macros, ddof=1)) if len(macros) > 1 else 0.0,
+            "macro_f1_seeds": macros,
+            "accuracy_mean": float(np.mean(accs)),
+        }
+    deltas_vt = [r["delta_vision_minus_text_only"] for r in seed_results]
+    deltas_vz = [r["delta_vision_minus_zeroed"] for r in seed_results]
+    return {
+        "n_seeds": len(seed_results),
+        "per_variant": per_variant,
+        "vision_minus_text_only": {
+            "mean": float(np.mean(deltas_vt)),
+            "std": float(np.std(deltas_vt, ddof=1)) if len(deltas_vt) > 1 else 0.0,
+            "seeds": deltas_vt,
+        },
+        "vision_minus_zeroed": {
+            "mean": float(np.mean(deltas_vz)),
+            "std": float(np.std(deltas_vz, ddof=1)) if len(deltas_vz) > 1 else 0.0,
+        },
+    }
+
+
+def plot_aitw_multiseed_bar(agg: dict, tfidf: list[dict] | None, out_path: Path) -> None:
+    variants = ["vision_zeroed", "text_only", "vision_text"]
+    means = [agg["per_variant"][v]["macro_f1_mean"] for v in variants]
+    stds = [agg["per_variant"][v]["macro_f1_std"] for v in variants]
+    labels = ["MLP\nvision_zeroed", "MLP\ntext_only", "MLP\nvision+text"]
+
+    tfidf_lookup: dict[str, float] = {}
+    if tfidf:
+        for r in tfidf:
+            tfidf_lookup[r["name"]] = r["macro_f1"]
+
+    extra_labels: list[str] = []
+    extra_values: list[float] = []
+    for k, label in (
+        ("majority_class", "majority\n(text baseline)"),
+        ("tfidf_logreg/goal_only/cw=balanced", "TF-IDF\ngoal_only"),
+        ("tfidf_logreg/goal_plus_typed/cw=balanced", "TF-IDF\ngoal+typed\n(leaky)"),
+    ):
+        if k in tfidf_lookup:
+            extra_labels.append(label)
+            extra_values.append(tfidf_lookup[k])
+
+    all_labels = extra_labels + labels
+    all_values = extra_values + means
+    all_errs = [0.0] * len(extra_values) + stds
+
+    x = np.arange(len(all_labels))
+    fig, ax = plt.subplots(figsize=(11, 5.5))
+    colors = ["#888"] * len(extra_values) + ["#bdbdbd", "#3a6ea5", "#9d4edd"]
+    ax.bar(x, all_values, yerr=all_errs, capsize=4, color=colors)
+    for i, (v, e) in enumerate(zip(all_values, all_errs)):
+        ax.text(i, v + (e or 0) + 0.015, f"{v:.3f}", ha="center", va="bottom", fontsize=9)
+    ax.set_xticks(x)
+    ax.set_xticklabels(all_labels, fontsize=9)
+    ax.set_ylabel(f"val macro-F1 on AITW test (n=1000)")
+    ax.set_ylim(0, 1.0)
+    ax.axhline(1.0 / 5, ls=":", color="#444", label="uniform-prior macro-F1 (5 classes = 0.2)")
+    ax.set_title(
+        f"AITW Stage 1 — text baselines vs Qwen2-VL-2B MLP\n"
+        f"({agg['n_seeds']}-seed mean ± std for MLPs)"
+    )
+    ax.legend(loc="upper left")
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+
+
 def main() -> None:
     src = PHASE3_DIR / "stage1_aitw_results.json"
     if not src.exists():
@@ -145,13 +221,30 @@ def main() -> None:
     plot_confusion_per_variant(results, PHASE3_DIR / "aitw_stage1_confusion.png")
     plot_per_class_f1(results, PHASE3_DIR / "aitw_stage1_per_class_f1.png")
     plot_mind2web_vs_aitw(PHASE3_DIR / "stage1_mind2web_vs_aitw.png")
-    print(f"[p3-consolidate] figures written to {PHASE3_DIR}")
+    print(f"[p3-consolidate] single-seed figures written")
 
-    print("\n=== AITW Stage 1 headline ===")
+    # Multi-seed aggregation
+    canonical_seed_files = [
+        PHASE3_DIR / "stage1_aitw_results.json",
+        PHASE3_DIR / "stage1_aitw_results_seed43.json",
+        PHASE3_DIR / "stage1_aitw_results_seed44.json",
+    ]
+    existing = [p for p in canonical_seed_files if p.exists()]
+    if len(existing) > 1:
+        agg = aggregate_aitw_seeds(existing)
+        (PHASE3_DIR / "stage1_aitw_multiseed.json").write_text(json.dumps(agg, indent=2))
+        tfidf = _load(PHASE3_DIR / "aitw_text_baselines.json")
+        plot_aitw_multiseed_bar(agg, tfidf, PHASE3_DIR / "aitw_stage1_headline.png")
+        print(f"[p3-consolidate] multi-seed aggregation written (n={agg['n_seeds']})")
+
+        print("\n=== AITW Stage 1 multi-seed headline ===")
+        for v, stats in agg["per_variant"].items():
+            print(f"  {v:<14}  macro-F1 = {stats['macro_f1_mean']:.4f} ± {stats['macro_f1_std']:.4f}")
+        print(f"\n  vision_text - text_only:    {agg['vision_minus_text_only']['mean']:+.4f} ± {agg['vision_minus_text_only']['std']:.4f}")
+
+    print("\n(single-seed seed=42 raw)")
     for v, mf1 in results["headline_macro_f1"].items():
         print(f"  {v:<14}  macro-F1 = {mf1:.4f}")
-    print(f"\n  vision_text - text_only:    {results['delta_vision_minus_text_only']:+.4f}")
-    print(f"  vision_text - vision_zeroed: {results['delta_vision_minus_zeroed']:+.4f}")
 
 
 if __name__ == "__main__":
