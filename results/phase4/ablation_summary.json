@@ -2,48 +2,53 @@
   "D__taps_and_swipes": {
     "variant": "D",
     "data_mix": "taps_and_swipes",
-    "n_seeds": 2,
+    "n_seeds": 3,
     "seeds": [
+      42,
       43,
       44
     ],
     "n_train": 1000,
     "epochs": 2,
     "hit_at_005": {
-      "mean": 0.1625,
-      "std": 0.0035355339059327407,
+      "mean": 0.16333333333333333,
+      "std": 0.002886751345948131,
       "seeds": [
-        0.16,
-        0.165
+        0.165,
+        0.165,
+        0.16
       ]
     },
     "hit_at_010": {
-      "mean": 0.2875,
-      "std": 0.010606601717798184,
+      "mean": 0.28833333333333333,
+      "std": 0.00763762615825971,
       "seeds": [
-        0.295,
-        0.28
+        0.29,
+        0.28,
+        0.295
       ]
     },
     "hit_at_025": {
-      "mean": 0.6225,
-      "std": 0.010606601717798222,
+      "mean": 0.6116666666666667,
+      "std": 0.020207259421636918,
       "seeds": [
-        0.615,
-        0.63
+        0.59,
+        0.63,
+        0.615
       ]
     },
     "mean_norm_l2": {
-      "mean": 0.21151144801730537,
-      "std": 0.0033061580372271532
+      "mean": 0.21462528953874746,
+      "std": 0.005878211253904594
     },
     "final_loss": {
-      "mean": 0.984845336407423,
-      "std": 0.0033828168234022625
+      "mean": 0.9858554098208745,
+      "std": 0.0029635231957977765
     },
     "files": [
-      "train_seed44_n1000_ep2_lr2e-05_mix-taps_and_swipes.json",
-      "train_seed43_n1000_ep2_lr2e-05_mix-taps_and_swipes.json"
+      "train_seed42_n1000_ep2_lr2e-05_mix-taps_and_swipes.json",
+      "train_seed43_n1000_ep2_lr2e-05_mix-taps_and_swipes.json",
+      "train_seed44_n1000_ep2_lr2e-05_mix-taps_and_swipes.json"
     ]
   },
   "D__taps_only": {
