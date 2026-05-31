@@ -1,0 +1,25 @@
+{
+  "model_id": "Qwen/Qwen2-VL-2B-Instruct",
+  "split": "train",
+  "mode": "vision_text",
+  "n_steps_requested": 0,
+  "n_steps_used": 7775,
+  "skipped_unmapped": 0,
+  "skipped_no_image": 0,
+  "seed": 42,
+  "batch_size": 2,
+  "max_image_pixels": 1000000,
+  "hidden_size": 1536,
+  "features_shape": [
+    7775,
+    1536
+  ],
+  "label_distribution_by_id": {
+    "0": 6839,
+    "2": 936
+  },
+  "feature_norm_mean": 93.19196319580078,
+  "feature_norm_std": 4.656478404998779,
+  "cache_file": "/root/cache/stage1/features_train_vision_text_n0_seed42.pt",
+  "from_cache": false
+}
