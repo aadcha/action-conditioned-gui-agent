@@ -51,6 +51,13 @@ class Stage2Config:
     target_modules: tuple[str, ...] = DEFAULT_TARGET_MODULES
     dtype: torch.dtype = torch.bfloat16
     device_map: str | dict = "auto"
+    # Diagnostic flag for Phase 5: when False, the action embedding table
+    # stays at random init throughout training (requires_grad=False). The
+    # model still sees the slot at the same position; only the per-class
+    # specialization is removed. Comparing trainable=True (variant D) vs
+    # trainable=False isolates "slot disturbs the prompt" from "embedding
+    # not learning fast enough".
+    action_embeddings_trainable: bool = True
 
 
 class Stage2ConditionedGrounding(nn.Module):
@@ -106,6 +113,10 @@ class Stage2ConditionedGrounding(nn.Module):
         # since their outputs slot directly into inputs_embeds.
         first_vlm_param = next(self.vlm.parameters())
         self.action_embeddings.to(device=first_vlm_param.device, dtype=cfg.dtype)
+        if not cfg.action_embeddings_trainable:
+            # Diagnostic mode: embedding stays at random init throughout training.
+            for p in self.action_embeddings.parameters():
+                p.requires_grad_(False)
 
     # ---- helpers --------------------------------------------------------
 
