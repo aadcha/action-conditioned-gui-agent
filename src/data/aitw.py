@@ -60,29 +60,74 @@ DEFAULT_TAP_THRESHOLD = 0.04
 
 
 # AITW HF mirror (cjfcsjt/AITW_General) stores screenshots as raw RGB pixel
-# bytes with no header, packed as W*H*3 uint8s. Empirically the General config
-# uses 540x1080 (half-resolution Pixel 3 portrait): 540*1080*3 = 1,749,600 bytes.
-# If a future row deviates, _decode_aitw_image_bytes inspects byte length and
-# tries the standard candidates.
+# bytes with no header. Bytes per row = width * height * 3. The train split is
+# uniformly 540*1080 (Pixel 3 half-res); the test split has multiple device
+# resolutions. Empirically observed byte-length → (W, H) pairs are listed below.
+# For an unrecognized length, _decode_aitw_image_bytes falls back to a search
+# over plausible portrait phone aspect ratios so the pipeline never crashes.
 _AITW_KNOWN_SHAPES: tuple[tuple[int, int], ...] = (
-    (540, 1080),   # 1,749,600 bytes — the General config
-    (1080, 540),   # 1,749,600 bytes — same product, in case orientation flipped
-    (1080, 2160),  # 6,998,400 bytes — full Pixel 3 portrait
-    (480, 800),    # 1,152,000 bytes — alternate device
+    (540, 1080),   # 1,749,600 bytes — Pixel 3 half-res
+    (540, 1140),   # 1,846,800 bytes — Pixel 4 half-res
+    (540, 1170),   # 1,895,400 bytes — Pixel 5 half-res
+    (412, 732),    # 904,752  bytes  — observed in test
+    (720, 1520),   # 3,283,200 bytes — full Pixel 4 portrait
+    (720, 1440),   # 3,110,400 bytes — observed (Pixel 2 / Galaxy S8 portrait)
+    (270, 600),    # 486,000  bytes  — small quarter-res device
+    (1080, 540),   # mirror in case orientation flipped
+    (1080, 2160),  # 6,998,400 — full Pixel 3 portrait
+    (480, 800),    # 1,152,000
 )
+
+
+# Common widths to try first when guessing — empirically observed widths from
+# real Android phone screenshots and their half/quarter resolutions.
+_AITW_GUESS_WIDTHS: tuple[int, ...] = (
+    540, 720, 1080, 412, 480, 270, 360, 320, 800, 1440, 768, 600, 1200,
+)
+
+
+def _guess_aitw_shape(n_bytes: int) -> tuple[int, int] | None:
+    """Search plausible (w, h) for a raw-RGB buffer of `n_bytes` bytes.
+
+    Tries common phone widths first; then falls back to a brute-force scan over
+    w in [240, 1440] step 4. Accepts only portrait aspect ratios (h between
+    1.2*w and 3.0*w) to avoid landscape false positives.
+    """
+    if n_bytes % 3 != 0:
+        return None
+    n_pixels = n_bytes // 3
+
+    # 1) prioritized common widths
+    for w in _AITW_GUESS_WIDTHS:
+        if n_pixels % w == 0:
+            h = n_pixels // w
+            if 1.2 * w <= h <= 3.0 * w:
+                return (w, h)
+
+    # 2) brute-force fallback
+    for w in range(240, 1441, 4):
+        if n_pixels % w != 0:
+            continue
+        h = n_pixels // w
+        if 1.2 * w <= h <= 3.0 * w:
+            return (w, h)
+    return None
 
 
 def _decode_aitw_image_bytes(buf: bytes) -> Image.Image:
     """Decode AITW raw-RGB image bytes into a PIL.Image.
 
-    Tries the known shapes first; falls back to attempting `Image.open` in case
-    a future variant of the dataset stores encoded images instead.
+    Order: known explicit shapes → portrait-aspect search → PIL.Image.open
+    fallback (in case a future variant of the dataset stores encoded images).
     """
     n = len(buf)
     for w, h in _AITW_KNOWN_SHAPES:
         if w * h * 3 == n:
             return Image.frombytes("RGB", (w, h), buf)
-    # Fallback: maybe it's a real encoded image after all.
+    guessed = _guess_aitw_shape(n)
+    if guessed is not None:
+        return Image.frombytes("RGB", guessed, buf)
+    # Last resort — could still be a real encoded image.
     return Image.open(io.BytesIO(buf)).convert("RGB")
 
 

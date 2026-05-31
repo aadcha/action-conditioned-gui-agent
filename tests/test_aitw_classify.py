@@ -77,6 +77,28 @@ def test_row_to_step_captures_typed_text():
     assert step.typed_text == "hello world"
 
 
+def test_guess_aitw_shape_recognizes_observed_lengths():
+    """The byte lengths empirically observed in cjfcsjt/AITW_General/standard
+    must all resolve to a plausible (w, h) — otherwise feature extraction
+    crashes on those rows."""
+    from src.data.aitw import _guess_aitw_shape
+    observed_lengths = [
+        1_749_600,  # 540x1080
+        1_846_800,  # 540x1140
+        1_895_400,  # 540x1170
+        904_752,    # 412x732
+        3_283_200,  # 720x1520
+        3_110_400,  # 720x1440
+        486_000,    # 270x600
+    ]
+    for L in observed_lengths:
+        shape = _guess_aitw_shape(L)
+        assert shape is not None, f"len {L} must resolve to a shape"
+        w, h = shape
+        assert w * h * 3 == L, f"shape {w}x{h} doesn't account for {L} bytes"
+        assert 1.2 * w <= h <= 3.0 * w, f"shape {w}x{h} is not portrait"
+
+
 def test_action_type_enum_is_complete():
     # Sanity: every name in the enum must be representable in our taxonomy
     # via either DUAL_POINT classification or _NON_DUAL_POINT_TO_STRING.
