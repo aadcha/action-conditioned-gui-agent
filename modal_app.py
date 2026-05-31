@@ -63,6 +63,11 @@ image = (
 hf_cache = modal.Volume.from_name("hf-cache", create_if_missing=True)
 HF_CACHE_PATH = "/root/.cache/huggingface"
 
+# Cache Qwen2-VL pooled features + small artifacts across runs. The MLP itself
+# is tiny so we can retrain it many times once features are cached.
+stage1_cache = modal.Volume.from_name("stage1-cache", create_if_missing=True)
+STAGE1_CACHE_PATH = "/root/cache/stage1"
+
 app = modal.App("action-conditioned-gui-agent")
 
 
@@ -622,3 +627,421 @@ def vision_ablation_m3(
     print(f"[m3-vis] vision_text:  macro_f1={vis['macro_f1']:.3f}  acc={vis['accuracy']:.3f}")
     d = result["vision_delta"]
     print(f"[m3-vis] DELTA:        macro_f1={d['macro_f1']:+.3f}  acc={d['accuracy']:+.3f}")
+
+
+# ---- Phase 2: Stage 1 real classifier on cached Qwen2-VL features -----------
+#
+# Step 1: Extract pooled features from a frozen Qwen2-VL-2B forward pass over
+#         Multimodal-Mind2Web (one cache per (split, mode) pair).
+# Step 2: Train the MLP head (src/models/stage1_classifier.py +
+#         src/train/stage1.py) on cached features. Cheap and re-runnable.
+#
+# This is the real Stage 1 the project proposes — replaces the TF-IDF baseline
+# headline from Milestone 3.
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret],
+    timeout=21600,
+)
+def _extract_features(
+    model_id: str,
+    split: str,
+    mode: str,                # "text_only" | "vision_text"
+    n_steps: int,             # 0 = full split
+    batch_size: int,
+    max_image_pixels: int,
+    seed: int,
+    force_recompute: bool,
+) -> dict:
+    """Forward-pass Qwen2-VL-2B over a Multimodal-Mind2Web split, save pooled
+    features to the stage1-cache Modal Volume.
+
+    The pooling is mean-of-last-hidden-state across all tokens (visual + text
+    fused after the LM's cross-attention). Single vector per example.
+    """
+    import os
+    import sys
+    import json as _json
+    import random
+    from collections import Counter
+    from pathlib import Path
+
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+
+    import torch
+    from datasets import load_dataset
+    from qwen_vl_utils import process_vision_info
+    from tqdm import tqdm
+    from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+
+    from src.data.taxonomy import unify_action
+
+    assert mode in ("text_only", "vision_text"), f"bad mode: {mode}"
+
+    cache_dir = Path(STAGE1_CACHE_PATH)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_file = cache_dir / f"features_{split}_{mode}_n{n_steps}_seed{seed}.pt"
+    meta_file = cache_dir / f"features_{split}_{mode}_n{n_steps}_seed{seed}.meta.json"
+
+    if cache_file.exists() and not force_recompute:
+        print(f"[extract] cached features exist at {cache_file}; skipping (use force_recompute=True to re-run)")
+        meta = _json.loads(meta_file.read_text()) if meta_file.exists() else {}
+        meta["cache_file"] = str(cache_file)
+        meta["from_cache"] = True
+        return meta
+
+    print(f"[extract] loading {model_id}...")
+    model = Qwen2VLForConditionalGeneration.from_pretrained(
+        model_id, torch_dtype=torch.bfloat16, device_map="auto"
+    )
+    processor = AutoProcessor.from_pretrained(model_id)
+    model.eval()
+    hf_cache.commit()
+
+    # In transformers v5 Qwen2VLConfig nests hidden_size under text_config. Probe
+    # both locations; fall back to a dynamic read after the first forward pass.
+    hidden_size = None
+    for attr_path in ("text_config.hidden_size", "hidden_size"):
+        cur = model.config
+        try:
+            for part in attr_path.split("."):
+                cur = getattr(cur, part)
+            hidden_size = int(cur)
+            break
+        except AttributeError:
+            continue
+    print(f"[extract] hidden_size (from config) = {hidden_size}")
+
+    print(f"[extract] loading osunlp/Multimodal-Mind2Web split={split}...")
+    ds = load_dataset(
+        "osunlp/Multimodal-Mind2Web", split=split, token=os.environ.get("HF_TOKEN")
+    )
+    print(f"[extract] full split size: {len(ds)} steps")
+
+    rng = random.Random(seed)
+    indices = list(range(len(ds)))
+    rng.shuffle(indices)
+    if n_steps > 0:
+        indices = indices[:n_steps]
+    print(f"[extract] will process {len(indices)} steps in mode={mode}")
+
+    # Pre-build examples (parse operation, decode screenshot, etc.)
+    PROMPT_TMPL = (
+        "Predict the next action type for the user task and target HTML element.\n"
+        "User task: {task}\n"
+        "Target HTML: {html}\n"
+        "Action type:"
+    )
+
+    examples = []
+    skipped_unmapped = skipped_no_image = 0
+    for idx in indices:
+        ex = ds[idx]
+        op_raw = ex.get("operation")
+        if isinstance(op_raw, str):
+            try:
+                op = _json.loads(op_raw).get("op")
+            except Exception:
+                op = None
+        elif isinstance(op_raw, dict):
+            op = op_raw.get("op")
+        else:
+            op = None
+        if not op:
+            continue
+        try:
+            cid = unify_action(op, "mind2web")
+        except KeyError:
+            skipped_unmapped += 1
+            continue
+        screenshot = ex.get("screenshot")
+        if screenshot is None:
+            skipped_no_image += 1
+            continue
+        img = screenshot.convert("RGB") if hasattr(screenshot, "convert") else screenshot
+        if max_image_pixels > 0 and img.width * img.height > max_image_pixels:
+            r = (max_image_pixels / (img.width * img.height)) ** 0.5
+            img = img.resize((max(1, int(img.width * r)), max(1, int(img.height * r))))
+        text_prompt = PROMPT_TMPL.format(
+            task=ex.get("confirmed_task", "") or "",
+            html=(ex.get("cleaned_html") or ex.get("raw_html") or "")[:1000],
+        )
+        examples.append({"text": text_prompt, "image": img, "label": cid})
+
+    print(f"[extract] kept {len(examples)} (skipped {skipped_unmapped} unmapped, {skipped_no_image} no-image)")
+
+    # Forward pass + pool. Process in batches.
+    all_features: list[torch.Tensor] = []
+    all_labels: list[int] = []
+    pbar = tqdm(range(0, len(examples), batch_size), desc=f"extract({mode})")
+    for start in pbar:
+        batch = examples[start : start + batch_size]
+        messages_batch = []
+        for ex in batch:
+            content = []
+            if mode == "vision_text":
+                content.append({"type": "image", "image": ex["image"]})
+            content.append({"type": "text", "text": ex["text"]})
+            messages_batch.append([{"role": "user", "content": content}])
+        texts = [
+            processor.apply_chat_template(m, tokenize=False, add_generation_prompt=True)
+            for m in messages_batch
+        ]
+        image_inputs, video_inputs = (
+            process_vision_info(messages_batch) if mode == "vision_text" else (None, None)
+        )
+        inputs = processor(
+            text=texts,
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        ).to(model.device)
+
+        with torch.inference_mode():
+            out = model(**inputs, output_hidden_states=True, return_dict=True)
+            last_hidden = out.hidden_states[-1]  # [B, T, H]
+            if hidden_size is None:
+                hidden_size = int(last_hidden.shape[-1])
+                print(f"[extract] hidden_size (from forward) = {hidden_size}")
+            # Masked mean-pool over real tokens
+            attention_mask = inputs["attention_mask"].unsqueeze(-1).to(last_hidden.dtype)
+            pooled = (last_hidden * attention_mask).sum(dim=1) / attention_mask.sum(dim=1).clamp(min=1)
+            pooled = pooled.to(torch.float32).cpu()
+
+        all_features.append(pooled)
+        all_labels.extend([ex["label"] for ex in batch])
+
+    features = torch.cat(all_features, dim=0)  # [N, H]
+    labels = torch.tensor(all_labels, dtype=torch.long)
+    print(f"[extract] features shape: {features.shape}  labels shape: {labels.shape}")
+    print(f"[extract] feature norm mean/std: {features.norm(dim=1).mean():.3f} / {features.norm(dim=1).std():.3f}")
+
+    torch.save({"features": features, "labels": labels, "hidden_size": hidden_size}, cache_file)
+    label_dist = {int(k): int(v) for k, v in Counter(all_labels).items()}
+    meta = {
+        "model_id": model_id,
+        "split": split,
+        "mode": mode,
+        "n_steps_requested": n_steps,
+        "n_steps_used": len(examples),
+        "skipped_unmapped": skipped_unmapped,
+        "skipped_no_image": skipped_no_image,
+        "seed": seed,
+        "batch_size": batch_size,
+        "max_image_pixels": max_image_pixels,
+        "hidden_size": hidden_size,
+        "features_shape": list(features.shape),
+        "label_distribution_by_id": label_dist,
+        "feature_norm_mean": float(features.norm(dim=1).mean()),
+        "feature_norm_std": float(features.norm(dim=1).std()),
+        "cache_file": str(cache_file),
+        "from_cache": False,
+    }
+    meta_file.write_text(_json.dumps(meta, indent=2))
+    stage1_cache.commit()
+    return meta
+
+
+@app.local_entrypoint()
+def extract_features(
+    model_id: str = "Qwen/Qwen2-VL-2B-Instruct",
+    split: str = "train",
+    mode: str = "vision_text",
+    n_steps: int = 0,
+    batch_size: int = 2,
+    max_image_pixels: int = 1_000_000,
+    seed: int = 42,
+    force_recompute: bool = False,
+) -> None:
+    """One (split, mode) pair → cached features on the stage1-cache Volume.
+
+    Typical usage to get everything we need for Phase 2:
+
+        modal run modal_app.py::extract_features --split train --mode vision_text
+        modal run modal_app.py::extract_features --split train --mode text_only
+        modal run modal_app.py::extract_features --split test_task --mode vision_text
+        modal run modal_app.py::extract_features --split test_task --mode text_only
+    """
+    import json
+    from pathlib import Path
+
+    meta = _extract_features.remote(
+        model_id, split, mode, n_steps, batch_size, max_image_pixels, seed, force_recompute
+    )
+    out = Path(f"results/phase2/feature_meta_{split}_{mode}.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(meta, indent=2))
+    print(f"[extract] meta saved to {out}")
+    print(f"[extract] features cached at: {meta.get('cache_file')}")
+    print(f"[extract] n_steps_used = {meta.get('n_steps_used')}, label dist by id = {meta.get('label_distribution_by_id')}")
+
+
+@app.function(
+    image=image,
+    gpu="L4",  # Tiny MLP — could be CPU. Keeping L4 for parity with the extract image; only ~$0.03 per run.
+    volumes={STAGE1_CACHE_PATH: stage1_cache},
+    timeout=1800,
+)
+def _train_stage1_remote(
+    train_split: str,
+    val_split: str,
+    n_train: int,
+    n_val: int,
+    seed: int,
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    hidden_dim: int,
+    dropout: float,
+    class_weighted: bool,
+    batch_size: int,
+    train_seed: int,
+) -> dict:
+    """Load cached features, train three MLP variants (text_only, vision_text, vision_zeroed).
+
+    The vision_zeroed variant is the Phase 2.4 day-1 sanity check: take the
+    vision+text features and replace them with zeros so the MLP cannot use any
+    of the information the VLM extracted from the screenshot. If macro-F1 holds
+    up vs vision_text, vision contributes nothing and the project framing is in
+    trouble.
+    """
+    import os
+    import sys
+    import json as _json
+    from pathlib import Path
+
+    sys.path.insert(0, "/root/repo")
+    import torch
+
+    from src.models.stage1_classifier import Stage1Config
+    from src.train.stage1 import TrainConfig, train_stage1
+
+    cache_dir = Path(STAGE1_CACHE_PATH)
+
+    def _load(split: str, mode: str, n: int) -> tuple[torch.Tensor, torch.Tensor, dict]:
+        path = cache_dir / f"features_{split}_{mode}_n{n}_seed{seed}.pt"
+        if not path.exists():
+            raise FileNotFoundError(f"Feature cache missing: {path}")
+        blob = torch.load(path, map_location="cpu")
+        return blob["features"], blob["labels"], {"hidden_size": int(blob["hidden_size"]), "path": str(path)}
+
+    print("[train] loading cached features...")
+    feats_train_text, labels_train, meta_text_train = _load(train_split, "text_only", n_train)
+    feats_train_vis, labels_train_vis, meta_vis_train = _load(train_split, "vision_text", n_train)
+    feats_val_text, labels_val, meta_text_val = _load(val_split, "text_only", n_val)
+    feats_val_vis, labels_val_vis, _meta_vis_val = _load(val_split, "vision_text", n_val)
+
+    assert labels_train.equal(labels_train_vis), "train labels diverge between modes"
+    assert labels_val.equal(labels_val_vis), "val labels diverge between modes"
+    hidden = meta_text_train["hidden_size"]
+    assert hidden == meta_vis_train["hidden_size"], "hidden dim mismatch between modes"
+
+    print(f"[train] train n = {feats_train_text.shape[0]}, val n = {feats_val_text.shape[0]}")
+    print(f"[train] hidden_size = {hidden}")
+
+    def _run(variant: str, ft: torch.Tensor, fv: torch.Tensor) -> dict:
+        print(f"\n[train] === variant: {variant} ===")
+        return train_stage1(
+            features_train=ft,
+            labels_train=labels_train,
+            features_val=fv,
+            labels_val=labels_val,
+            model_cfg=Stage1Config(
+                feature_dim=hidden,
+                hidden_dim=hidden_dim,
+                num_classes=8,
+                dropout=dropout,
+            ),
+            train_cfg=TrainConfig(
+                epochs=epochs,
+                lr=lr,
+                weight_decay=weight_decay,
+                batch_size=batch_size,
+                class_weighted=class_weighted,
+                seed=train_seed,
+            ),
+            device="cuda" if torch.cuda.is_available() else "cpu",
+        )
+
+    results: dict[str, dict] = {}
+
+    # Variant: text_only
+    results["text_only"] = _run("text_only", feats_train_text, feats_val_text)
+
+    # Variant: vision_text
+    results["vision_text"] = _run("vision_text", feats_train_vis, feats_val_vis)
+
+    # Variant: vision_zeroed (sanity check) — same shape as vision_text but zeros
+    feats_train_zero = torch.zeros_like(feats_train_vis)
+    feats_val_zero = torch.zeros_like(feats_val_vis)
+    # train_stage1 needs SOMETHING for the model to fit; with all-zero features
+    # the model can only learn a class-prior bias. That's exactly the point: if
+    # macro-F1 matches text_only, the only information the model used was the
+    # class-prior, not the screenshot.
+    results["vision_zeroed"] = _run("vision_zeroed", feats_train_zero, feats_val_zero)
+
+    # Strip large tensors before returning (Modal serializes the whole dict).
+    def _slim(r: dict) -> dict:
+        return {k: v for k, v in r.items() if k != "best_state"}
+
+    summary = {
+        "train_split": train_split,
+        "val_split": val_split,
+        "n_train": int(feats_train_text.shape[0]),
+        "n_val": int(feats_val_text.shape[0]),
+        "hidden_size": hidden,
+        "variants": {k: _slim(v) for k, v in results.items()},
+        "headline_macro_f1": {k: results[k]["best_val_macro_f1"] for k in results},
+        "delta_vision_minus_text_only": (
+            results["vision_text"]["best_val_macro_f1"] - results["text_only"]["best_val_macro_f1"]
+        ),
+        "delta_vision_minus_zeroed": (
+            results["vision_text"]["best_val_macro_f1"] - results["vision_zeroed"]["best_val_macro_f1"]
+        ),
+    }
+    return summary
+
+
+@app.local_entrypoint()
+def train_stage1(
+    train_split: str = "train",
+    val_split: str = "test_task",
+    n_train: int = 0,
+    n_val: int = 0,
+    seed: int = 42,
+    epochs: int = 8,
+    lr: float = 1e-4,
+    weight_decay: float = 0.01,
+    hidden_dim: int = 1024,
+    dropout: float = 0.1,
+    class_weighted: bool = True,
+    batch_size: int = 128,
+    train_seed: int = 42,
+    out_name: str = "stage1_results",
+) -> None:
+    """Train the three MLP variants on cached features. Writes results JSON locally."""
+    import json
+    from pathlib import Path
+
+    result = _train_stage1_remote.remote(
+        train_split, val_split, n_train, n_val, seed,
+        epochs, lr, weight_decay, hidden_dim, dropout, class_weighted,
+        batch_size, train_seed,
+    )
+    out = Path(f"results/phase2/{out_name}.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2))
+    print(f"[train] wrote {out}")
+
+    print("\n=== Stage 1 headline ===")
+    print(f"train n={result['n_train']}  val n={result['n_val']}  hidden={result['hidden_size']}")
+    for variant, macro in result["headline_macro_f1"].items():
+        print(f"  {variant:<14} macro-F1 = {macro:.4f}")
+    print(f"\nvision_text - text_only:    {result['delta_vision_minus_text_only']:+.4f}")
+    print(f"vision_text - vision_zeroed: {result['delta_vision_minus_zeroed']:+.4f}")
