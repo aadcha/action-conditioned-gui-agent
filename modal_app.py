@@ -1354,3 +1354,253 @@ def train_stage1_aitw(
         print(f"  {v:<14} macro-F1 = {mf1:.4f}")
     print(f"\nvision_text - text_only:    {result['delta_vision_minus_text_only']:+.4f}")
     print(f"vision_text - vision_zeroed: {result['delta_vision_minus_zeroed']:+.4f}")
+
+
+# ---- Phase 4: Stage 2 action-type-conditioned grounding ---------------------
+#
+# Trains the action-type-conditioned VLM on AITW DUAL_POINT actions. Stage 1
+# is *not* required for teacher-forced training — we use the gold canonical
+# action ID. Student-forcing (passing Stage 1 predictions instead) is a
+# follow-up once teacher-forced loss curves are healthy.
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache},
+    secrets=[hf_secret],
+    timeout=600,
+)
+def _stage2_smoke_remote(n_examples: int = 2) -> dict:
+    """Load Stage 2 model on Modal, run one forward+backward on synthetic data."""
+    import os
+    import sys
+
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+
+    import torch
+    from PIL import Image as PILImage
+
+    from src.data.aitw import iter_aitw_steps
+    from src.models.stage2_grounding import Stage2ConditionedGrounding, Stage2Config
+    from src.train.stage2 import Stage2Example, build_batch
+
+    print("[s2-smoke] building Stage2ConditionedGrounding...")
+    model = Stage2ConditionedGrounding(Stage2Config())
+    hf_cache.commit()
+    model.print_trainable_parameters()
+
+    device = next(model.parameters()).device
+    print(f"[s2-smoke] device: {device}")
+
+    # Pull a few real AITW DUAL_POINT examples
+    print("[s2-smoke] streaming AITW examples...")
+    examples: list[Stage2Example] = []
+    for step in iter_aitw_steps(n_max=200, include_images=True):
+        if step.string_label != "tap":
+            continue
+        examples.append(Stage2Example(
+            image=step.open_image(),
+            goal_info=step.goal_info,
+            action_type_id=step.canonical_action_id,
+            target_xy=(step.touch_yx[1], step.touch_yx[0]),  # (x, y) from (y, x)
+        ))
+        if len(examples) >= n_examples:
+            break
+    print(f"[s2-smoke] got {len(examples)} examples")
+
+    # Build a batch and run forward + backward
+    batch = build_batch(model, examples, device)
+    print(f"[s2-smoke] batch keys: {list(batch.keys())}")
+    print(f"[s2-smoke] input_ids shape: {batch['input_ids'].shape}")
+
+    print("[s2-smoke] forward + backward...")
+    out = model(**batch)
+    loss = out.loss
+    print(f"[s2-smoke] loss: {loss.item():.4f}")
+    loss.backward()
+
+    # Check that the action embedding got a gradient
+    ae_grad_norm = float(model.action_embeddings.weight.grad.norm()) if model.action_embeddings.weight.grad is not None else 0.0
+    print(f"[s2-smoke] action_embeddings grad norm: {ae_grad_norm:.4f}")
+
+    # Check that *some* LoRA parameters got gradients (we don't enumerate all)
+    lora_with_grad = 0
+    for n, p in model.named_parameters():
+        if "lora" in n.lower() and p.grad is not None and p.grad.norm().item() > 0:
+            lora_with_grad += 1
+    print(f"[s2-smoke] LoRA params with non-zero grad: {lora_with_grad}")
+
+    return {
+        "loss": float(loss.item()),
+        "action_embedding_grad_norm": ae_grad_norm,
+        "lora_params_with_grad": lora_with_grad,
+        "n_examples": len(examples),
+        "input_ids_shape": list(batch["input_ids"].shape),
+    }
+
+
+@app.local_entrypoint()
+def stage2_smoke(n_examples: int = 2) -> None:
+    """Forward+backward smoke test of the Stage 2 model on Modal L4."""
+    result = _stage2_smoke_remote.remote(n_examples)
+    print("\n=== Stage 2 smoke result ===")
+    for k, v in result.items():
+        print(f"  {k}: {v}")
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache},
+    secrets=[hf_secret],
+    timeout=14400,
+)
+def _stage2_train_remote(
+    n_train: int,
+    n_val: int,
+    epochs: int,
+    lr: float,
+    batch_size: int,
+    seed: int,
+    aitw_split: str,
+    coord_scale: int,
+    only_taps: bool,
+) -> dict:
+    """Teacher-forced Stage 2 grounding training on AITW DUAL_POINT actions."""
+    import os
+    import sys
+    import random
+    from collections import Counter
+
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+
+    import torch
+    from src.data.aitw import iter_aitw_steps
+    from src.models.stage2_grounding import Stage2ConditionedGrounding, Stage2Config
+    from src.train.stage2 import (
+        Stage2Example,
+        build_batch,
+        evaluate_grounding,
+    )
+
+    torch.manual_seed(seed)
+    random.seed(seed)
+
+    print(f"[s2-train] streaming AITW {aitw_split} for {n_train + n_val} taps...")
+    examples_all: list[Stage2Example] = []
+    target_needed = n_train + n_val
+    # Pull more rows than needed because we filter to taps with valid coordinates.
+    for step in iter_aitw_steps(split=aitw_split, n_max=max(target_needed * 3, 500), include_images=True):
+        if only_taps and step.string_label != "tap":
+            continue
+        if not only_taps and step.canonical_action_id not in (0, 1, 2, 3, 4, 5, 6, 7):
+            continue
+        examples_all.append(Stage2Example(
+            image=step.open_image(),
+            goal_info=step.goal_info,
+            action_type_id=step.canonical_action_id,
+            target_xy=(step.touch_yx[1], step.touch_yx[0]),  # (x, y) from (y, x)
+        ))
+        if len(examples_all) >= target_needed:
+            break
+    if len(examples_all) < target_needed:
+        print(f"[s2-train] WARN: only got {len(examples_all)} examples after filtering")
+    train_examples = examples_all[:n_train]
+    val_examples = examples_all[n_train:n_train + n_val]
+    print(f"[s2-train] train n={len(train_examples)}  val n={len(val_examples)}")
+    print(f"[s2-train] train action dist: {Counter(e.action_type_id for e in train_examples)}")
+
+    print("[s2-train] loading Stage 2 model...")
+    model = Stage2ConditionedGrounding(Stage2Config())
+    hf_cache.commit()
+    model.print_trainable_parameters()
+
+    device = next(model.parameters()).device
+    optimizer = torch.optim.AdamW(
+        [p for p in model.parameters() if p.requires_grad],
+        lr=lr,
+        weight_decay=0.01,
+    )
+
+    history: list[dict] = []
+    for epoch in range(1, epochs + 1):
+        print(f"\n[s2-train] === epoch {epoch}/{epochs} ===")
+        # Shuffle
+        rng = random.Random(seed + epoch)
+        order = list(range(len(train_examples)))
+        rng.shuffle(order)
+
+        model.train()
+        epoch_loss = 0.0
+        n_steps = 0
+        for i in range(0, len(order), batch_size):
+            batch_indices = order[i : i + batch_size]
+            batch_examples = [train_examples[j] for j in batch_indices]
+            batch = build_batch(model, batch_examples, device, coord_scale=coord_scale)
+            out = model(**batch)
+            loss = out.loss
+            optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(
+                [p for p in model.parameters() if p.requires_grad], max_norm=1.0
+            )
+            optimizer.step()
+            epoch_loss += float(loss.item())
+            n_steps += 1
+            if (n_steps % 25) == 0:
+                print(f"[s2-train]   step {n_steps}  loss={loss.item():.4f}")
+
+        avg = epoch_loss / max(n_steps, 1)
+        eval_metrics = evaluate_grounding(model, val_examples, device, coord_scale=coord_scale)
+        history.append({
+            "epoch": epoch,
+            "train_loss": avg,
+            **{k: v for k, v in eval_metrics.items() if k != "raw_outputs"},
+        })
+        print(f"[s2-train] epoch {epoch} avg loss = {avg:.4f}")
+        print(f"[s2-train] val: parsed {eval_metrics['n_parsed']}/{eval_metrics['n_total']}")
+        print(f"[s2-train] val: mean normalized L2 = {eval_metrics['mean_normalized_l2']:.3f}")
+        print(f"[s2-train] val: hit@0.05={eval_metrics['hit_at_005']:.3f}  hit@0.10={eval_metrics['hit_at_010']:.3f}  hit@0.25={eval_metrics['hit_at_025']:.3f}")
+        print(f"[s2-train] val sample outputs: {eval_metrics.get('raw_outputs', [])[:5]}")
+
+    return {
+        "n_train": len(train_examples),
+        "n_val": len(val_examples),
+        "epochs": epochs,
+        "lr": lr,
+        "batch_size": batch_size,
+        "coord_scale": coord_scale,
+        "history": history,
+        "final_val_metrics": history[-1] if history else None,
+    }
+
+
+@app.local_entrypoint()
+def train_stage2(
+    n_train: int = 500,
+    n_val: int = 100,
+    epochs: int = 2,
+    lr: float = 2e-5,
+    batch_size: int = 1,
+    seed: int = 42,
+    aitw_split: str = "train",
+    coord_scale: int = 1000,
+    only_taps: bool = True,
+    out_name: str = "stage2_train_results",
+) -> None:
+    import json
+    from pathlib import Path
+
+    result = _stage2_train_remote.remote(
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, only_taps,
+    )
+    out = Path(f"results/phase4/{out_name}.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2))
+    print(f"[s2-train] wrote {out}")
+    if result.get("final_val_metrics"):
+        m = result["final_val_metrics"]
+        print(f"[s2-train] final: loss={m['train_loss']:.4f}  hit@0.10={m['hit_at_010']:.3f}  norm L2={m['mean_normalized_l2']:.3f}")
