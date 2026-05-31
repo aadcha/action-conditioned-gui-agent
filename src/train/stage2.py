@@ -253,16 +253,24 @@ def evaluate_grounding(
         batch = examples[start : start + batch_size]
         inputs = build_batch(model, batch, device, coord_scale=coord_scale, include_labels=False)
         prompt_len = inputs["input_ids"].shape[1]
+        # Pass ALL processor outputs through to generate(). Qwen2-VL v5 needs
+        # `mm_token_type_ids` (alongside pixel_values + image_grid_thw) to
+        # compute multimodal RoPE positions; dropping it silently degrades
+        # vision attention. We previously extracted keys by hand and missed
+        # this — caused D to underperform A in eval despite identical training.
+        generate_kwargs = {
+            k: v for k, v in inputs.items()
+            if k not in {"action_type_id", "input_ids", "attention_mask", "labels"}
+        }
         with torch.inference_mode():
             generated = model.generate(
                 action_type_id=inputs["action_type_id"],
                 input_ids=inputs["input_ids"],
                 attention_mask=inputs["attention_mask"],
-                pixel_values=inputs.get("pixel_values"),
-                image_grid_thw=inputs.get("image_grid_thw"),
                 max_new_tokens=max_new_tokens,
                 do_sample=False,
                 pad_token_id=model.processor.tokenizer.eos_token_id,
+                **generate_kwargs,
             )
         # When the underlying generate() is given input_ids alongside our
         # inputs_embeds, it returns the full sequence (prompt prepended).
