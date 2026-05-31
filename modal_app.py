@@ -1931,3 +1931,153 @@ def train_stage2_variantA(
         out.write_text(json.dumps(result, indent=2))
         m = result["final_val_metrics"]
         print(f"[A-train] final: loss={m['train_loss']:.4f}  hit@0.10={m['hit_at_010']:.3f}  hit@0.25={m['hit_at_025']:.3f}")
+
+
+# ---- Phase 5 diagnostic: variant D with frozen action_embeddings ------------
+#
+# Same Stage2ConditionedGrounding pipeline as variant D, but the action
+# embedding table is frozen at random init. The slot token is present in the
+# prompt at the same position, but the model can't specialize per-class.
+# This disentangles "slot disrupts the prompt" from "embedding can't learn fast
+# enough" — both of which would cause D < A.
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret],
+    timeout=14400,
+)
+def _stage2_Dfrozen_train_remote(
+    n_train: int,
+    n_val: int,
+    epochs: int,
+    lr: float,
+    batch_size: int,
+    seed: int,
+    aitw_split: str,
+    coord_scale: int,
+    data_mix: str,
+) -> dict:
+    """Variant D with action_embeddings frozen at random init. Diagnostic only."""
+    import os
+    import sys
+    import random
+    from collections import Counter
+    from pathlib import Path as _Path
+    import json as _json
+
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+
+    import torch
+    from src.data.aitw import iter_aitw_steps
+    from src.models.stage2_grounding import Stage2ConditionedGrounding, Stage2Config
+    from src.train.stage2 import Stage2Example, build_batch, evaluate_grounding
+
+    torch.manual_seed(seed)
+    random.seed(seed)
+
+    _DATA_MIX_LABELS = {
+        "taps_only": {"tap"},
+        "taps_and_swipes": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right"},
+        "all_with_coords": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"},
+    }
+    allowed_labels = _DATA_MIX_LABELS.get(data_mix, {"tap"})
+
+    print(f"[Dfrozen] streaming AITW {aitw_split} (data_mix={data_mix})...")
+    examples_all: list[Stage2Example] = []
+    target_needed = n_train + n_val
+    for step in iter_aitw_steps(split=aitw_split, n_max=max(target_needed * 4, 1000), include_images=True):
+        if step.string_label not in allowed_labels:
+            continue
+        examples_all.append(Stage2Example(
+            image=step.open_image(),
+            goal_info=step.goal_info,
+            action_type_id=step.canonical_action_id,
+            target_xy=(step.touch_yx[1], step.touch_yx[0]),
+        ))
+        if len(examples_all) >= target_needed:
+            break
+    train_examples = examples_all[:n_train]
+    val_examples = examples_all[n_train:n_train + n_val]
+    print(f"[Dfrozen] train n={len(train_examples)}  val n={len(val_examples)}")
+    print(f"[Dfrozen] train action dist: {Counter(e.action_type_id for e in train_examples)}")
+
+    # Build the FROZEN-embedding variant
+    print("[Dfrozen] loading Stage2 model with action_embeddings frozen...")
+    model = Stage2ConditionedGrounding(Stage2Config(action_embeddings_trainable=False))
+    hf_cache.commit()
+    model.print_trainable_parameters()
+
+    device = next(model.parameters()).device
+    optimizer = torch.optim.AdamW(
+        [p for p in model.parameters() if p.requires_grad],
+        lr=lr, weight_decay=0.01,
+    )
+
+    history: list[dict] = []
+    for epoch in range(1, epochs + 1):
+        print(f"\n[Dfrozen] === epoch {epoch}/{epochs} ===")
+        rng = random.Random(seed + epoch)
+        order = list(range(len(train_examples)))
+        rng.shuffle(order)
+        model.train()
+        epoch_loss, n_steps = 0.0, 0
+        for i in range(0, len(order), batch_size):
+            batch_examples = [train_examples[j] for j in order[i:i + batch_size]]
+            batch = build_batch(model, batch_examples, device, coord_scale=coord_scale)
+            out = model(**batch)
+            loss = out.loss
+            optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(
+                [p for p in model.parameters() if p.requires_grad], max_norm=1.0
+            )
+            optimizer.step()
+            epoch_loss += float(loss.item())
+            n_steps += 1
+            if (n_steps % 25) == 0:
+                print(f"[Dfrozen]   step {n_steps}  loss={loss.item():.4f}")
+        avg = epoch_loss / max(n_steps, 1)
+        eval_m = evaluate_grounding(model, val_examples, device, coord_scale=coord_scale)
+        history.append({"epoch": epoch, "train_loss": avg,
+                        **{k: v for k, v in eval_m.items() if k != "raw_outputs"}})
+        print(f"[Dfrozen] epoch {epoch} avg loss = {avg:.4f}")
+        print(f"[Dfrozen] val: hit@0.05={eval_m['hit_at_005']:.3f}  hit@0.10={eval_m['hit_at_010']:.3f}  hit@0.25={eval_m['hit_at_025']:.3f}")
+        print(f"[Dfrozen] val sample outputs: {eval_m.get('raw_outputs', [])[:5]}")
+
+    summary = {
+        "variant": "D_frozen_diagnostic",
+        "n_train": len(train_examples), "n_val": len(val_examples),
+        "epochs": epochs, "lr": lr, "batch_size": batch_size, "coord_scale": coord_scale,
+        "seed": seed, "aitw_split": aitw_split, "data_mix": data_mix,
+        "history": history,
+        "final_val_metrics": history[-1] if history else None,
+    }
+    cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    out_path = cache_dir / f"Dfrozen_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}.json"
+    out_path.write_text(_json.dumps(summary, indent=2))
+    stage1_cache.commit()
+    print(f"[Dfrozen] persisted result to {out_path}")
+    return summary
+
+
+@app.local_entrypoint()
+def train_stage2_Dfrozen(
+    n_train: int = 1000,
+    n_val: int = 200,
+    epochs: int = 2,
+    lr: float = 2e-5,
+    batch_size: int = 1,
+    seed: int = 42,
+    aitw_split: str = "train",
+    coord_scale: int = 1000,
+    data_mix: str = "taps_and_swipes",
+) -> None:
+    """Diagnostic variant D with frozen action embeddings. Use --detach."""
+    _stage2_Dfrozen_train_remote.remote(
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix,
+    )
