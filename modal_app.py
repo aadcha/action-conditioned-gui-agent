@@ -2081,3 +2081,33 @@ def train_stage2_Dfrozen(
     _stage2_Dfrozen_train_remote.remote(
         n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix,
     )
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache},
+    secrets=[hf_secret],
+    timeout=900,
+)
+def _stage2_debug_remote() -> dict:
+    """Run scripts/p5_debug_stage2.py inside Modal so it has GPU + HF cache."""
+    import os, sys, json
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+    # Execute the script's main() and return its results
+    from scripts.p5_debug_stage2 import main
+    result = main()
+    return result
+
+
+@app.local_entrypoint()
+def stage2_debug() -> None:
+    import json
+    from pathlib import Path
+    result = _stage2_debug_remote.remote()
+    out = Path("results/phase4/stage2_mechanism_check.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2, default=str))
+    print(f"\n[debug] wrote {out}")
+    print(json.dumps(result, indent=2, default=str))

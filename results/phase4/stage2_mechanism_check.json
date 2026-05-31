@@ -1,0 +1,51 @@
+{
+  "1_slot_in_rendered_text": {
+    "present": true,
+    "count": 1
+  },
+  "2_slot_in_input_ids": {
+    "slot_token_id": 151657,
+    "per_row_counts": [
+      1,
+      1
+    ]
+  },
+  "3_embed_replacement_localized": true,
+  "3b_slot_value_equals_action_embedding": true,
+  "4_action_changes_logits": {
+    "max_abs_delta": 6.171875,
+    "mean_abs_delta": 0.8018540143966675,
+    "cosine_similarity": 0.9351193904876709,
+    "top1_token_differs_at_random_init": true,
+    "top5_click": [
+      40,
+      785,
+      2121,
+      1249,
+      2132
+    ],
+    "top5_scroll": [
+      785,
+      40,
+      1249,
+      53544,
+      5002
+    ]
+  },
+  "5_grad_populated": true,
+  "5_grad_norms_per_class": {
+    "click": 6.03125,
+    "double_click": 0.0,
+    "type": 0.0,
+    "scroll": 0.0,
+    "drag": 0.0,
+    "hotkey": 0.0,
+    "wait": 0.0,
+    "finished": 0.0
+  },
+  "6_grad_localized_to_active_classes": {
+    "click_grad_norm": 6.03125,
+    "max_inactive_grad_norm": 0.0,
+    "ok": true
+  }
+}
