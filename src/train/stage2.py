@@ -171,6 +171,59 @@ def train_one_epoch(
     return total_loss / max(n, 1)
 
 
+def _metrics_from_predictions(
+    targets: list[tuple[float, float]],
+    preds: list[tuple[float, float] | None],
+    action_type_ids: list[int] | None = None,
+) -> dict:
+    """Compute hit@r + per-class breakdowns over already-collected predictions."""
+    import math
+    from collections import defaultdict
+    from src.data.taxonomy import ID_TO_ACTION
+
+    parsed_pairs = [(p, t, (action_type_ids[i] if action_type_ids else None))
+                    for i, (p, t) in enumerate(zip(preds, targets)) if p is not None]
+    n_total = len(targets)
+    n_parsed = len(parsed_pairs)
+    if n_parsed == 0:
+        return {
+            "n_total": n_total, "n_parsed": 0,
+            "parse_rate": 0.0,
+            "mean_normalized_l2": float("nan"),
+            "hit_at_005": 0.0, "hit_at_010": 0.0, "hit_at_025": 0.0,
+            "per_class": {},
+        }
+
+    dists = [math.hypot(p[0] - t[0], p[1] - t[1]) for p, t, _ in parsed_pairs]
+    hit = lambda r: sum(1 for d in dists if d <= r) / n_parsed
+
+    per_class: dict[str, dict] = {}
+    if action_type_ids is not None:
+        by_class: dict[int, list[float]] = defaultdict(list)
+        for d, (_, _, cid) in zip(dists, parsed_pairs):
+            if cid is not None:
+                by_class[cid].append(d)
+        for cid, dlist in sorted(by_class.items()):
+            per_class[ID_TO_ACTION[cid]] = {
+                "n": len(dlist),
+                "mean_normalized_l2": float(sum(dlist) / len(dlist)),
+                "hit_at_005": float(sum(1 for d in dlist if d <= 0.05) / len(dlist)),
+                "hit_at_010": float(sum(1 for d in dlist if d <= 0.10) / len(dlist)),
+                "hit_at_025": float(sum(1 for d in dlist if d <= 0.25) / len(dlist)),
+            }
+
+    return {
+        "n_total": n_total,
+        "n_parsed": n_parsed,
+        "parse_rate": n_parsed / n_total,
+        "mean_normalized_l2": float(sum(dists) / n_parsed),
+        "hit_at_005": float(hit(0.05)),
+        "hit_at_010": float(hit(0.10)),
+        "hit_at_025": float(hit(0.25)),
+        "per_class": per_class,
+    }
+
+
 def evaluate_grounding(
     model: Stage2ConditionedGrounding,
     examples: list[Stage2Example],
@@ -180,10 +233,11 @@ def evaluate_grounding(
     batch_size: int = 1,
     image_resolution_hint: tuple[int, int] | None = None,
 ) -> dict:
-    """Generate coords for each example, compute pixel + normalized error."""
+    """Generate coords for each example, compute hit@r overall and per canonical class."""
     model.eval()
     preds: list[tuple[float, float] | None] = []
     targets: list[tuple[float, float]] = []
+    action_ids: list[int] = []
     raw_outputs: list[str] = []
     for start in range(0, len(examples), batch_size):
         batch = examples[start : start + batch_size]
@@ -199,44 +253,14 @@ def evaluate_grounding(
                 do_sample=False,
                 pad_token_id=model.processor.tokenizer.eos_token_id,
             )
-        # generated includes a virtual position for the prepended action embed
-        # in inputs_embeds; we decode the whole thing then take the trailing piece.
         decoded = model.processor.batch_decode(generated, skip_special_tokens=True)
         for ex, raw in zip(batch, decoded):
             raw_outputs.append(raw)
             parsed = string_to_coord(raw, scale=coord_scale)
             preds.append(parsed)
             targets.append(ex.target_xy)
+            action_ids.append(ex.action_type_id)
 
-    # Metrics: distance and hit@k in normalized space; with screen-px conversion
-    # left to the caller if image dims are known.
-    parsed_ok = [(p, t) for p, t in zip(preds, targets) if p is not None]
-    n_parsed = len(parsed_ok)
-    if n_parsed == 0:
-        return {
-            "n_total": len(examples),
-            "n_parsed": 0,
-            "mean_normalized_l2": float("nan"),
-            "hit_at_005": 0.0,
-            "hit_at_010": 0.0,
-            "hit_at_025": 0.0,
-            "raw_outputs": raw_outputs[:20],
-        }
-
-    import math
-    dists = [
-        math.hypot(p[0] - t[0], p[1] - t[1]) for p, t in parsed_ok
-    ]
-    hit_005 = sum(1 for d in dists if d <= 0.05) / n_parsed
-    hit_010 = sum(1 for d in dists if d <= 0.10) / n_parsed
-    hit_025 = sum(1 for d in dists if d <= 0.25) / n_parsed
-    return {
-        "n_total": len(examples),
-        "n_parsed": n_parsed,
-        "parse_rate": n_parsed / len(examples),
-        "mean_normalized_l2": float(sum(dists) / n_parsed),
-        "hit_at_005": float(hit_005),
-        "hit_at_010": float(hit_010),
-        "hit_at_025": float(hit_025),
-        "raw_outputs": raw_outputs[:20],
-    }
+    metrics = _metrics_from_predictions(targets, preds, action_ids)
+    metrics["raw_outputs"] = raw_outputs[:20]
+    return metrics
