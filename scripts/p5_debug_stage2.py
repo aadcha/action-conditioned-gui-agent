@@ -248,80 +248,57 @@ def main() -> dict:
         "trained_tokens_text": tokenizer.decode(row[cut:]) if cut > 0 else tokenizer.decode(row),
     }
 
-    # ---- 8. SUSPECT BUG: Qwen2-VL needs input_ids to merge vision features
-    # at <|image_pad|> positions. D's forward currently passes inputs_embeds
-    # but drops input_ids. Test: compare D's logits (zero action embedding)
-    # against A's pathway (input_ids, no replacement) on the SAME image+text.
-    # If outputs differ off the slot position, image fusion is being mishandled.
-    print("\n[debug-8] image-fusion-pathway comparison (D vs A code paths)")
-    # Build a real image+text batch
-    img_examples = [
-        Stage2Example(image=make_synthetic_pil_image(), goal_info="open chrome",
-                      action_type_id=CANONICAL_ACTIONS["click"], target_xy=(0.5, 0.4)),
-    ]
-    img_batch = build_batch(model, img_examples, device, include_labels=False)
-    # Zero out the action embedding so the only diff is the code path
-    with torch.no_grad():
-        saved_ae = model.action_embeddings.weight.data.clone()
-        model.action_embeddings.weight.data.zero_()
+    # ---- 9. DECISIVE: does D's forward actually SEE the image? -----------
+    # Run D's exact training forward path with two DIFFERENT images on the
+    # same prompt. If logits are identical, image features are NOT being
+    # merged into the sequence -> D trains blind to the screenshot.
+    print("\n[debug-9] does D's forward path actually use the image?")
+    from PIL import Image as _Image
+    img_white = _Image.new("RGB", (512, 512), color=(255, 255, 255))
+    img_ui = make_synthetic_pil_image()
 
-    # D's pathway (inputs_embeds, NO input_ids)
-    inputs_embeds_d = model._embed_with_action(img_batch["input_ids"], img_batch["action_type_id"])
+    ex_white = [Stage2Example(image=img_white, goal_info="open chrome",
+                              action_type_id=CANONICAL_ACTIONS["click"], target_xy=(0.5, 0.4))]
+    ex_ui = [Stage2Example(image=img_ui, goal_info="open chrome",
+                           action_type_id=CANONICAL_ACTIONS["click"], target_xy=(0.5, 0.4))]
+    batch_white = build_batch(model, ex_white, device, include_labels=False)
+    batch_ui = build_batch(model, ex_ui, device, include_labels=False)
+
+    model.eval()
     with torch.inference_mode():
-        out_d = model.vlm(
-            inputs_embeds=inputs_embeds_d,
-            attention_mask=img_batch["attention_mask"],
-            pixel_values=img_batch.get("pixel_values"),
-            image_grid_thw=img_batch.get("image_grid_thw"),
+        o_white = model(
+            action_type_id=batch_white["action_type_id"],
+            input_ids=batch_white["input_ids"],
+            attention_mask=batch_white["attention_mask"],
+            **{k: v for k, v in batch_white.items()
+               if k not in {"action_type_id", "input_ids", "attention_mask", "labels"}},
             return_dict=True,
         )
-
-    # A's pathway (input_ids, no slot replacement). For fairness, use the same
-    # batch (slot token still in input_ids, but the model uses the table's
-    # current row for it, which we just zeroed — so the slot is also a zero
-    # vector in both paths).
-    with torch.inference_mode():
-        out_a = model.vlm(
-            input_ids=img_batch["input_ids"],
-            attention_mask=img_batch["attention_mask"],
-            pixel_values=img_batch.get("pixel_values"),
-            image_grid_thw=img_batch.get("image_grid_thw"),
+        o_ui = model(
+            action_type_id=batch_ui["action_type_id"],
+            input_ids=batch_ui["input_ids"],
+            attention_mask=batch_ui["attention_mask"],
+            **{k: v for k, v in batch_ui.items()
+               if k not in {"action_type_id", "input_ids", "attention_mask", "labels"}},
             return_dict=True,
         )
-
-    # Restore action embeddings
-    model.action_embeddings.weight.data.copy_(saved_ae)
-
-    # Compare logits position-by-position
-    logits_d = out_d.logits.float()
-    logits_a = out_a.logits.float()
-    print(f"  D logits shape: {tuple(logits_d.shape)}")
-    print(f"  A logits shape: {tuple(logits_a.shape)}")
-    if logits_d.shape == logits_a.shape:
-        per_pos_max = (logits_d - logits_a).abs().max(dim=-1).values  # [B, T]
-        for b in range(logits_d.shape[0]):
-            # Find slot position for this row
-            slot_pos = (img_batch["input_ids"][b] == model.action_slot_token_id).nonzero(as_tuple=True)[0]
-            slot_pos = slot_pos.item() if len(slot_pos) else -1
-            non_slot_max = per_pos_max[b].clone()
-            if slot_pos >= 0:
-                non_slot_max[slot_pos] = 0.0
-            print(f"  row {b}: max |D-A| at slot position {slot_pos}: {per_pos_max[b, slot_pos].item() if slot_pos>=0 else 'n/a':.5f}")
-            print(f"  row {b}: max |D-A| at any OTHER position: {non_slot_max.max().item():.5f}")
-            results["8_image_fusion_check"] = {
-                "logits_shape_d": list(logits_d.shape),
-                "logits_shape_a": list(logits_a.shape),
-                "slot_position": int(slot_pos),
-                "max_abs_delta_at_slot": float(per_pos_max[b, slot_pos].item() if slot_pos >= 0 else float("nan")),
-                "max_abs_delta_off_slot": float(non_slot_max.max().item()),
-            }
-    else:
-        print(f"  WARNING: logits shapes differ — image fusion clearly different")
-        results["8_image_fusion_check"] = {
-            "logits_shape_d": list(logits_d.shape),
-            "logits_shape_a": list(logits_a.shape),
-            "shapes_differ": True,
-        }
+    # Compare last-token logits. If the image matters, they should differ.
+    lw = o_white.logits[0, -1].float()
+    lu = o_ui.logits[0, -1].float()
+    # shapes may differ (different image token counts) — compare last token only
+    img_delta_max = float((lw - lu).abs().max().item()) if lw.shape == lu.shape else -1.0
+    img_cos = float(torch.nn.functional.cosine_similarity(lw.unsqueeze(0), lu.unsqueeze(0)).item()) if lw.shape == lu.shape else -1.0
+    print(f"  white-image last-token logits vs UI-image:")
+    print(f"  shapes: white={tuple(o_white.logits.shape)}, ui={tuple(o_ui.logits.shape)}")
+    print(f"  max |delta| = {img_delta_max:.5f}   cosine = {img_cos:.6f}")
+    print(f"  >>> if max|delta| ~ 0, D IS BLIND TO THE IMAGE <<<")
+    results["9_image_affects_output"] = {
+        "max_abs_delta": img_delta_max,
+        "cosine": img_cos,
+        "white_logits_shape": list(o_white.logits.shape),
+        "ui_logits_shape": list(o_ui.logits.shape),
+        "image_is_used": img_delta_max > 0.01,
+    }
 
     # ---- 7. Generation shape check ---------------------------------------
     # When using inputs_embeds via Stage2ConditionedGrounding.generate,
