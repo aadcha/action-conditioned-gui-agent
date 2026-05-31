@@ -59,6 +59,33 @@ _NON_DUAL_POINT_TO_STRING: dict[str, str] = {
 DEFAULT_TAP_THRESHOLD = 0.04
 
 
+# AITW HF mirror (cjfcsjt/AITW_General) stores screenshots as raw RGB pixel
+# bytes with no header, packed as W*H*3 uint8s. Empirically the General config
+# uses 540x1080 (half-resolution Pixel 3 portrait): 540*1080*3 = 1,749,600 bytes.
+# If a future row deviates, _decode_aitw_image_bytes inspects byte length and
+# tries the standard candidates.
+_AITW_KNOWN_SHAPES: tuple[tuple[int, int], ...] = (
+    (540, 1080),   # 1,749,600 bytes — the General config
+    (1080, 540),   # 1,749,600 bytes — same product, in case orientation flipped
+    (1080, 2160),  # 6,998,400 bytes — full Pixel 3 portrait
+    (480, 800),    # 1,152,000 bytes — alternate device
+)
+
+
+def _decode_aitw_image_bytes(buf: bytes) -> Image.Image:
+    """Decode AITW raw-RGB image bytes into a PIL.Image.
+
+    Tries the known shapes first; falls back to attempting `Image.open` in case
+    a future variant of the dataset stores encoded images instead.
+    """
+    n = len(buf)
+    for w, h in _AITW_KNOWN_SHAPES:
+        if w * h * 3 == n:
+            return Image.frombytes("RGB", (w, h), buf)
+    # Fallback: maybe it's a real encoded image after all.
+    return Image.open(io.BytesIO(buf)).convert("RGB")
+
+
 @dataclass(frozen=True)
 class AITWStep:
     ep_id: str
@@ -75,7 +102,7 @@ class AITWStep:
     def open_image(self) -> Image.Image:
         if self.image_bytes is None:
             raise ValueError("AITWStep has no image bytes (load with include_images=True)")
-        return Image.open(io.BytesIO(self.image_bytes)).convert("RGB")
+        return _decode_aitw_image_bytes(self.image_bytes)
 
 
 def classify_dual_point(
