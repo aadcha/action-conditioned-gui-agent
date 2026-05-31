@@ -123,5 +123,6 @@
         "hit_at_025": 0.717391304347826
       }
     }
-  }
+  },
+  "_file": "train_seed42_n1200_ep2_lr2e-05_mix-all_with_coords.json"
 }
