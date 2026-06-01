@@ -2144,10 +2144,15 @@ def _stage2_variantDhook_train_remote(
     coord_scale: int,
     data_mix: str,
     init_std: float,
+    action_lr: float = 0.0,
 ) -> dict:
     """Variant D-hook: additive action conditioning via embedding-layer hook.
 
     init_std=0.0 -> zero init (exact superset of A). >0 -> small random init.
+    action_lr<=0 -> action embedding shares the base lr. action_lr>0 -> the
+    action embedding gets its own (higher) learning rate via a separate param
+    group, so a zero-init embedding can actually develop per-class vectors
+    instead of barely moving (ae_norm ~0.06 at lr=2e-5 was undertrained).
     """
     import os, sys, random, json as _json
     from collections import Counter
@@ -2285,9 +2290,16 @@ def _stage2_variantDhook_train_remote(
         m["raw_outputs"] = raws[:20]
         return m
 
-    optimizer = torch.optim.AdamW(
-        [p for p in model.parameters() if p.requires_grad] + list(action_embeddings.parameters()),
-        lr=lr, weight_decay=0.01)
+    if action_lr and action_lr > 0:
+        optimizer = torch.optim.AdamW([
+            {"params": [p for p in model.parameters() if p.requires_grad], "lr": lr},
+            {"params": list(action_embeddings.parameters()), "lr": action_lr},
+        ], weight_decay=0.01)
+        print(f"[Dhook] separate param groups: base lr={lr}, action_emb lr={action_lr}")
+    else:
+        optimizer = torch.optim.AdamW(
+            [p for p in model.parameters() if p.requires_grad] + list(action_embeddings.parameters()),
+            lr=lr, weight_decay=0.01)
 
     history = []
     for epoch in range(1, epochs + 1):
@@ -2327,11 +2339,13 @@ def _stage2_variantDhook_train_remote(
         "n_train": len(train_examples), "n_val": len(val_examples),
         "epochs": epochs, "lr": lr, "batch_size": batch_size, "coord_scale": coord_scale,
         "seed": seed, "aitw_split": aitw_split, "data_mix": data_mix, "init_std": init_std,
+        "action_lr": action_lr,
         "history": history, "final_val_metrics": history[-1] if history else None,
     }
     cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    out_path = cache_dir / f"Dhook_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_init{init_std}.json"
+    _alr_tag = f"_alr{action_lr}" if action_lr and action_lr > 0 else ""
+    out_path = cache_dir / f"Dhook_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_init{init_std}{_alr_tag}.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[Dhook] persisted result to {out_path}")
@@ -2350,10 +2364,14 @@ def train_stage2_Dhook(
     coord_scale: int = 1000,
     data_mix: str = "taps_and_swipes",
     init_std: float = 0.0,
+    action_lr: float = 0.0,
 ) -> None:
-    """Variant D-hook (additive conditioning, true superset of A). Use --detach."""
+    """Variant D-hook (additive conditioning, true superset of A). Use --detach.
+
+    --action-lr 1e-3 gives the action embedding its own (higher) learning rate.
+    """
     _stage2_variantDhook_train_remote.remote(
-        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, init_std)
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, init_std, action_lr)
 
 
 # ---- Phase 5 variant D-text: action type as natural language in the prompt -
