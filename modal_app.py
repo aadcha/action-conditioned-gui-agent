@@ -2538,3 +2538,184 @@ def train_stage2_Dtext(
     """Variant D-text (action word in prompt). Use --detach."""
     _stage2_variantDtext_train_remote.remote(
         n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix)
+
+
+# ---- Phase 6 variant B: auxiliary action-type loss --------------------------
+#
+# Flat Qwen2-VL-2B + LoRA (plain prompt -> coords, identical to variant A at
+# inference) PLUS a small action-type classification head trained jointly:
+#     loss = LM_coord_loss + lambda_aux * CE(aux_head(pooled_hidden), gold_type)
+# The action-type signal is present ONLY as a training objective; there is no
+# conditioning at the input or at inference. Tests the plan's question: does the
+# signal-during-training alone help, without inference-time conditioning?
+# Rubric: D-hook > B  =>  inference-time conditioning matters beyond the signal.
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret],
+    timeout=14400,
+)
+def _stage2_variantB_train_remote(
+    n_train: int, n_val: int, epochs: int, lr: float, batch_size: int,
+    seed: int, aitw_split: str, coord_scale: int, data_mix: str, lambda_aux: float,
+) -> dict:
+    import os, sys, random, json as _json
+    from collections import Counter
+    from pathlib import Path as _Path
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    from peft import LoraConfig, get_peft_model
+    from qwen_vl_utils import process_vision_info
+    from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+    from src.data.aitw import iter_aitw_steps
+    from src.train.stage2 import Stage2Example, coord_to_string, string_to_coord, _metrics_from_predictions
+
+    torch.manual_seed(seed); random.seed(seed)
+    _DATA_MIX_LABELS = {
+        "taps_only": {"tap"},
+        "taps_and_swipes": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right"},
+        "all_with_coords": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"},
+    }
+    allowed = _DATA_MIX_LABELS.get(data_mix, {"tap"})
+    print(f"[B-train] streaming AITW {aitw_split} (data_mix={data_mix}, lambda_aux={lambda_aux})...")
+    examples_all = []
+    need = n_train + n_val
+    for step in iter_aitw_steps(split=aitw_split, n_max=max(need * 4, 1000), include_images=True):
+        if step.string_label not in allowed:
+            continue
+        examples_all.append(Stage2Example(
+            image=step.open_image(), goal_info=step.goal_info,
+            action_type_id=step.canonical_action_id,
+            target_xy=(step.touch_yx[1], step.touch_yx[0])))
+        if len(examples_all) >= need:
+            break
+    train_examples = examples_all[:n_train]
+    val_examples = examples_all[n_train:n_train + n_val]
+    print(f"[B-train] train n={len(train_examples)} val n={len(val_examples)}")
+    print(f"[B-train] train action dist: {Counter(e.action_type_id for e in train_examples)}")
+
+    base = Qwen2VLForConditionalGeneration.from_pretrained(
+        "Qwen/Qwen2-VL-2B-Instruct", torch_dtype=torch.bfloat16, device_map="auto")
+    processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")
+    model = get_peft_model(base, LoraConfig(r=16, lora_alpha=32,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], lora_dropout=0.05, task_type="CAUSAL_LM"))
+    hf_cache.commit()
+    device = next(model.parameters()).device
+    hidden = model.get_input_embeddings().embedding_dim
+
+    # Auxiliary action-type classification head (8 canonical classes).
+    aux_head = nn.Linear(hidden, 8).to(device=device, dtype=torch.bfloat16)
+
+    def build(examples, include_labels):
+        msgs = []
+        for ex in examples:
+            content = [{"type": "image", "image": ex.image},
+                       {"type": "text", "text": f"Goal: {ex.goal_info}\nPredict the action coordinate."}]
+            m = [{"role": "user", "content": content}]
+            if include_labels:
+                m.append({"role": "assistant", "content": [{"type": "text", "text": coord_to_string(ex.target_xy, coord_scale)}]})
+            msgs.append(m)
+        texts = [processor.apply_chat_template(m, tokenize=False, add_generation_prompt=(not include_labels)) for m in msgs]
+        image_inputs, video_inputs = process_vision_info(msgs)
+        inputs = processor(text=texts, images=image_inputs, videos=video_inputs, padding=True, return_tensors="pt").to(device)
+        if include_labels:
+            labels = inputs["input_ids"].clone()
+            im_start = processor.tokenizer.convert_tokens_to_ids("<|im_start|>")
+            assistant_id = processor.tokenizer.convert_tokens_to_ids("assistant")
+            for b in range(labels.shape[0]):
+                row = inputs["input_ids"][b]
+                starts = (row == im_start).nonzero(as_tuple=True)[0].tolist()
+                cut = 0
+                for idx in reversed(starts):
+                    if idx + 1 < row.shape[0] and row[idx + 1].item() == assistant_id:
+                        cut = idx + 2
+                        if cut < row.shape[0]: cut += 1
+                        break
+                labels[b, :cut] = -100
+            inputs["labels"] = labels
+        action_ids = torch.tensor([ex.action_type_id for ex in examples], dtype=torch.long, device=device)
+        return inputs, action_ids
+
+    def evaluate(examples):
+        model.eval()
+        preds, targets, aids, raws = [], [], [], []
+        for s in range(0, len(examples), batch_size):
+            chunk = examples[s:s + batch_size]
+            inputs, _ = build(chunk, include_labels=False)
+            prompt_len = inputs["input_ids"].shape[1]
+            with torch.inference_mode():
+                gen = model.generate(**inputs, max_new_tokens=16, do_sample=False,
+                                     pad_token_id=processor.tokenizer.eos_token_id)
+            new = gen[:, prompt_len:] if gen.shape[1] > prompt_len else gen
+            for ex, raw in zip(chunk, processor.batch_decode(new, skip_special_tokens=True)):
+                raws.append(raw); preds.append(string_to_coord(raw, scale=coord_scale))
+                targets.append(ex.target_xy); aids.append(ex.action_type_id)
+        m = _metrics_from_predictions(targets, preds, aids); m["raw_outputs"] = raws[:20]
+        return m
+
+    optimizer = torch.optim.AdamW(
+        [p for p in model.parameters() if p.requires_grad] + list(aux_head.parameters()),
+        lr=lr, weight_decay=0.01)
+
+    history = []
+    for epoch in range(1, epochs + 1):
+        print(f"\n[B-train] === epoch {epoch}/{epochs} ===")
+        rng = random.Random(seed + epoch); order = list(range(len(train_examples))); rng.shuffle(order)
+        model.train(); ep_lm, ep_aux, ep_acc, nstep = 0.0, 0.0, 0.0, 0
+        for i in range(0, len(order), batch_size):
+            chunk = [train_examples[j] for j in order[i:i + batch_size]]
+            inputs, action_ids = build(chunk, include_labels=True)
+            out = model(**inputs, output_hidden_states=True)
+            lm_loss = out.loss
+            last_hidden = out.hidden_states[-1]                       # [B,T,H]
+            amask = inputs["attention_mask"].unsqueeze(-1).to(last_hidden.dtype)
+            pooled = (last_hidden * amask).sum(1) / amask.sum(1).clamp(min=1)  # [B,H]
+            aux_logits = aux_head(pooled.to(aux_head.weight.dtype)).float()    # [B,8]
+            aux_loss = F.cross_entropy(aux_logits, action_ids)
+            loss = lm_loss + lambda_aux * aux_loss
+            optimizer.zero_grad(); loss.backward()
+            torch.nn.utils.clip_grad_norm_(
+                [p for p in model.parameters() if p.requires_grad] + list(aux_head.parameters()), 1.0)
+            optimizer.step()
+            ep_lm += float(lm_loss.item()); ep_aux += float(aux_loss.item())
+            ep_acc += float((aux_logits.argmax(-1) == action_ids).float().mean().item()); nstep += 1
+            if nstep % 25 == 0:
+                print(f"[B-train]   step {nstep}  lm={lm_loss.item():.4f} aux={aux_loss.item():.4f} aux_acc={ep_acc/nstep:.3f}")
+        em = evaluate(val_examples)
+        history.append({"epoch": epoch, "train_loss": ep_lm / max(nstep, 1),
+                        "aux_loss": ep_aux / max(nstep, 1), "aux_train_acc": ep_acc / max(nstep, 1),
+                        **{k: v for k, v in em.items() if k != "raw_outputs"}})
+        print(f"[B-train] epoch {epoch} lm={ep_lm/max(nstep,1):.4f} aux={ep_aux/max(nstep,1):.4f} "
+              f"aux_acc={ep_acc/max(nstep,1):.3f} hit@0.10={em['hit_at_010']:.3f} hit@0.25={em['hit_at_025']:.3f}")
+
+    summary = {
+        "variant": "B_aux_loss", "n_train": len(train_examples), "n_val": len(val_examples),
+        "epochs": epochs, "lr": lr, "batch_size": batch_size, "coord_scale": coord_scale,
+        "seed": seed, "aitw_split": aitw_split, "data_mix": data_mix, "lambda_aux": lambda_aux,
+        "history": history, "final_val_metrics": history[-1] if history else None,
+    }
+    cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    out_path = cache_dir / f"variantB_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_aux{lambda_aux}.json"
+    out_path.write_text(_json.dumps(summary, indent=2))
+    stage1_cache.commit()
+    print(f"[B-train] persisted result to {out_path}")
+    return summary
+
+
+@app.local_entrypoint()
+def train_stage2_variantB(
+    n_train: int = 1200, n_val: int = 250, epochs: int = 2, lr: float = 2e-5,
+    batch_size: int = 1, seed: int = 42, aitw_split: str = "train",
+    coord_scale: int = 1000, data_mix: str = "all_with_coords", lambda_aux: float = 1.0,
+) -> None:
+    """Variant B (auxiliary action-type loss). Use --detach."""
+    _stage2_variantB_train_remote.remote(
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, lambda_aux)
