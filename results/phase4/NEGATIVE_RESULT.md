@@ -1,4 +1,13 @@
-# Phase 5 negative result — variant D underperforms variant A
+> ⚠️ **SUPERSEDED — see `PHASE5_CORRECTED.md`.** The headline below (8σ "A beats D")
+> was a **measurement artifact**: variant D's `inputs_embeds` injection bypassed
+> Qwen2-VL's M-RoPE position computation, corrupting image-patch spatial encoding.
+> After fixing the injection (variant D-hook), D **ties** A (0.392 vs 0.390 hit@0.10,
+> 3 seeds). This file is kept as an honest record of the bug hunt; do not cite its
+> headline as a result.
+
+---
+
+# Phase 5 negative result — variant D underperforms variant A  [SUPERSEDED]
 
 Matched-compute comparison across two training distributions. Variant D
 (action-type-conditioned, the project's central architectural intervention)
