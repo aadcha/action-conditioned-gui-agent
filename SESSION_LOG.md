@@ -4,6 +4,18 @@ Read this first tomorrow. It captures the full state, the headline findings,
 the one open data point, and exactly what to do next. Pairs with `CLAUDE.md`
 (operational/how-to) and the per-phase writeups under `results/`.
 
+> **UPDATE (late session): the two open items below are now RESOLVED.**
+> - A seed 46 landed → full **5×5** seed-level table (D-hook still wins all
+>   metrics: hit@0.10 +0.046, hit@0.25 +0.058, mean L2 −0.035).
+> - **Paired bootstrap built and run** (`src/eval/bootstrap.py`,
+>   `scripts/p5_paired_bootstrap.py`). On all_with_coords, 3 seeds × 250
+>   examples = 750 paired units: **D-hook beats A on all four metrics with
+>   95% CIs excluding zero and p < 0.005** (bootstrap + permutation).
+>   See `results/phase4/PHASE5_CORRECTED.md` and
+>   `results/phase4/paired_bootstrap_all_with_coords.json`.
+> The "open data point" and "next steps #1–2" sections below are kept for the
+> record but are DONE. Remaining open work: variants B/C, scale n, attention viz.
+
 ---
 
 ## TL;DR of the day
