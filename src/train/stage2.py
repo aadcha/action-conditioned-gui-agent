@@ -181,15 +181,35 @@ def train_one_epoch(
     return total_loss / max(n, 1)
 
 
+# Max possible normalized L2 distance in the unit square; used as the sentinel
+# distance for parse failures so they count as a miss at every hit@r threshold
+# while keeping per-example arrays aligned across variants (for paired bootstrap).
+_MAX_NORM_L2 = 2.0 ** 0.5
+
+
 def _metrics_from_predictions(
     targets: list[tuple[float, float]],
     preds: list[tuple[float, float] | None],
     action_type_ids: list[int] | None = None,
 ) -> dict:
-    """Compute hit@r + per-class breakdowns over already-collected predictions."""
+    """Compute hit@r + per-class breakdowns over already-collected predictions.
+
+    Also returns `per_example_dist`: one normalized-L2 distance per example in
+    INPUT ORDER (parse failures = sqrt(2) sentinel), so two variants evaluated
+    on the same val set produce index-aligned arrays for the paired bootstrap
+    in `src.eval.bootstrap`.
+    """
     import math
     from collections import defaultdict
     from src.data.taxonomy import ID_TO_ACTION
+
+    # Per-example distance aligned to ALL examples (input order).
+    per_example_dist: list[float] = []
+    for p, t in zip(preds, targets):
+        if p is None:
+            per_example_dist.append(_MAX_NORM_L2)
+        else:
+            per_example_dist.append(math.hypot(p[0] - t[0], p[1] - t[1]))
 
     parsed_pairs = [(p, t, (action_type_ids[i] if action_type_ids else None))
                     for i, (p, t) in enumerate(zip(preds, targets)) if p is not None]
@@ -202,6 +222,7 @@ def _metrics_from_predictions(
             "mean_normalized_l2": float("nan"),
             "hit_at_005": 0.0, "hit_at_010": 0.0, "hit_at_025": 0.0,
             "per_class": {},
+            "per_example_dist": per_example_dist,
         }
 
     dists = [math.hypot(p[0] - t[0], p[1] - t[1]) for p, t, _ in parsed_pairs]
@@ -231,6 +252,7 @@ def _metrics_from_predictions(
         "hit_at_010": float(hit(0.10)),
         "hit_at_025": float(hit(0.25)),
         "per_class": per_class,
+        "per_example_dist": per_example_dist,
     }
 
 
