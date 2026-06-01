@@ -11,6 +11,22 @@ same data, same hyperparameters, same eval.
   At forward time the slot's embedding is replaced by the row for the gold
   action type.
 
+## data_mix = `all_with_coords`
+
+- n_train: 1200  ·  epochs: 2  ·  seeds: 1
+
+| Variant | final train loss | hit@0.05 | hit@0.10 | hit@0.25 | mean norm L2 |
+|---|---|---|---|---|---|
+| **A (flat baseline)** | 0.849 | 0.160 | **0.276** | 0.540 | 0.393 |
+| **D (action-conditioned)** | 0.837 | 0.109 | **0.227** | 0.486 | 0.391 |
+
+Deltas (D − A; positive = D better for hit@r, negative = D better for L2):
+
+- **hit@0.05**: -0.0507  ·  pooled std = 0.0000  ·  infσ (≥2σ — meaningful)
+- **hit@0.10**: -0.0493  ·  pooled std = 0.0000  ·  infσ (≥2σ — meaningful)
+- **hit@0.25**: -0.0542  ·  pooled std = 0.0000  ·  infσ (≥2σ — meaningful)
+- **mean norm L2**: -0.0019  ·  pooled std = 0.0000  ·  infσ (≥2σ — meaningful)
+
 ## data_mix = `taps_and_swipes`
 
 - n_train: 1000  ·  epochs: 2  ·  seeds: 3
@@ -18,14 +34,14 @@ same data, same hyperparameters, same eval.
 | Variant | final train loss | hit@0.05 | hit@0.10 | hit@0.25 | mean norm L2 |
 |---|---|---|---|---|---|
 | **A (flat baseline)** | 0.976 ± 0.002 | 0.233 ± 0.010 | **0.390 ± 0.010** | 0.727 ± 0.023 | 0.184 ± 0.002 |
-| **D (action-conditioned)** | 0.986 ± 0.003 | 0.163 ± 0.003 | **0.288 ± 0.008** | 0.612 ± 0.020 | 0.215 ± 0.006 |
+| **D (action-conditioned)** | 0.986 ± 0.003 | 0.143 ± 0.024 | **0.282 ± 0.032** | 0.597 ± 0.040 | 0.219 ± 0.005 |
 
 Deltas (D − A; positive = D better for hit@r, negative = D better for L2):
 
-- **hit@0.05**: -0.0700  ·  pooled std = 0.0108  ·  6.48σ (≥2σ — meaningful)
-- **hit@0.10**: -0.1017  ·  pooled std = 0.0126  ·  8.08σ (≥2σ — meaningful)
-- **hit@0.25**: -0.1150  ·  pooled std = 0.0307  ·  3.75σ (≥2σ — meaningful)
-- **mean norm L2**: +0.0311  ·  pooled std = 0.0062  ·  5.05σ (≥2σ — meaningful)
+- **hit@0.05**: -0.0900  ·  pooled std = 0.0258  ·  3.49σ (≥2σ — meaningful)
+- **hit@0.10**: -0.1083  ·  pooled std = 0.0333  ·  3.25σ (≥2σ — meaningful)
+- **hit@0.25**: -0.1300  ·  pooled std = 0.0465  ·  2.79σ (≥2σ — meaningful)
+- **mean norm L2**: +0.0350  ·  pooled std = 0.0055  ·  6.31σ (≥2σ — meaningful)
 
 ## data_mix = `taps_only`
 
