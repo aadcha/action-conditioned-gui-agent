@@ -1,0 +1,101 @@
+{
+  "variant": "D_hook_additive",
+  "n_train": 1000,
+  "n_val": 200,
+  "epochs": 2,
+  "lr": 2e-05,
+  "batch_size": 1,
+  "coord_scale": 1000,
+  "seed": 42,
+  "aitw_split": "train",
+  "data_mix": "taps_and_swipes",
+  "init_std": 0.0,
+  "action_lr": 0.005,
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.2376834520101547,
+      "action_emb_norm": 3.484375,
+      "n_total": 200,
+      "n_parsed": 200,
+      "parse_rate": 1.0,
+      "mean_normalized_l2": 0.27732428867335956,
+      "hit_at_005": 0.065,
+      "hit_at_010": 0.18,
+      "hit_at_025": 0.435,
+      "per_class": {
+        "click": {
+          "n": 157,
+          "mean_normalized_l2": 0.29815211436086925,
+          "hit_at_005": 0.08280254777070063,
+          "hit_at_010": 0.12738853503184713,
+          "hit_at_025": 0.3375796178343949
+        },
+        "scroll": {
+          "n": 43,
+          "mean_normalized_l2": 0.2012785065119861,
+          "hit_at_005": 0.0,
+          "hit_at_010": 0.37209302325581395,
+          "hit_at_025": 0.7906976744186046
+        }
+      }
+    },
+    {
+      "epoch": 2,
+      "train_loss": 1.0768953697681427,
+      "action_emb_norm": 4.09375,
+      "n_total": 200,
+      "n_parsed": 200,
+      "parse_rate": 1.0,
+      "mean_normalized_l2": 0.2596201089368796,
+      "hit_at_005": 0.095,
+      "hit_at_010": 0.215,
+      "hit_at_025": 0.535,
+      "per_class": {
+        "click": {
+          "n": 157,
+          "mean_normalized_l2": 0.2757715376544649,
+          "hit_at_005": 0.08280254777070063,
+          "hit_at_010": 0.18471337579617833,
+          "hit_at_025": 0.4585987261146497
+        },
+        "scroll": {
+          "n": 43,
+          "mean_normalized_l2": 0.2006486133866268,
+          "hit_at_005": 0.13953488372093023,
+          "hit_at_010": 0.32558139534883723,
+          "hit_at_025": 0.813953488372093
+        }
+      }
+    }
+  ],
+  "final_val_metrics": {
+    "epoch": 2,
+    "train_loss": 1.0768953697681427,
+    "action_emb_norm": 4.09375,
+    "n_total": 200,
+    "n_parsed": 200,
+    "parse_rate": 1.0,
+    "mean_normalized_l2": 0.2596201089368796,
+    "hit_at_005": 0.095,
+    "hit_at_010": 0.215,
+    "hit_at_025": 0.535,
+    "per_class": {
+      "click": {
+        "n": 157,
+        "mean_normalized_l2": 0.2757715376544649,
+        "hit_at_005": 0.08280254777070063,
+        "hit_at_010": 0.18471337579617833,
+        "hit_at_025": 0.4585987261146497
+      },
+      "scroll": {
+        "n": 43,
+        "mean_normalized_l2": 0.2006486133866268,
+        "hit_at_005": 0.13953488372093023,
+        "hit_at_010": 0.32558139534883723,
+        "hit_at_025": 0.813953488372093
+      }
+    }
+  },
+  "_file": "Dhook_seed42_n1000_ep2_lr2e-05_mix-taps_and_swipes_init0.0_alr0.005.json"
+}
