@@ -1,4 +1,56 @@
 {
+  "D__taps_and_swipes": {
+    "variant": "D",
+    "data_mix": "taps_and_swipes",
+    "n_seeds": 3,
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "n_train": 1000,
+    "epochs": 2,
+    "hit_at_005": {
+      "mean": 0.14333333333333334,
+      "std": 0.023629078131263047,
+      "seeds": [
+        0.125,
+        0.17,
+        0.135
+      ]
+    },
+    "hit_at_010": {
+      "mean": 0.2816666666666667,
+      "std": 0.031754264805429415,
+      "seeds": [
+        0.3,
+        0.3,
+        0.245
+      ]
+    },
+    "hit_at_025": {
+      "mean": 0.5966666666666667,
+      "std": 0.04041451884327379,
+      "seeds": [
+        0.64,
+        0.59,
+        0.56
+      ]
+    },
+    "mean_norm_l2": {
+      "mean": 0.21854799664789307,
+      "std": 0.005240511192287451
+    },
+    "final_loss": {
+      "mean": 0.9861427002549172,
+      "std": 0.0028181069127586893
+    },
+    "files": [
+      "train_seed44_n1000_ep2_lr2e-05_mix-taps_and_swipes.json",
+      "train_seed42_n1000_ep2_lr2e-05_mix-taps_and_swipes.json",
+      "train_seed43_n1000_ep2_lr2e-05_mix-taps_and_swipes.json"
+    ]
+  },
   "D__all_with_coords": {
     "variant": "D",
     "data_mix": "all_with_coords",
@@ -39,58 +91,6 @@
     },
     "files": [
       "train_seed42_n1200_ep2_lr2e-05_mix-all_with_coords.json"
-    ]
-  },
-  "D__taps_and_swipes": {
-    "variant": "D",
-    "data_mix": "taps_and_swipes",
-    "n_seeds": 3,
-    "seeds": [
-      42,
-      43,
-      44
-    ],
-    "n_train": 1000,
-    "epochs": 2,
-    "hit_at_005": {
-      "mean": 0.16333333333333333,
-      "std": 0.002886751345948131,
-      "seeds": [
-        0.165,
-        0.165,
-        0.16
-      ]
-    },
-    "hit_at_010": {
-      "mean": 0.28833333333333333,
-      "std": 0.00763762615825971,
-      "seeds": [
-        0.29,
-        0.28,
-        0.295
-      ]
-    },
-    "hit_at_025": {
-      "mean": 0.6116666666666667,
-      "std": 0.020207259421636918,
-      "seeds": [
-        0.59,
-        0.63,
-        0.615
-      ]
-    },
-    "mean_norm_l2": {
-      "mean": 0.21462528953874746,
-      "std": 0.005878211253904594
-    },
-    "final_loss": {
-      "mean": 0.9858554098208745,
-      "std": 0.0029635231957977765
-    },
-    "files": [
-      "train_seed42_n1000_ep2_lr2e-05_mix-taps_and_swipes.json",
-      "train_seed43_n1000_ep2_lr2e-05_mix-taps_and_swipes.json",
-      "train_seed44_n1000_ep2_lr2e-05_mix-taps_and_swipes.json"
     ]
   },
   "D__taps_only": {
