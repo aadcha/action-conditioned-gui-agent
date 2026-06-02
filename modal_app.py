@@ -3140,3 +3140,206 @@ def train_stage2_e2e(
     """End-to-end: Stage 1 predicted types -> D-hook conditioning. oracle vs predicted gap. --detach."""
     _stage2_e2e_remote.remote(
         n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix)
+
+
+# ---- Phase 6 attention visualization ----------------------------------------
+#
+# "The figure that sells the mechanism": for a real screenshot, show where the
+# answer token attends to image patches under click- vs type-conditioning.
+# Trains D-hook briefly, then for a few val examples runs output_attentions
+# forwards under different action embeddings and overlays the image-patch
+# attention as a heatmap. Also records image-vs-text attention mass.
+#
+# Caveat: B ~= D in the ablation (conditioning mechanism is ~neutral), so this
+# is a qualitative/mechanistic illustration, not a load-bearing result.
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret],
+    timeout=14400,
+)
+def _stage2_attn_viz_remote(
+    n_train: int, epochs: int, lr: float, seed: int, data_mix: str,
+    n_examples: int, coord_scale: int,
+) -> dict:
+    import os, sys, random, io, base64, json as _json
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+
+    import numpy as np
+    import torch
+    import torch.nn as nn
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from peft import LoraConfig, get_peft_model
+    from qwen_vl_utils import process_vision_info
+    from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+    from src.data.aitw import iter_aitw_steps
+    from src.data.taxonomy import ID_TO_ACTION, CANONICAL_ACTIONS
+    from src.train.stage2 import Stage2Example, coord_to_string
+
+    torch.manual_seed(seed); random.seed(seed)
+    allowed = {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"}
+    examples_all = []
+    for step in iter_aitw_steps(split="train", n_max=max(n_train * 4, 1000), include_images=True):
+        if step.string_label not in allowed:
+            continue
+        examples_all.append(Stage2Example(
+            image=step.open_image(), goal_info=step.goal_info,
+            action_type_id=step.canonical_action_id,
+            target_xy=(step.touch_yx[1], step.touch_yx[0])))
+        if len(examples_all) >= n_train + 60:
+            break
+    train_examples = examples_all[:n_train]
+    val_examples = examples_all[n_train:]
+
+    base = Qwen2VLForConditionalGeneration.from_pretrained(
+        "Qwen/Qwen2-VL-2B-Instruct", torch_dtype=torch.bfloat16, device_map="auto")
+    processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")
+    model = get_peft_model(base, LoraConfig(r=16, lora_alpha=32,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], lora_dropout=0.05, task_type="CAUSAL_LM"))
+    hf_cache.commit()
+    device = next(model.parameters()).device
+    hidden = model.get_input_embeddings().embedding_dim
+    action_embeddings = nn.Embedding(8, hidden).to(device=device, dtype=torch.bfloat16)
+    nn.init.zeros_(action_embeddings.weight)
+    _holder = {"action_id": None}
+    def _hook(m, i, o):
+        aid = _holder["action_id"]
+        return o if aid is None else o + action_embeddings(aid).unsqueeze(1).to(o.dtype)
+    h = model.get_input_embeddings().register_forward_hook(_hook)
+
+    PROMPT = "Goal: {goal}\nPredict the action coordinate."
+    def build(examples, include_labels):
+        msgs = []
+        for ex in examples:
+            m = [{"role": "user", "content": [{"type": "image", "image": ex.image},
+                                              {"type": "text", "text": PROMPT.format(goal=ex.goal_info)}]}]
+            if include_labels:
+                m.append({"role": "assistant", "content": [{"type": "text", "text": coord_to_string(ex.target_xy, coord_scale)}]})
+            msgs.append(m)
+        texts = [processor.apply_chat_template(m, tokenize=False, add_generation_prompt=(not include_labels)) for m in msgs]
+        ii, vi = process_vision_info(msgs)
+        inputs = processor(text=texts, images=ii, videos=vi, padding=True, return_tensors="pt").to(device)
+        if include_labels:
+            labels = inputs["input_ids"].clone()
+            im_start = processor.tokenizer.convert_tokens_to_ids("<|im_start|>")
+            assistant_id = processor.tokenizer.convert_tokens_to_ids("assistant")
+            for b in range(labels.shape[0]):
+                row = inputs["input_ids"][b]; starts = (row == im_start).nonzero(as_tuple=True)[0].tolist(); cut = 0
+                for idx in reversed(starts):
+                    if idx + 1 < row.shape[0] and row[idx + 1].item() == assistant_id:
+                        cut = idx + 2
+                        if cut < row.shape[0]: cut += 1
+                        break
+                labels[b, :cut] = -100
+            inputs["labels"] = labels
+        aids = torch.tensor([e.action_type_id for e in examples], dtype=torch.long, device=device)
+        return inputs, aids
+
+    print(f"[viz] training D-hook {epochs} epochs on {len(train_examples)} examples...")
+    opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad] + list(action_embeddings.parameters()), lr=lr, weight_decay=0.01)
+    for epoch in range(epochs):
+        rng = random.Random(seed + epoch); order = list(range(len(train_examples))); rng.shuffle(order)
+        model.train()
+        for i in range(0, len(order), 1):
+            ex = [train_examples[order[i]]]
+            inputs, aids = build(ex, include_labels=True)
+            _holder["action_id"] = aids
+            loss = model(**inputs).loss
+            _holder["action_id"] = None
+            opt.zero_grad(); loss.backward()
+            torch.nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad] + list(action_embeddings.parameters()), 1.0)
+            opt.step()
+
+    # image token id
+    img_tok = getattr(model.config, "image_token_id", None)
+    if img_tok is None:
+        img_tok = getattr(getattr(model.config, "vision_config", object()), "image_token_id", 151655)
+
+    # pick a 'type' example and a 'click' example for the demo
+    def pick(label_id):
+        for e in val_examples:
+            if e.action_type_id == label_id:
+                return e
+        return None
+    demo = [e for e in [pick(CANONICAL_ACTIONS["type"]), pick(CANONICAL_ACTIONS["click"]),
+                        pick(CANONICAL_ACTIONS["scroll"])] if e is not None][:n_examples]
+
+    model.eval()
+    figs_b64 = []
+    mass_records = []
+    conditions = [CANONICAL_ACTIONS["click"], CANONICAL_ACTIONS["type"], CANONICAL_ACTIONS["scroll"]]
+    for ei, ex in enumerate(demo):
+        inputs, _ = build([ex], include_labels=False)
+        ids = inputs["input_ids"][0]
+        img_pos = (ids == img_tok).nonzero(as_tuple=True)[0]
+        if len(img_pos) == 0:
+            continue
+        grid = inputs["image_grid_thw"][0].tolist()  # [t,h,w] patches
+        merge = 2
+        gh, gw = grid[1] // merge, grid[2] // merge
+        last_pos = int(inputs["attention_mask"][0].sum().item()) - 1
+        heatmaps = {}
+        for cond in conditions:
+            _holder["action_id"] = torch.tensor([cond], device=device)
+            with torch.inference_mode():
+                out = model(**inputs, output_attentions=True)
+            _holder["action_id"] = None
+            # average attention over heads at a late layer, from last prompt token
+            layer = len(out.attentions) * 3 // 4
+            attn = out.attentions[layer][0].float().mean(0)  # [T,T]
+            row = attn[last_pos]                              # [T]
+            img_attn = row[img_pos]                           # [n_img]
+            img_mass = float(img_attn.sum().item())
+            heat = img_attn.detach().cpu().numpy()
+            if heat.size == gh * gw:
+                heat = heat.reshape(gh, gw)
+            else:
+                side = int(np.sqrt(heat.size)); heat = heat[:side * side].reshape(side, side)
+            heatmaps[ID_TO_ACTION[cond]] = (heat, img_mass)
+
+        # render: screenshot + click/type/scroll heatmap overlays
+        img = ex.image.convert("RGB")
+        fig, axes = plt.subplots(1, 1 + len(conditions), figsize=(4 * (1 + len(conditions)), 5))
+        axes[0].imshow(img); axes[0].set_title(f"goal: {ex.goal_info[:30]}\ngold: {ID_TO_ACTION[ex.action_type_id]}", fontsize=8)
+        axes[0].axis("off")
+        for j, cond in enumerate(conditions):
+            heat, mass = heatmaps[ID_TO_ACTION[cond]]
+            ax = axes[j + 1]
+            ax.imshow(img, alpha=0.5)
+            ax.imshow(heat, cmap="jet", alpha=0.5, extent=[0, img.width, img.height, 0], aspect="auto")
+            ax.set_title(f"cond={ID_TO_ACTION[cond]}\nimg-attn mass={mass:.3f}", fontsize=8)
+            ax.axis("off")
+            mass_records.append({"example": ei, "gold": ID_TO_ACTION[ex.action_type_id],
+                                 "condition": ID_TO_ACTION[cond], "image_attention_mass": mass})
+        fig.tight_layout()
+        buf = io.BytesIO(); fig.savefig(buf, format="png", dpi=120, bbox_inches="tight"); plt.close(fig)
+        figs_b64.append(base64.b64encode(buf.getvalue()).decode())
+
+    h.remove()
+    return {"n_figs": len(figs_b64), "figs_b64": figs_b64, "attention_mass": mass_records,
+            "layer_used_frac": 0.75, "note": "attention from last prompt token to image patches"}
+
+
+@app.local_entrypoint()
+def attn_viz(
+    n_train: int = 600, epochs: int = 2, lr: float = 2e-5, seed: int = 42,
+    data_mix: str = "all_with_coords", n_examples: int = 3, coord_scale: int = 1000,
+) -> None:
+    """Attention viz: click/type/scroll-conditioned attention heatmaps. Writes PNGs locally."""
+    import base64
+    from pathlib import Path
+    res = _stage2_attn_viz_remote.remote(n_train, epochs, lr, seed, data_mix, n_examples, coord_scale)
+    outdir = Path("results/phase4/attn_viz"); outdir.mkdir(parents=True, exist_ok=True)
+    for i, b64 in enumerate(res["figs_b64"]):
+        (outdir / f"attn_example_{i}.png").write_bytes(base64.b64decode(b64))
+    import json
+    (outdir / "attention_mass.json").write_text(json.dumps(res["attention_mass"], indent=2))
+    print(f"[viz] wrote {res['n_figs']} figures to {outdir}")
+    for r in res["attention_mass"]:
+        print(f"  ex{r['example']} gold={r['gold']:<9} cond={r['condition']:<9} img_mass={r['image_attention_mass']:.3f}")
