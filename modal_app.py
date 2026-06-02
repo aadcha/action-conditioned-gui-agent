@@ -3596,3 +3596,277 @@ def train_stage2_Dtoken(
     """Variant D-token (M-RoPE-correct prepended action token). Use --detach."""
     _stage2_variantDtoken_train_remote.remote(
         n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, init_std)
+
+
+# ---- Phase 6 Mind2Web grounding benchmark (proposal-named dataset) ----------
+#
+# Adds a SECOND Stage 2 benchmark on Multimodal-Mind2Web (a primary dataset in
+# the proposal). Grounding = predict a point on the screenshot; target = the
+# center of the gold element's bounding box. Two hit metrics:
+#   hit@r     : predicted point within radius r of the bbox center (normalized,
+#               AITW-consistent)
+#   hit@bbox  : predicted point falls INSIDE the gold element bbox (the
+#               Mind2Web-native element-grounding criterion)
+# Mind2Web is click/type-dominated (action type ~uninformative), so this also
+# serves as a cross-dataset control: we expect D-hook ~= A here, mirroring the
+# AITW taps_and_swipes control.
+
+
+def _m2w_parse_target_bbox(row):
+    """Return (x, y, w, h) of the gold element bbox in screenshot pixels, or None."""
+    import json as _json
+    pcs = row.get("pos_candidates") or []
+    chosen = None
+    parsed = []
+    for pc in pcs:
+        try:
+            d = _json.loads(pc) if isinstance(pc, str) else pc
+        except Exception:
+            continue
+        parsed.append(d)
+        if d.get("is_original_target") or d.get("is_top_level_target"):
+            chosen = d
+            break
+    if chosen is None and parsed:
+        chosen = parsed[0]
+    if chosen is None:
+        return None
+    attrs = chosen.get("attributes")
+    if isinstance(attrs, str):
+        try:
+            attrs = _json.loads(attrs)
+        except Exception:
+            return None
+    if not attrs:
+        return None
+    rect = attrs.get("bounding_box_rect")
+    if not rect or rect in ("-1,-1,-1,-1",):
+        return None
+    try:
+        x, y, w, h = [float(v) for v in rect.split(",")]
+    except Exception:
+        return None
+    if w <= 0 or h <= 0:
+        return None
+    return (x, y, w, h)
+
+
+@app.function(
+    image=image, gpu="L4", volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret], timeout=900,
+)
+def _m2w_probe() -> dict:
+    """Verify bbox parsing on a few Multimodal-Mind2Web rows."""
+    import os, sys, json as _json
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+    from datasets import load_dataset
+    ds = load_dataset("osunlp/Multimodal-Mind2Web", split="test_task", token=os.environ.get("HF_TOKEN"))
+    out = []
+    ok = 0
+    for i in range(min(40, len(ds))):
+        row = ds[i]
+        bbox = _m2w_parse_target_bbox(row)
+        img = row.get("screenshot")
+        W, H = (img.width, img.height) if hasattr(img, "width") else (None, None)
+        if bbox and W:
+            ok += 1
+            x, y, w, h = bbox
+            if len(out) < 6:
+                out.append({"op": str(row.get("operation"))[:60], "bbox": bbox,
+                            "img_wh": [W, H], "norm_center": [(x + w / 2) / W, (y + h / 2) / H]})
+    return {"parsed_ok_of_40": ok, "samples": out}
+
+
+@app.local_entrypoint()
+def m2w_probe() -> None:
+    import json
+    print(json.dumps(_m2w_probe.remote(), indent=2))
+
+
+@app.function(
+    image=image, gpu="L4", volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret], timeout=14400,
+)
+def _stage2_m2w_grounding_remote(
+    variant: str, n_train: int, n_val: int, epochs: int, lr: float, batch_size: int,
+    seed: int, coord_scale: int, max_image_pixels: int,
+) -> dict:
+    """Stage 2 grounding on Multimodal-Mind2Web. variant in {A, Dhook}.
+    Target = gold element bbox center (normalized). Metrics: hit@r + hit@bbox."""
+    import os, sys, random, math, json as _json
+    from collections import Counter
+    from pathlib import Path as _Path
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+
+    import torch
+    import torch.nn as nn
+    from datasets import load_dataset
+    from peft import LoraConfig, get_peft_model
+    from qwen_vl_utils import process_vision_info
+    from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+    from src.data.taxonomy import unify_action, ID_TO_ACTION
+    from src.train.stage2 import coord_to_string, string_to_coord
+
+    torch.manual_seed(seed); random.seed(seed)
+
+    def load_split(split, n):
+        ds = load_dataset("osunlp/Multimodal-Mind2Web", split=split, token=os.environ.get("HF_TOKEN"))
+        rng = random.Random(seed); idx = list(range(len(ds))); rng.shuffle(idx)
+        out = []
+        for i in idx:
+            row = ds[i]
+            bbox = _m2w_parse_target_bbox(row)
+            img = row.get("screenshot")
+            if bbox is None or not hasattr(img, "width"):
+                continue
+            op_raw = row.get("operation")
+            try:
+                op = _json.loads(op_raw)["op"] if isinstance(op_raw, str) else op_raw.get("op")
+                cid = unify_action(op, "mind2web")
+            except Exception:
+                continue
+            W, H = img.width, img.height
+            x, y, w, h = bbox
+            img2 = img.convert("RGB")
+            if max_image_pixels > 0 and W * H > max_image_pixels:
+                r = (max_image_pixels / (W * H)) ** 0.5
+                img2 = img2.resize((max(1, int(W * r)), max(1, int(H * r))))
+            out.append({
+                "image": img2, "goal": row.get("confirmed_task", "") or "",
+                "action_id": cid,
+                "target_xy": ((x + w / 2) / W, (y + h / 2) / H),
+                "bbox_norm": (x / W, y / H, w / W, h / H),
+            })
+            if len(out) >= n:
+                break
+        return out
+
+    print(f"[m2w-{variant}] loading Multimodal-Mind2Web...")
+    train_ex = load_split("train", n_train)
+    val_ex = load_split("test_task", n_val)
+    print(f"[m2w-{variant}] train n={len(train_ex)} val n={len(val_ex)}  "
+          f"train action dist={Counter(e['action_id'] for e in train_ex)}")
+
+    base = Qwen2VLForConditionalGeneration.from_pretrained(
+        "Qwen/Qwen2-VL-2B-Instruct", torch_dtype=torch.bfloat16, device_map="auto")
+    processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")
+    model = get_peft_model(base, LoraConfig(r=16, lora_alpha=32,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], lora_dropout=0.05, task_type="CAUSAL_LM"))
+    hf_cache.commit()
+    device = next(model.parameters()).device
+    hidden = model.get_input_embeddings().embedding_dim
+
+    use_d = (variant == "Dhook")
+    action_embeddings = nn.Embedding(8, hidden).to(device=device, dtype=torch.bfloat16)
+    nn.init.zeros_(action_embeddings.weight)
+    _holder = {"action_id": None}
+    if use_d:
+        def _hook(m, i, o):
+            aid = _holder["action_id"]
+            return o if aid is None else o + action_embeddings(aid).unsqueeze(1).to(o.dtype)
+        hook = model.get_input_embeddings().register_forward_hook(_hook)
+
+    PROMPT = "Goal: {goal}\nPredict the action coordinate."
+    def build(examples, include_labels):
+        msgs = []
+        for ex in examples:
+            m = [{"role": "user", "content": [{"type": "image", "image": ex["image"]},
+                                              {"type": "text", "text": PROMPT.format(goal=ex["goal"])}]}]
+            if include_labels:
+                m.append({"role": "assistant", "content": [{"type": "text", "text": coord_to_string(ex["target_xy"], coord_scale)}]})
+            msgs.append(m)
+        texts = [processor.apply_chat_template(m, tokenize=False, add_generation_prompt=(not include_labels)) for m in msgs]
+        ii, vi = process_vision_info(msgs)
+        inputs = processor(text=texts, images=ii, videos=vi, padding=True, return_tensors="pt").to(device)
+        if include_labels:
+            labels = inputs["input_ids"].clone()
+            im_start = processor.tokenizer.convert_tokens_to_ids("<|im_start|>")
+            assistant_id = processor.tokenizer.convert_tokens_to_ids("assistant")
+            for b in range(labels.shape[0]):
+                row = inputs["input_ids"][b]; starts = (row == im_start).nonzero(as_tuple=True)[0].tolist(); cut = 0
+                for idx in reversed(starts):
+                    if idx + 1 < row.shape[0] and row[idx + 1].item() == assistant_id:
+                        cut = idx + 2
+                        if cut < row.shape[0]: cut += 1
+                        break
+                labels[b, :cut] = -100
+            inputs["labels"] = labels
+        aids = torch.tensor([e["action_id"] for e in examples], dtype=torch.long, device=device)
+        return inputs, aids
+
+    def evaluate(examples):
+        model.eval()
+        n_parsed = 0; dists = []; in_box = 0
+        for s in range(0, len(examples), batch_size):
+            chunk = examples[s:s + batch_size]
+            inputs, aids = build(chunk, include_labels=False)
+            if use_d: _holder["action_id"] = aids
+            plen = inputs["input_ids"].shape[1]
+            with torch.inference_mode():
+                gen = model.generate(**inputs, max_new_tokens=16, do_sample=False,
+                                     pad_token_id=processor.tokenizer.eos_token_id)
+            if use_d: _holder["action_id"] = None
+            new = gen[:, plen:] if gen.shape[1] > plen else gen
+            for ex, raw in zip(chunk, processor.batch_decode(new, skip_special_tokens=True)):
+                p = string_to_coord(raw, scale=coord_scale)
+                if p is None:
+                    dists.append(2.0 ** 0.5); continue
+                n_parsed += 1
+                tx, ty = ex["target_xy"]
+                dists.append(math.hypot(p[0] - tx, p[1] - ty))
+                bx, by, bw, bh = ex["bbox_norm"]
+                if bx <= p[0] <= bx + bw and by <= p[1] <= by + bh:
+                    in_box += 1
+        n = len(examples)
+        hit = lambda r: sum(1 for d in dists if d <= r) / n
+        return {"n_total": n, "n_parsed": n_parsed, "parse_rate": n_parsed / n,
+                "mean_normalized_l2": sum(dists) / n,
+                "hit_at_005": hit(0.05), "hit_at_010": hit(0.10), "hit_at_025": hit(0.25),
+                "hit_at_bbox": in_box / n}
+
+    params = [p for p in model.parameters() if p.requires_grad] + (list(action_embeddings.parameters()) if use_d else [])
+    optimizer = torch.optim.AdamW(params, lr=lr, weight_decay=0.01)
+    history = []
+    for epoch in range(1, epochs + 1):
+        print(f"\n[m2w-{variant}] === epoch {epoch}/{epochs} ===")
+        rng = random.Random(seed + epoch); order = list(range(len(train_ex))); rng.shuffle(order)
+        model.train(); ep_loss, nstep = 0.0, 0
+        for i in range(0, len(order), batch_size):
+            chunk = [train_ex[j] for j in order[i:i + batch_size]]
+            inputs, aids = build(chunk, include_labels=True)
+            if use_d: _holder["action_id"] = aids
+            out = model(**inputs); loss = out.loss
+            if use_d: _holder["action_id"] = None
+            optimizer.zero_grad(); loss.backward()
+            torch.nn.utils.clip_grad_norm_(params, 1.0); optimizer.step()
+            ep_loss += float(loss.item()); nstep += 1
+            if nstep % 50 == 0:
+                print(f"[m2w-{variant}]   step {nstep}  loss={loss.item():.4f}")
+        em = evaluate(val_ex)
+        history.append({"epoch": epoch, "train_loss": ep_loss / max(nstep, 1), **em})
+        print(f"[m2w-{variant}] epoch {epoch} loss={ep_loss/max(nstep,1):.4f} "
+              f"hit@0.10={em['hit_at_010']:.3f} hit@bbox={em['hit_at_bbox']:.3f} L2={em['mean_normalized_l2']:.3f}")
+    if use_d: hook.remove()
+
+    summary = {"variant": f"m2w_{variant}", "dataset": "Multimodal-Mind2Web",
+               "n_train": len(train_ex), "n_val": len(val_ex), "epochs": epochs, "lr": lr,
+               "seed": seed, "coord_scale": coord_scale,
+               "history": history, "final_val_metrics": history[-1] if history else None}
+    cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"; cache_dir.mkdir(parents=True, exist_ok=True)
+    out_path = cache_dir / f"m2w_{variant}_seed{seed}_n{n_train}_ep{epochs}.json"
+    out_path.write_text(_json.dumps(summary, indent=2)); stage1_cache.commit()
+    print(f"[m2w-{variant}] persisted to {out_path}")
+    return summary
+
+
+@app.local_entrypoint()
+def train_m2w_grounding(
+    variant: str = "A", n_train: int = 1000, n_val: int = 250, epochs: int = 2,
+    lr: float = 2e-5, batch_size: int = 1, seed: int = 42, coord_scale: int = 1000,
+    max_image_pixels: int = 1000000,
+) -> None:
+    """Stage 2 grounding on Multimodal-Mind2Web (variant A or Dhook). Use --detach."""
+    _stage2_m2w_grounding_remote.remote(
+        variant, n_train, n_val, epochs, lr, batch_size, seed, coord_scale, max_image_pixels)
