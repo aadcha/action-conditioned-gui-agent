@@ -2904,3 +2904,239 @@ def train_stage2_variantC(
     """Variant C (hard routing: forced action word at decode). Use --detach."""
     _stage2_variantC_train_remote.remote(
         n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix)
+
+
+# ---- Phase 6 end-to-end: Stage 1 predicted types -> Stage 2 conditioning ----
+#
+# The project's central pitch is a TWO-STAGE pipeline: Stage 1 predicts the
+# action type, Stage 2 conditions grounding on it. Every Stage 2 result so far
+# used the GOLD action type (oracle upper bound). This job closes the loop:
+#   1. train D-hook (additive action conditioning) as usual
+#   2. extract frozen-backbone features (LoRA disabled, hook off) for train+val
+#   3. train a small Stage 1 MLP head on (feature -> gold action type)
+#   4. evaluate D-hook TWICE: conditioned on (i) gold types [oracle], and
+#      (ii) Stage 1 PREDICTED types
+# The oracle-vs-predicted gap isolates Stage-1 classifier error from grounding
+# error (a must-have diagnostic from the plan).
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret],
+    timeout=14400,
+)
+def _stage2_e2e_remote(
+    n_train: int, n_val: int, epochs: int, lr: float, batch_size: int,
+    seed: int, aitw_split: str, coord_scale: int, data_mix: str,
+) -> dict:
+    import os, sys, random, json as _json
+    from collections import Counter
+    from pathlib import Path as _Path
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    from peft import LoraConfig, get_peft_model
+    from qwen_vl_utils import process_vision_info
+    from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+    from sklearn.metrics import f1_score, accuracy_score
+    from src.data.aitw import iter_aitw_steps
+    from src.data.taxonomy import ID_TO_ACTION
+    from src.train.stage2 import Stage2Example, coord_to_string, string_to_coord, _metrics_from_predictions
+
+    torch.manual_seed(seed); random.seed(seed)
+    _DATA_MIX_LABELS = {
+        "taps_only": {"tap"},
+        "taps_and_swipes": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right"},
+        "all_with_coords": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"},
+    }
+    allowed = _DATA_MIX_LABELS.get(data_mix, {"tap"})
+    print(f"[e2e] streaming AITW {aitw_split} (data_mix={data_mix})...")
+    examples_all = []
+    need = n_train + n_val
+    for step in iter_aitw_steps(split=aitw_split, n_max=max(need * 4, 1000), include_images=True):
+        if step.string_label not in allowed:
+            continue
+        examples_all.append(Stage2Example(
+            image=step.open_image(), goal_info=step.goal_info,
+            action_type_id=step.canonical_action_id,
+            target_xy=(step.touch_yx[1], step.touch_yx[0])))
+        if len(examples_all) >= need:
+            break
+    train_examples = examples_all[:n_train]
+    val_examples = examples_all[n_train:n_train + n_val]
+    print(f"[e2e] train n={len(train_examples)} val n={len(val_examples)}")
+
+    base = Qwen2VLForConditionalGeneration.from_pretrained(
+        "Qwen/Qwen2-VL-2B-Instruct", torch_dtype=torch.bfloat16, device_map="auto")
+    processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")
+    model = get_peft_model(base, LoraConfig(r=16, lora_alpha=32,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], lora_dropout=0.05, task_type="CAUSAL_LM"))
+    hf_cache.commit()
+    device = next(model.parameters()).device
+    hidden = model.get_input_embeddings().embedding_dim
+
+    action_embeddings = nn.Embedding(8, hidden).to(device=device, dtype=torch.bfloat16)
+    nn.init.zeros_(action_embeddings.weight)
+    _holder = {"action_id": None}
+    def _embed_hook(module, inputs, output):
+        aid = _holder["action_id"]
+        if aid is None:
+            return output
+        return output + action_embeddings(aid).unsqueeze(1).to(output.dtype)
+    hook = model.get_input_embeddings().register_forward_hook(_embed_hook)
+
+    PROMPT = "Goal: {goal}\nPredict the action coordinate."
+    def build(examples, include_labels):
+        msgs = []
+        for ex in examples:
+            m = [{"role": "user", "content": [{"type": "image", "image": ex.image},
+                                              {"type": "text", "text": PROMPT.format(goal=ex.goal_info)}]}]
+            if include_labels:
+                m.append({"role": "assistant", "content": [{"type": "text", "text": coord_to_string(ex.target_xy, coord_scale)}]})
+            msgs.append(m)
+        texts = [processor.apply_chat_template(m, tokenize=False, add_generation_prompt=(not include_labels)) for m in msgs]
+        image_inputs, video_inputs = process_vision_info(msgs)
+        inputs = processor(text=texts, images=image_inputs, videos=video_inputs, padding=True, return_tensors="pt").to(device)
+        if include_labels:
+            labels = inputs["input_ids"].clone()
+            im_start = processor.tokenizer.convert_tokens_to_ids("<|im_start|>")
+            assistant_id = processor.tokenizer.convert_tokens_to_ids("assistant")
+            for b in range(labels.shape[0]):
+                row = inputs["input_ids"][b]
+                starts = (row == im_start).nonzero(as_tuple=True)[0].tolist()
+                cut = 0
+                for idx in reversed(starts):
+                    if idx + 1 < row.shape[0] and row[idx + 1].item() == assistant_id:
+                        cut = idx + 2
+                        if cut < row.shape[0]: cut += 1
+                        break
+                labels[b, :cut] = -100
+            inputs["labels"] = labels
+        action_ids = torch.tensor([ex.action_type_id for ex in examples], dtype=torch.long, device=device)
+        return inputs, action_ids
+
+    # --- train D-hook ---
+    optimizer = torch.optim.AdamW(
+        [p for p in model.parameters() if p.requires_grad] + list(action_embeddings.parameters()),
+        lr=lr, weight_decay=0.01)
+    for epoch in range(1, epochs + 1):
+        print(f"\n[e2e] === D-hook epoch {epoch}/{epochs} ===")
+        rng = random.Random(seed + epoch); order = list(range(len(train_examples))); rng.shuffle(order)
+        model.train(); nstep = 0
+        for i in range(0, len(order), batch_size):
+            chunk = [train_examples[j] for j in order[i:i + batch_size]]
+            inputs, action_ids = build(chunk, include_labels=True)
+            _holder["action_id"] = action_ids
+            out = model(**inputs); loss = out.loss
+            _holder["action_id"] = None
+            optimizer.zero_grad(); loss.backward()
+            torch.nn.utils.clip_grad_norm_(
+                [p for p in model.parameters() if p.requires_grad] + list(action_embeddings.parameters()), 1.0)
+            optimizer.step(); nstep += 1
+            if nstep % 50 == 0:
+                print(f"[e2e]   step {nstep}  loss={loss.item():.4f}")
+
+    # --- extract frozen-backbone features (LoRA disabled, hook off) ---
+    print("[e2e] extracting Stage 1 features (frozen backbone)...")
+    def extract_feats(examples):
+        feats = []
+        model.eval()
+        _holder["action_id"] = None
+        for s in range(0, len(examples), batch_size):
+            chunk = examples[s:s + batch_size]
+            inputs, _ = build(chunk, include_labels=False)
+            with torch.inference_mode(), model.disable_adapter():
+                out = model(**inputs, output_hidden_states=True)
+                lh = out.hidden_states[-1]
+                am = inputs["attention_mask"].unsqueeze(-1).to(lh.dtype)
+                pooled = (lh * am).sum(1) / am.sum(1).clamp(min=1)
+                feats.append(pooled.float().cpu())
+        return torch.cat(feats, 0)
+
+    ftr = extract_feats(train_examples); fva = extract_feats(val_examples)
+    ytr = torch.tensor([e.action_type_id for e in train_examples])
+    yva = torch.tensor([e.action_type_id for e in val_examples])
+
+    # --- train Stage 1 MLP head (class-weighted, full-batch) ---
+    print("[e2e] training Stage 1 head...")
+    s1 = nn.Sequential(nn.Linear(hidden, 256), nn.GELU(), nn.Dropout(0.1), nn.Linear(256, 8)).to(device)
+    counts = torch.bincount(ytr, minlength=8).float().clamp(min=1)
+    w = (counts.sum() / (8 * counts)).to(device)
+    opt1 = torch.optim.AdamW(s1.parameters(), lr=1e-3, weight_decay=1e-4)
+    ftr_d, ytr_d = ftr.to(device), ytr.to(device)
+    for ep in range(200):
+        s1.train(); opt1.zero_grad()
+        logits = s1(ftr_d)
+        loss = F.cross_entropy(logits, ytr_d, weight=w)
+        loss.backward(); opt1.step()
+    s1.eval()
+    with torch.inference_mode():
+        pred_val = s1(fva.to(device)).argmax(-1).cpu()
+    s1_acc = float(accuracy_score(yva.numpy(), pred_val.numpy()))
+    s1_macro = float(f1_score(yva.numpy(), pred_val.numpy(), average="macro", zero_division=0))
+    print(f"[e2e] Stage1 val: acc={s1_acc:.3f} macroF1={s1_macro:.3f}")
+    print(f"[e2e] Stage1 pred dist: {Counter(pred_val.tolist())}  gold dist: {Counter(yva.tolist())}")
+
+    # --- eval D-hook with gold (oracle) vs predicted types ---
+    def eval_with(types_tensor):
+        model.eval()
+        preds, targets, aids, raws = [], [], [], []
+        for s in range(0, len(val_examples), batch_size):
+            chunk = val_examples[s:s + batch_size]
+            type_chunk = types_tensor[s:s + batch_size].to(device)
+            inputs, _ = build(chunk, include_labels=False)
+            _holder["action_id"] = type_chunk
+            prompt_len = inputs["input_ids"].shape[1]
+            with torch.inference_mode():
+                gen = model.generate(**inputs, max_new_tokens=16, do_sample=False,
+                                     pad_token_id=processor.tokenizer.eos_token_id)
+            _holder["action_id"] = None
+            new = gen[:, prompt_len:] if gen.shape[1] > prompt_len else gen
+            for ex, raw in zip(chunk, processor.batch_decode(new, skip_special_tokens=True)):
+                raws.append(raw); preds.append(string_to_coord(raw, scale=coord_scale))
+                targets.append(ex.target_xy); aids.append(ex.action_type_id)
+        m = _metrics_from_predictions(targets, preds, aids); m["raw_outputs"] = raws[:10]
+        return m
+
+    print("[e2e] eval with GOLD types (oracle)...")
+    oracle = eval_with(yva)
+    print(f"[e2e]   oracle hit@0.10={oracle['hit_at_010']:.3f} hit@0.25={oracle['hit_at_025']:.3f} L2={oracle['mean_normalized_l2']:.3f}")
+    print("[e2e] eval with PREDICTED types...")
+    predicted = eval_with(pred_val)
+    print(f"[e2e]   pred   hit@0.10={predicted['hit_at_010']:.3f} hit@0.25={predicted['hit_at_025']:.3f} L2={predicted['mean_normalized_l2']:.3f}")
+    hook.remove()
+
+    summary = {
+        "variant": "D_hook_e2e", "n_train": len(train_examples), "n_val": len(val_examples),
+        "epochs": epochs, "lr": lr, "seed": seed, "data_mix": data_mix, "coord_scale": coord_scale,
+        "stage1_val_acc": s1_acc, "stage1_val_macro_f1": s1_macro,
+        "oracle_metrics": {k: v for k, v in oracle.items() if k not in ("raw_outputs", "per_example_dist")},
+        "predicted_metrics": {k: v for k, v in predicted.items() if k not in ("raw_outputs", "per_example_dist")},
+        "oracle_per_example_dist": oracle.get("per_example_dist"),
+        "predicted_per_example_dist": predicted.get("per_example_dist"),
+        "gap_hit_at_010": oracle["hit_at_010"] - predicted["hit_at_010"],
+        "gap_mean_l2": predicted["mean_normalized_l2"] - oracle["mean_normalized_l2"],
+    }
+    cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    out_path = cache_dir / f"e2e_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}.json"
+    out_path.write_text(_json.dumps(summary, indent=2))
+    stage1_cache.commit()
+    print(f"[e2e] persisted to {out_path}")
+    return summary
+
+
+@app.local_entrypoint()
+def train_stage2_e2e(
+    n_train: int = 1200, n_val: int = 250, epochs: int = 2, lr: float = 2e-5,
+    batch_size: int = 1, seed: int = 42, aitw_split: str = "train",
+    coord_scale: int = 1000, data_mix: str = "all_with_coords",
+) -> None:
+    """End-to-end: Stage 1 predicted types -> D-hook conditioning. oracle vs predicted gap. --detach."""
+    _stage2_e2e_remote.remote(
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix)
