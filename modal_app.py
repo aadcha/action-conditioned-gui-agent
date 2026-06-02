@@ -2904,3 +2904,573 @@ def train_stage2_variantC(
     """Variant C (hard routing: forced action word at decode). Use --detach."""
     _stage2_variantC_train_remote.remote(
         n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix)
+
+
+# ---- Phase 7: end-to-end Stage 1 -> Stage 2 evaluation ---------------------
+#
+# This is the deployable evaluation missing from Phases 3-6:
+#   image + goal -> Stage 1 predicts action type -> D-hook grounds coordinate.
+# Gold/oracle action types remain in the output only as a diagnostic ceiling.
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret],
+    timeout=21600,
+)
+def _phase7_end_to_end_remote(
+    n_train: int,
+    n_val: int,
+    epochs: int,
+    lr: float,
+    batch_size: int,
+    seed: int,
+    aitw_split: str,
+    coord_scale: int,
+    data_mix: str,
+    stage1_epochs: int,
+    stage1_lr: float,
+    stage1_hidden_dim: int,
+    stage1_dropout: float,
+    feature_batch_size: int,
+    max_image_pixels: int,
+    reuse_phase6_a: bool,
+) -> dict:
+    """Run one Phase 7 seed: matched Stage 1, D-hook, and predicted-type eval."""
+    import os
+    import sys
+    import random
+    import json as _json
+    import gc
+    from collections import Counter
+    from pathlib import Path as _Path
+
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    from peft import LoraConfig, get_peft_model
+    from qwen_vl_utils import process_vision_info
+    from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+
+    from src.data.aitw import iter_aitw_steps
+    from src.data.taxonomy import ID_TO_ACTION
+    from src.eval.phase7 import (
+        PHASE7_VARIANTS,
+        distance_or_sentinel,
+        make_control_action_ids,
+        metrics_from_distances,
+        select_phase7_steps,
+        stage1_correct_breakdown,
+        summarize_stage1_predictions,
+    )
+    from src.models.stage1_classifier import Stage1Classifier, Stage1Config
+    from src.train.stage1 import TrainConfig, train_stage1
+    from src.train.stage2 import Stage2Example, coord_to_string, string_to_coord, _metrics_from_predictions
+
+    torch.manual_seed(seed)
+    random.seed(seed)
+
+    need = n_train + n_val
+    print(f"[p7] streaming AITW {aitw_split} for {need} eligible examples (mix={data_mix})...")
+    split = select_phase7_steps(
+        iter_aitw_steps(
+            split=aitw_split,
+            n_max=max(need * 4, 1000),
+            include_images=True,
+        ),
+        n_train=n_train,
+        n_val=n_val,
+        data_mix=data_mix,
+    )
+    train_steps = split.train_steps
+    val_steps = split.val_steps
+    print(f"[p7] train n={len(train_steps)} val n={len(val_steps)}")
+    print(f"[p7] train action dist: {Counter(s.canonical_action_id for s in train_steps)}")
+
+    def _maybe_resize(img):
+        if max_image_pixels > 0 and img.width * img.height > max_image_pixels:
+            r = (max_image_pixels / (img.width * img.height)) ** 0.5
+            return img.resize((max(1, int(img.width * r)), max(1, int(img.height * r))))
+        return img
+
+    def _stage2_examples(steps):
+        return [
+            Stage2Example(
+                image=_maybe_resize(s.open_image()),
+                goal_info=s.goal_info,
+                action_type_id=s.canonical_action_id,
+                target_xy=(s.touch_yx[1], s.touch_yx[0]),
+            )
+            for s in steps
+        ]
+
+    train_examples = _stage2_examples(train_steps)
+    val_examples = _stage2_examples(val_steps)
+    train_action_ids = [ex.action_type_id for ex in train_examples]
+    gold_val_ids = [ex.action_type_id for ex in val_examples]
+
+    # ---- Stage 1: frozen Qwen2-VL feature extraction + MLP ----------------
+    print("[p7-stage1] loading frozen Qwen2-VL for vision_text features...")
+    s1_vlm = Qwen2VLForConditionalGeneration.from_pretrained(
+        "Qwen/Qwen2-VL-2B-Instruct", torch_dtype=torch.bfloat16, device_map="auto"
+    )
+    s1_processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")
+    s1_vlm.eval()
+    hf_cache.commit()
+    feature_device = next(s1_vlm.parameters()).device
+
+    stage1_prompt = (
+        "Predict the next action type for this mobile UI task.\n"
+        "Goal: {goal}\n"
+        "Action type:"
+    )
+
+    def _extract_features(examples):
+        feats = []
+        labels = []
+        for start in range(0, len(examples), feature_batch_size):
+            chunk = examples[start:start + feature_batch_size]
+            messages = []
+            for ex in chunk:
+                messages.append([{
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "image": ex.image},
+                        {"type": "text", "text": stage1_prompt.format(goal=ex.goal_info)},
+                    ],
+                }])
+            texts = [
+                s1_processor.apply_chat_template(m, tokenize=False, add_generation_prompt=True)
+                for m in messages
+            ]
+            image_inputs, video_inputs = process_vision_info(messages)
+            inputs = s1_processor(
+                text=texts,
+                images=image_inputs,
+                videos=video_inputs,
+                padding=True,
+                return_tensors="pt",
+            ).to(feature_device)
+            with torch.inference_mode():
+                out = s1_vlm(**inputs, output_hidden_states=True, return_dict=True)
+                last_hidden = out.hidden_states[-1]
+                mask = inputs["attention_mask"].unsqueeze(-1).to(last_hidden.dtype)
+                pooled = (last_hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
+                feats.append(pooled.to(torch.float32).cpu())
+            labels.extend([ex.action_type_id for ex in chunk])
+            print(f"[p7-stage1] extracted {min(start + len(chunk), len(examples))}/{len(examples)}")
+        return torch.cat(feats, dim=0), torch.tensor(labels, dtype=torch.long)
+
+    f_train, y_train = _extract_features(train_examples)
+    f_val, y_val = _extract_features(val_examples)
+    hidden_dim = int(f_train.shape[1])
+    print(f"[p7-stage1] feature shape train={list(f_train.shape)} val={list(f_val.shape)}")
+
+    s1_result = train_stage1(
+        features_train=f_train,
+        labels_train=y_train,
+        features_val=f_val,
+        labels_val=y_val,
+        model_cfg=Stage1Config(
+            feature_dim=hidden_dim,
+            hidden_dim=stage1_hidden_dim,
+            num_classes=8,
+            dropout=stage1_dropout,
+        ),
+        train_cfg=TrainConfig(
+            epochs=stage1_epochs,
+            lr=stage1_lr,
+            weight_decay=0.01,
+            batch_size=128,
+            class_weighted=True,
+            seed=seed,
+        ),
+        device="cuda" if torch.cuda.is_available() else "cpu",
+    )
+    s1_model = Stage1Classifier(
+        Stage1Config(
+            feature_dim=hidden_dim,
+            hidden_dim=stage1_hidden_dim,
+            num_classes=8,
+            dropout=stage1_dropout,
+        )
+    )
+    s1_model.load_state_dict(s1_result["best_state"])
+    s1_model.eval()
+    with torch.no_grad():
+        logits = s1_model(f_val)
+        probs = F.softmax(logits, dim=-1)
+        pred_ids = logits.argmax(dim=-1).cpu().tolist()
+        confidences = probs.max(dim=-1).values.cpu().tolist()
+        logits_list = logits.cpu().tolist()
+
+    stage1_summary = summarize_stage1_predictions(gold_val_ids, pred_ids, confidences)
+    stage1_summary["best_epoch"] = int(s1_result["best_epoch"])
+    stage1_summary["train_cfg"] = {k: v for k, v in s1_result["train_cfg"].items()}
+    stage1_summary["model_cfg"] = {k: v for k, v in s1_result["model_cfg"].items()}
+    print(
+        f"[p7-stage1] val acc={stage1_summary['accuracy']:.3f} "
+        f"macro_f1={stage1_summary['macro_f1']:.3f}"
+    )
+
+    del s1_vlm, s1_processor
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    controls = make_control_action_ids(train_action_ids, gold_val_ids, seed=seed)
+    mode_action_ids = {
+        "D_gold": gold_val_ids,
+        "D_predicted": pred_ids,
+        "D_majority": controls["majority_ids"],
+        "D_random": controls["random_ids"],
+    }
+
+    # ---- D-hook Stage 2 training ----------------------------------------
+    print("[p7-dhook] loading Qwen2-VL + LoRA + zero-init action hook...")
+    base = Qwen2VLForConditionalGeneration.from_pretrained(
+        "Qwen/Qwen2-VL-2B-Instruct", torch_dtype=torch.bfloat16, device_map="auto"
+    )
+    processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")
+    lora_config = LoraConfig(
+        r=16,
+        lora_alpha=32,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+        lora_dropout=0.05,
+        task_type="CAUSAL_LM",
+    )
+    model = get_peft_model(base, lora_config)
+    hf_cache.commit()
+    device = next(model.parameters()).device
+    hidden = model.get_input_embeddings().embedding_dim
+    action_embeddings = nn.Embedding(8, hidden).to(device=device, dtype=torch.bfloat16)
+    nn.init.zeros_(action_embeddings.weight)
+    holder = {"action_id": None}
+    embed_layer = model.get_input_embeddings()
+
+    def _embed_hook(module, inputs, output):
+        aid = holder["action_id"]
+        if aid is None:
+            return output
+        bias = action_embeddings(aid)
+        return output + bias.unsqueeze(1).to(output.dtype)
+
+    hook_handle = embed_layer.register_forward_hook(_embed_hook)
+    prompt = "Goal: {goal}\nPredict the action coordinate."
+
+    def _build(examples, action_ids, include_labels):
+        messages = []
+        for ex in examples:
+            m = [{
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": ex.image},
+                    {"type": "text", "text": prompt.format(goal=ex.goal_info)},
+                ],
+            }]
+            if include_labels:
+                m.append({
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": coord_to_string(ex.target_xy, coord_scale)}],
+                })
+            messages.append(m)
+        texts = [
+            processor.apply_chat_template(m, tokenize=False, add_generation_prompt=(not include_labels))
+            for m in messages
+        ]
+        image_inputs, video_inputs = process_vision_info(messages)
+        inputs = processor(
+            text=texts,
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        ).to(device)
+        if include_labels:
+            labels = inputs["input_ids"].clone()
+            im_start = processor.tokenizer.convert_tokens_to_ids("<|im_start|>")
+            assistant_id = processor.tokenizer.convert_tokens_to_ids("assistant")
+            for b in range(labels.shape[0]):
+                row = inputs["input_ids"][b]
+                starts = (row == im_start).nonzero(as_tuple=True)[0].tolist()
+                cut = 0
+                for idx in reversed(starts):
+                    if idx + 1 < row.shape[0] and row[idx + 1].item() == assistant_id:
+                        cut = idx + 2
+                        if cut < row.shape[0]:
+                            cut += 1
+                        break
+                labels[b, :cut] = -100
+            inputs["labels"] = labels
+        return inputs, torch.tensor(action_ids, dtype=torch.long, device=device)
+
+    def _evaluate_with_actions(name, examples, action_ids):
+        model.eval()
+        preds, targets, aids, raws = [], [], [], []
+        for start in range(0, len(examples), batch_size):
+            chunk = examples[start:start + batch_size]
+            ids = action_ids[start:start + len(chunk)]
+            inputs, action_tensor = _build(chunk, ids, include_labels=False)
+            holder["action_id"] = action_tensor
+            prompt_len = inputs["input_ids"].shape[1]
+            with torch.inference_mode():
+                gen = model.generate(
+                    **inputs,
+                    max_new_tokens=16,
+                    do_sample=False,
+                    pad_token_id=processor.tokenizer.eos_token_id,
+                )
+            holder["action_id"] = None
+            new = gen[:, prompt_len:] if gen.shape[1] > prompt_len else gen
+            decoded = processor.batch_decode(new, skip_special_tokens=True)
+            for ex, aid, raw in zip(chunk, ids, decoded, strict=True):
+                parsed = string_to_coord(raw, scale=coord_scale)
+                raws.append(raw)
+                preds.append(parsed)
+                targets.append(ex.target_xy)
+                aids.append(int(aid))
+        metrics = _metrics_from_predictions(targets, preds, aids)
+        metrics["raw_outputs"] = raws[:20]
+        metrics["conditioning_mode"] = name
+        details = [
+            {
+                "raw_output": raw,
+                "pred_xy": list(pred) if pred is not None else None,
+                "distance": distance_or_sentinel(pred, target),
+                "hit_at_005": distance_or_sentinel(pred, target) <= 0.05,
+                "hit_at_010": distance_or_sentinel(pred, target) <= 0.10,
+                "hit_at_025": distance_or_sentinel(pred, target) <= 0.25,
+            }
+            for raw, pred, target in zip(raws, preds, targets, strict=True)
+        ]
+        print(
+            f"[p7-dhook] {name}: hit@0.10={metrics['hit_at_010']:.3f} "
+            f"hit@0.25={metrics['hit_at_025']:.3f} l2={metrics['mean_normalized_l2']:.3f}"
+        )
+        return metrics, details
+
+    optimizer = torch.optim.AdamW(
+        [p for p in model.parameters() if p.requires_grad] + list(action_embeddings.parameters()),
+        lr=lr,
+        weight_decay=0.01,
+    )
+    history = []
+    for epoch in range(1, epochs + 1):
+        print(f"\n[p7-dhook] === epoch {epoch}/{epochs} ===")
+        rng = random.Random(seed + epoch)
+        order = list(range(len(train_examples)))
+        rng.shuffle(order)
+        model.train()
+        epoch_loss, n_steps = 0.0, 0
+        for i in range(0, len(order), batch_size):
+            idxs = order[i:i + batch_size]
+            chunk = [train_examples[j] for j in idxs]
+            ids = [train_examples[j].action_type_id for j in idxs]
+            inputs, action_tensor = _build(chunk, ids, include_labels=True)
+            holder["action_id"] = action_tensor
+            out = model(**inputs)
+            holder["action_id"] = None
+            loss = out.loss
+            optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(
+                [p for p in model.parameters() if p.requires_grad] + list(action_embeddings.parameters()),
+                max_norm=1.0,
+            )
+            optimizer.step()
+            epoch_loss += float(loss.item())
+            n_steps += 1
+            if n_steps % 25 == 0:
+                print(
+                    f"[p7-dhook] step {n_steps} loss={loss.item():.4f} "
+                    f"ae_norm={float(action_embeddings.weight.norm()):.4f}"
+                )
+        avg_loss = epoch_loss / max(n_steps, 1)
+        gold_metrics, _ = _evaluate_with_actions("D_gold", val_examples, gold_val_ids)
+        history.append({
+            "epoch": epoch,
+            "train_loss": avg_loss,
+            "action_emb_norm": float(action_embeddings.weight.norm()),
+            **{k: v for k, v in gold_metrics.items() if k not in {"raw_outputs", "per_example_dist"}},
+        })
+
+    variant_details = {}
+    variants = {}
+    for name in ("D_gold", "D_predicted", "D_majority", "D_random"):
+        metrics, details = _evaluate_with_actions(name, val_examples, mode_action_ids[name])
+        if name == "D_predicted":
+            metrics["stage1_correct_breakdown"] = stage1_correct_breakdown(
+                metrics["per_example_dist"], gold_val_ids, pred_ids
+            )
+        variants[name] = {"final_val_metrics": metrics}
+        variant_details[name] = details
+
+    hook_handle.remove()
+
+    # ---- A-flat reuse from Phase 6 when available ------------------------
+    a_flat_metrics = None
+    a_flat_source = "missing"
+    if reuse_phase6_a:
+        phase4_dir = _Path("/root/repo/results/phase4")
+        candidates = sorted(phase4_dir.glob(f"variantA_seed{seed}_*_mix-{data_mix}.json"))
+        for p in reversed(candidates):
+            try:
+                data = _json.loads(p.read_text())
+            except Exception:
+                continue
+            dist = (data.get("final_val_metrics") or {}).get("per_example_dist")
+            if dist is not None:
+                dist = [float(x) for x in dist[:len(val_examples)]]
+                a_flat_metrics = metrics_from_distances(dist)
+                a_flat_metrics["source"] = str(p)
+                a_flat_source = "phase6_reused"
+                print(f"[p7] reused A-flat distances from {p}")
+                break
+    if a_flat_metrics is None:
+        print("[p7] WARNING: no A-flat per-example distances found; consolidation can still use Phase 4 fallback.")
+        a_flat_metrics = {"per_example_dist": [], "source": a_flat_source}
+    variants["A_flat"] = {"final_val_metrics": a_flat_metrics}
+
+    examples_out = []
+    for i, (step, ex) in enumerate(zip(val_steps, val_examples, strict=True)):
+        rec = {
+            "example_index": i,
+            "episode_id": step.ep_id,
+            "step_id": int(step.step_id),
+            "raw_label": step.string_label,
+            "goal_info": step.goal_info,
+            "gold_action_type": int(gold_val_ids[i]),
+            "gold_action_name": ID_TO_ACTION[int(gold_val_ids[i])],
+            "pred_action_type": int(pred_ids[i]),
+            "pred_action_name": ID_TO_ACTION[int(pred_ids[i])],
+            "stage1_correct": bool(gold_val_ids[i] == pred_ids[i]),
+            "stage1_confidence": float(confidences[i]),
+            "stage1_logits": [float(x) for x in logits_list[i]],
+            "target_xy": [float(ex.target_xy[0]), float(ex.target_xy[1])],
+            "variants": {},
+        }
+        for name, details in variant_details.items():
+            rec["variants"][name] = details[i]
+        if a_flat_metrics.get("per_example_dist"):
+            d = float(a_flat_metrics["per_example_dist"][i])
+            rec["variants"]["A_flat"] = {
+                "raw_output": None,
+                "pred_xy": None,
+                "distance": d,
+                "hit_at_005": d <= 0.05,
+                "hit_at_010": d <= 0.10,
+                "hit_at_025": d <= 0.25,
+                "source": a_flat_source,
+            }
+        examples_out.append(rec)
+
+    summary = {
+        "seed": seed,
+        "data_mix": data_mix,
+        "n_train": len(train_examples),
+        "n_val": len(val_examples),
+        "epochs": epochs,
+        "lr": lr,
+        "batch_size": batch_size,
+        "coord_scale": coord_scale,
+        "aitw_split": aitw_split,
+        "stage1": stage1_summary,
+        "controls": controls,
+        "variants": {k: variants.get(k, {"final_val_metrics": {"per_example_dist": []}}) for k in PHASE7_VARIANTS},
+        "dhook_history": history,
+        "examples": examples_out,
+    }
+
+    cache_dir = _Path(STAGE1_CACHE_PATH) / "phase7_runs"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    out_path = cache_dir / f"end_to_end_seed{seed}_mix-{data_mix}.json"
+    out_path.write_text(_json.dumps(summary, indent=2))
+    stage1_cache.commit()
+    print(f"[p7] persisted result to {out_path}")
+    return summary
+
+
+@app.local_entrypoint()
+def phase7_end_to_end(
+    n_train: int = 1200,
+    n_val: int = 250,
+    epochs: int = 2,
+    lr: float = 2e-5,
+    batch_size: int = 1,
+    seed: int = 42,
+    aitw_split: str = "train",
+    coord_scale: int = 1000,
+    data_mix: str = "all_with_coords",
+    stage1_epochs: int = 8,
+    stage1_lr: float = 1e-4,
+    stage1_hidden_dim: int = 1024,
+    stage1_dropout: float = 0.1,
+    feature_batch_size: int = 2,
+    max_image_pixels: int = 1_000_000,
+    reuse_phase6_a: bool = True,
+) -> None:
+    """Run one Phase 7 end-to-end seed and write results/phase7 locally."""
+    import json
+    from pathlib import Path
+
+    result = _phase7_end_to_end_remote.remote(
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale,
+        data_mix, stage1_epochs, stage1_lr, stage1_hidden_dim, stage1_dropout,
+        feature_batch_size, max_image_pixels, reuse_phase6_a,
+    )
+    out = Path(f"results/phase7/end_to_end_seed{seed}_mix-{data_mix}.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2))
+    print(f"[p7] wrote {out}")
+    s1 = result.get("stage1", {})
+    print(f"[p7] Stage 1: acc={s1.get('accuracy', float('nan')):.3f} macro_f1={s1.get('macro_f1', float('nan')):.3f}")
+    for name, payload in (result.get("variants") or {}).items():
+        m = payload.get("final_val_metrics") or {}
+        if m.get("per_example_dist"):
+            print(f"[p7] {name}: hit@0.10={m.get('hit_at_010', float('nan')):.3f} l2={m.get('mean_normalized_l2', float('nan')):.3f}")
+
+
+@app.function(
+    image=image,
+    volumes={STAGE1_CACHE_PATH: stage1_cache},
+    timeout=120,
+)
+def _list_phase7_runs() -> list[dict]:
+    import json as _json
+    from pathlib import Path as _Path
+
+    runs_dir = _Path(STAGE1_CACHE_PATH) / "phase7_runs"
+    if not runs_dir.exists():
+        return []
+    out = []
+    for p in sorted(runs_dir.glob("*.json")):
+        try:
+            data = _json.loads(p.read_text())
+            data["_file"] = p.name
+            out.append(data)
+        except Exception as e:
+            out.append({"_file": p.name, "_error": str(e)})
+    return out
+
+
+@app.local_entrypoint()
+def list_phase7_runs() -> None:
+    """Pull persisted Phase 7 runs from the Modal Volume into results/phase7/."""
+    import json
+    from pathlib import Path
+
+    runs = _list_phase7_runs.remote()
+    print(f"[p7] found {len(runs)} persisted Phase 7 runs")
+    out_dir = Path("results/phase7")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for run in runs:
+        name = run.get("_file", f"end_to_end_seed{run.get('seed', 'unknown')}_mix-{run.get('data_mix', 'unknown')}.json")
+        local = out_dir / name
+        run = {k: v for k, v in run.items() if k != "_file"}
+        local.write_text(json.dumps(run, indent=2))
+        print(f"[p7] saved -> {local}")
