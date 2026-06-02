@@ -3322,6 +3322,15 @@ def _stage2_attn_viz_remote(
         figs_b64.append(base64.b64encode(buf.getvalue()).decode())
 
     h.remove()
+    # Persist to the Volume so a --detach run is recoverable (local exits early).
+    from pathlib import Path as _Path
+    vdir = _Path(STAGE1_CACHE_PATH) / "attn_viz"
+    vdir.mkdir(parents=True, exist_ok=True)
+    for i, b64 in enumerate(figs_b64):
+        (vdir / f"attn_example_{i}.png").write_bytes(base64.b64decode(b64))
+    (vdir / "attention_mass.json").write_text(_json.dumps(mass_records, indent=2))
+    stage1_cache.commit()
+    print(f"[viz] persisted {len(figs_b64)} figures to Volume {vdir}")
     return {"n_figs": len(figs_b64), "figs_b64": figs_b64, "attention_mass": mass_records,
             "layer_used_frac": 0.75, "note": "attention from last prompt token to image patches"}
 
@@ -3343,3 +3352,33 @@ def attn_viz(
     print(f"[viz] wrote {res['n_figs']} figures to {outdir}")
     for r in res["attention_mass"]:
         print(f"  ex{r['example']} gold={r['gold']:<9} cond={r['condition']:<9} img_mass={r['image_attention_mass']:.3f}")
+
+
+@app.function(image=image, volumes={STAGE1_CACHE_PATH: stage1_cache}, timeout=300)
+def _pull_attn_viz() -> dict:
+    import base64 as _b64
+    from pathlib import Path as _Path
+    vdir = _Path(STAGE1_CACHE_PATH) / "attn_viz"
+    out = {"pngs": {}, "mass": None}
+    if not vdir.exists():
+        return out
+    for p in sorted(vdir.glob("*.png")):
+        out["pngs"][p.name] = _b64.b64encode(p.read_bytes()).decode()
+    mp = vdir / "attention_mass.json"
+    if mp.exists():
+        out["mass"] = mp.read_text()
+    return out
+
+
+@app.local_entrypoint()
+def pull_attn_viz() -> None:
+    """Pull attention-viz figures persisted on the Volume into results/phase4/attn_viz/."""
+    import base64, json
+    from pathlib import Path
+    res = _pull_attn_viz.remote()
+    outdir = Path("results/phase4/attn_viz"); outdir.mkdir(parents=True, exist_ok=True)
+    for name, b64 in res["pngs"].items():
+        (outdir / name).write_bytes(base64.b64decode(b64))
+    if res["mass"]:
+        (outdir / "attention_mass.json").write_text(res["mass"])
+    print(f"[viz] pulled {len(res['pngs'])} figures to {outdir}")
