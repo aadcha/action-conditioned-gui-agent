@@ -40,6 +40,7 @@ image = (
         "pyyaml>=6.0",
         "scikit-learn>=1.5",
         "tqdm>=4.66",
+        "matplotlib>=3.9",
     )
     .add_local_dir(
         str(REPO_ROOT),
