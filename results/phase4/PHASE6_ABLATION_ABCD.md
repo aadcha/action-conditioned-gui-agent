@@ -1,4 +1,8 @@
-# Phase 6 — full A/B/C/D ablation (the table the paper hinges on)
+# Phase 6 — full A/B/C/D ablation [superseded by PHASE6_FINAL.md]
+
+> This file is kept for provenance. The current paper-ready synthesis is
+> `results/phase4/PHASE6_FINAL.md`, which adds D-token, end-to-end predicted
+> types, the taps_and_swipes control, and the final hypothesis verdict.
 
 All four variants on **AITW all_with_coords** (action types click/scroll/type,
 the setting where action type is spatially informative), Qwen2-VL-2B + LoRA,
@@ -78,10 +82,10 @@ nuanced and defensible finding the controlled ablation was designed to surface:
 
 ## Control: taps_and_swipes
 
-On the spatially-uninformative mix (tap vs swipe — both generic touch points),
-D-hook ties A (see `PHASE5_CORRECTED.md`). We have not yet run B/C there, but
-the prediction is that all conditioned variants tie A, because there is no
-action-type→location signal to exploit. (Cheap follow-up if needed.)
+The spatially-uninformative mix (tap vs swipe — both generic touch points) is
+now reported in `PHASE6_FINAL.md`. D-hook ties A; B and C do not improve the
+control. This supports the interpretation that action-type supervision helps
+only when action type predicts location.
 
 ## Reproduction
 
