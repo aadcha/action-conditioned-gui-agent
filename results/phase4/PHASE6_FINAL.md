@@ -1,8 +1,11 @@
 # Phase 6 — Final ablation, end-to-end pipeline, and the hypothesis verdict
 
 This consolidates the full controlled study. All Stage 2 grounding on AITW,
-Qwen2-VL-2B + LoRA, 2 epochs, 3 seeds, paired-bootstrap-grade comparisons.
-Supersedes the partial PHASE6_ABLATION_ABCD.md (which lacked D-token).
+Qwen2-VL-2B + LoRA, 2 epochs, 3 seeds. Paired-bootstrap comparisons are
+available for the all_with_coords setting, where every variant has aligned
+per-example distances. The taps_and_swipes control is reported as 3-seed
+mean/stdev because the A and D-hook control runs predate per-example logging.
+This file supersedes the partial PHASE6_ABLATION_ABCD.md (which lacked D-token).
 
 ## The variants
 
@@ -22,12 +25,20 @@ Supersedes the partial PHASE6_ABLATION_ABCD.md (which lacked D-token).
 |---|---|---|---|
 | A (flat) | 0.255 ± 0.021 | 0.515 | 0.392 |
 | **B (aux loss)** | **0.305 ± 0.012** | **0.585** | **0.362** |
-| C (hard routing) | 0.285 ± 0.033 | 0.555 | 0.388 |
+| C (hard routing) | 0.279 ± 0.032 | 0.543 | 0.412 |
 | D-hook (additive) | 0.300 ± 0.028 | 0.569 | 0.365 |
 | D-token (prepended, the hypothesis) | 0.269 ± 0.025 | 0.533 | 0.375 |
 
 Paired bootstrap (750 units) confirmed **B and D-hook each beat A** on all
-metrics (p < 0.002). **Ranking: B ≈ D-hook > C ≳ D-token ≳ A.**
+metrics (p < 0.002). C metrics above count parse failures as misses via the
+same per-example sentinel-distance convention used by the bootstrap. **Ranking:
+B ≈ D-hook > D-token ≳ C > A**, with D-token still below B/D-hook on the
+headline hit@0.10 and hit@0.25 metrics.
+
+D-token's comparison to A is mixed rather than a clean win: it improves hit@0.05
+(+0.027, p=0.003) and mean L2 (-0.017, p<0.001), but not hit@0.10 (+0.015,
+ns) or hit@0.25 (+0.019, ns). Against B, it is significantly worse on
+hit@0.10, hit@0.25, and mean L2.
 
 ## Result 2 — control, taps_and_swipes (action type NOT spatially informative)
 
@@ -35,12 +46,13 @@ metrics (p < 0.002). **Ranking: B ≈ D-hook > C ≳ D-token ≳ A.**
 |---|---|---|---|
 | A (flat) | 0.390 ± 0.008 | 0.727 | 0.184 |
 | B (aux loss) | 0.368 ± 0.009 | 0.730 | 0.173 |
-| C (hard routing) | 0.337 ± 0.040 | 0.659 | 0.229 |
+| C (hard routing) | 0.325 ± 0.032 | 0.635 | 0.271 |
 | D-hook (additive) | 0.392 ± 0.035 | 0.723 | 0.179 |
 
-Here A is already strong and **nothing beats it**; conditioning is neutral
-(D-hook) to mildly harmful (B, C). Exactly as predicted: no action-type→
-location signal to exploit when tap and swipe both land anywhere.
+Here A is already strong and no conditioned mechanism clearly beats it:
+D-hook is neutral, B trades slightly lower hit@0.10 for slightly lower mean L2,
+and C is worse after counting parse failures. Exactly as predicted: no
+action-type→location signal to exploit when tap and swipe both land anywhere.
 
 ## Result 3 — end-to-end pipeline (Stage 1 predicted → Stage 2), all_with_coords
 
@@ -76,12 +88,14 @@ this mechanism is **not** what matters:
   the **best** conditioned variant.
 - The **literal hypothesized architecture (D-token)** — a routable prepended
   embedding, M-RoPE-correct, with the embedding fully developed (norm 2.2) —
-  **does not beat B; it underperforms it and ties A.**
+  **does not beat B/D-hook on headline grounding.** It improves over A on
+  hit@0.05 and mean L2, but not significantly on hit@0.10 or hit@0.25.
 - The *stronger* the embedding signal injected at a token position, the
-  *worse* grounding gets (D-token norm 2.2 < D-hook norm 0.06 in performance;
-  raising D-hook's action-embedding LR also hurt). A strong action token at a
-  sequence position appears to *compete with* the image/goal for attention
-  rather than help.
+  less competitive it is with B/D-hook on the headline thresholds (D-token norm
+  2.2 trails D-hook norm 0.06 on hit@0.10, hit@0.25, and mean L2; raising
+  D-hook's action-embedding LR also hurt). A strong action token at a sequence
+  position appears to *compete with* the image/goal for attention rather than
+  help.
 
 We ruled out the obvious "implementation was weak" escape: we found and fixed
 a real M-RoPE bug (the original `inputs_embeds` injection), then built the
@@ -94,8 +108,9 @@ and none beat the auxiliary loss.
 > action-type supervision improves grounding **only where the action type is
 > spatially predictive of the target** — and that **the simplest mechanism, an
 > auxiliary training loss, captures the full benefit**, while the learned
-> action-type embedding our proposal advocated does not beat it (and a strong
-> embedding signal hurts). We also document a M-RoPE implementation pitfall
+> action-type embedding our proposal advocated does not beat B/D-hook on
+> headline grounding (and a strong embedding signal is not the best mechanism).
+> We also document a M-RoPE implementation pitfall
 > that silently degrades grounding (an 8σ false-negative if uncaught), and an
 > end-to-end pipeline whose predicted-type degradation over the oracle is small
 > (~0.02 hit@0.10) because the Stage 1 classifier is accurate. This is a
@@ -112,6 +127,8 @@ for v in A B C; do for s in 42 43 44; do modal run --detach modal_app.py::train_
 for s in 42 43 44; do modal run --detach modal_app.py::train_stage2_Dhook  --seed $s --data-mix all_with_coords; done
 for s in 42 43 44; do modal run --detach modal_app.py::train_stage2_Dtoken --seed $s --data-mix all_with_coords; done
 for s in 42 43 44; do modal run --detach modal_app.py::train_stage2_e2e    --seed $s --data-mix all_with_coords; done
+for v in A B C; do for s in 42 43 44; do modal run --detach modal_app.py::train_stage2_variant$v --seed $s --data-mix taps_and_swipes --n-train 1000 --n-val 200; done; done
+for s in 42 43 44; do modal run --detach modal_app.py::train_stage2_Dhook --seed $s --data-mix taps_and_swipes --n-train 1000 --n-val 200; done
 modal run modal_app.py::list_stage2_runs
 uv run python scripts/p6_ablation_table.py --mix all_with_coords
 ```

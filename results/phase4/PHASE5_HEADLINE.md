@@ -1,4 +1,8 @@
-# Phase 5 — Ablation headline (Variant A vs Variant D)
+# Phase 5 — Ablation headline (Variant A vs Variant D) [superseded]
+
+> This auto-rendered snapshot predates the M-RoPE fix and the final Phase 6
+> ablation. Use `results/phase4/PHASE5_CORRECTED.md` for the corrected A-vs-D
+> story and `results/phase4/PHASE6_FINAL.md` for the paper-ready verdict.
 
 Matched-compute comparison of the project's central architectural
 intervention against the flat baseline. Variants differ only in the
