@@ -1,0 +1,56 @@
+[
+  {
+    "example": 0,
+    "gold": "type",
+    "condition": "click",
+    "image_attention_mass": 0.18552282452583313
+  },
+  {
+    "example": 0,
+    "gold": "type",
+    "condition": "type",
+    "image_attention_mass": 0.13534438610076904
+  },
+  {
+    "example": 0,
+    "gold": "type",
+    "condition": "scroll",
+    "image_attention_mass": 0.11493845283985138
+  },
+  {
+    "example": 1,
+    "gold": "click",
+    "condition": "click",
+    "image_attention_mass": 0.20386989414691925
+  },
+  {
+    "example": 1,
+    "gold": "click",
+    "condition": "type",
+    "image_attention_mass": 0.13244928419589996
+  },
+  {
+    "example": 1,
+    "gold": "click",
+    "condition": "scroll",
+    "image_attention_mass": 0.11031658947467804
+  },
+  {
+    "example": 2,
+    "gold": "scroll",
+    "condition": "click",
+    "image_attention_mass": 0.18833351135253906
+  },
+  {
+    "example": 2,
+    "gold": "scroll",
+    "condition": "type",
+    "image_attention_mass": 0.17605608701705933
+  },
+  {
+    "example": 2,
+    "gold": "scroll",
+    "condition": "scroll",
+    "image_attention_mass": 0.13589367270469666
+  }
+]
