@@ -3198,7 +3198,8 @@ def _stage2_attn_viz_remote(
     val_examples = examples_all[n_train:]
 
     base = Qwen2VLForConditionalGeneration.from_pretrained(
-        "Qwen/Qwen2-VL-2B-Instruct", torch_dtype=torch.bfloat16, device_map="auto")
+        "Qwen/Qwen2-VL-2B-Instruct", torch_dtype=torch.bfloat16, device_map="auto",
+        attn_implementation="eager")  # eager required for output_attentions (sdpa/flash return None)
     processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")
     model = get_peft_model(base, LoraConfig(r=16, lora_alpha=32,
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], lora_dropout=0.05, task_type="CAUSAL_LM"))
