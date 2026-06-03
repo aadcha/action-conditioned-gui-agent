@@ -112,7 +112,9 @@ This reads `stage2_runs/*.json` from the Volume and writes each to `results/phas
 
 ### Submitting many runs in parallel
 
-Don't use a shell `for` loop in a single Bash invocation — the loop blocks if any `modal run` hangs, and you'll end up with only the first iteration registered. Instead, submit each `modal run --detach` as its own background Bash invocation. They run independently on Modal.
+Submit each `modal run --detach` as its **own** `run_in_background` Bash invocation. They run independently on Modal.
+
+**DO NOT** batch them in a single Bash with a `for` loop — and ESPECIALLY not with `... & ... wait`. CONFIRMED BURN (Jun 2): firing the 6 data-scaling runs as `for n ...; do modal run --detach ... & sleep 10; done; wait` held all 6 detach-client subprocesses alive inside that one Bash task; when the task was reaped, SIGTERM propagated to every client and Modal cancelled ALL the remotes simultaneously (same `kill`-cancels-detached gotcha as above) — at the same timestamp, right before they persisted. Lost ~3h of compute. Even unrelated detached runs fired from other Bash tasks got swept up. One `modal run --detach` per `run_in_background` Bash, full stop.
 
 ### Checking status
 
