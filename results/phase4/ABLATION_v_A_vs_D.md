@@ -114,7 +114,7 @@ Estimated cost: ~$2 for 3 seeds × 2 variants on Modal L4.
 |---|---|---|
 | Variant A × 3 seeds (detached) | ~75 min total (3 parallel L4) | ~$1.00 |
 | Variant D × 3 seeds (detached, with Volume fix) | ~75 min total | ~$1.00 |
-| (Plus earlier Phase 4 single-seed runs, partial runs) | | ~$0.70 |
+| (Plus earlier Phase 4 exploratory single-seed runs) | | ~$0.70 |
 | **This ablation block total** | | **~$2.70** |
 
 Cumulative Modal spend: **~$4.20 of $200 (2.1%)**.

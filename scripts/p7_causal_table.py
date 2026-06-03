@@ -19,7 +19,6 @@ Usage:
 
 from __future__ import annotations
 
-import glob
 import json
 import statistics as st
 import sys
@@ -31,15 +30,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.eval.bootstrap import paired_bootstrap, pool_distances_across_seeds  # noqa: E402
 
 PHASE4 = Path(__file__).resolve().parent.parent / "results" / "phase4"
-GLOB = "Dtoken_seed*_n1200_ep2_lr2e-05_mix-all_with_coords_init0.02_causal.json"
+SEEDS = [42, 43, 44]
+FILE_TEMPLATE = "Dtoken_seed{s}_n1200_ep2_lr2e-05_mix-all_with_coords_init0.02_causal.json"
 CONDS = ["gold", "wrong", "zero"]
 HITS = ["hit_at_005", "hit_at_010", "hit_at_025"]
 
 
 def main() -> None:
-    files = sorted(glob.glob(str(PHASE4 / GLOB)))
-    if not files:
-        print(f"no causal runs found matching {GLOB} yet."); return
+    files = [PHASE4 / FILE_TEMPLATE.format(s=s) for s in SEEDS]
+    missing = [p for p in files if not p.exists()]
+    if missing:
+        rel = ", ".join(str(p.relative_to(PHASE4.parent.parent)) for p in missing)
+        raise FileNotFoundError(f"causal-use table is missing expected result file(s): {rel}")
     print(f"found {len(files)} causal run(s): {[Path(f).name for f in files]}\n")
 
     agg: dict[str, dict[str, list[float]]] = {c: {m: [] for m in HITS + ["mean_normalized_l2"]} for c in CONDS}

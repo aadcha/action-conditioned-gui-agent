@@ -95,7 +95,7 @@ does not yet test:
 | Run | wall time | est. cost |
 |---|---|---|
 | Stage 2 smoke (forward+backward sanity) | ~3 min | ~$0.04 |
-| Stage 2 first training (cancelled by client disconnect) | ~20 min before disconnect | ~$0.25 |
+| Stage 2 first training attempt (cancelled by client disconnect) | ~20 min before disconnect | ~$0.25 |
 | Stage 2 detached re-run (full 2 epochs, completed) | ~25 min | ~$0.34 |
 | **Phase 4 first cut total** | | **~$0.63** |
 
@@ -107,7 +107,6 @@ Cumulative Modal spend through Phase 4 first cut: **~$3.17 of $200 (1.6%)**.
 |---|---|
 | `results/phase4/PHASE4_RESULTS.md` | This writeup |
 | `results/phase4/stage2_n500_ep2_lr2e-5.json` | Detached run results reconstructed from Modal logs |
-| `results/phase4/stage2_first_run_partial.json` | First (cancelled) run's epoch-1 result; kept for reference |
 | `src/models/stage2_grounding.py` | The Stage2ConditionedGrounding model |
 | `src/train/stage2.py` | build_batch, evaluate_grounding, coord_to_string |
 | `modal_app.py:stage2_smoke` | Forward+backward smoke entrypoint |

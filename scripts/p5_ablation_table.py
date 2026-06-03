@@ -74,7 +74,7 @@ def load_runs(d: Path = PHASE4_DIR) -> list[RunRow]:
 
         variant = _canon_variant(data.get("variant", ""), p.name)
         if variant == "?":
-            # Skip files we can't classify (e.g. earlier partial/incomplete runs)
+            # Skip files we can't classify (e.g. exploratory one-off runs)
             continue
 
         data_mix = data.get("data_mix") or ("taps_only" if data.get("only_taps", True) else "all_with_coords")

@@ -155,7 +155,7 @@ Pattern: clone `_stage2_train_remote` or `_stage2_variantA_train_remote` and adj
 
 ---
 
-## Current state of results (June 2, 2026)
+## Current state of results (June 3, 2026)
 
 | Phase | What | Headline | Where |
 |---|---|---|---|
@@ -165,13 +165,15 @@ Pattern: clone `_stage2_train_remote` or `_stage2_variantA_train_remote` and adj
 | Phase 4 | Stage 2 architecture works | hit@0.10 = 0.38 on taps (~12× random) | `results/phase4/PHASE4_RESULTS.md` |
 | Phase 5 | A vs D bug hunt | The initial 8σ "A beats D" result was a M-RoPE bug from the `inputs_embeds` injection path. D-hook fixes it by preserving `input_ids`; tap/swipe becomes a tie, all_with_coords becomes a real positive signal. | `results/phase4/PHASE5_CORRECTED.md` |
 | Phase 6 | Full ablation + e2e | **Broad thesis supported, specific embedding claim refuted.** all_with_coords: B≈D-hook > D-token≳C>A; B and D-hook beat A by paired bootstrap. taps_and_swipes control: no conditioned mechanism clearly beats A. E2E predicted types beat flat A with ~0.02 oracle gap. | `results/phase4/PHASE6_FINAL.md` |
+| Phase 7 | Mechanism + low-data strengthening | Low-data matrix complete for A/B/D-hook at n_train ∈ {300,500,800}, seeds 42/43/44; strict audit passes. D-hook is the most stable low-data mechanism. D-token causal-use test shows the learned embedding is used (gold − wrong +0.192 hit@0.10; gold − zero +0.093) but still not the winning mechanism. | `results/phase4/PHASE7_RESULTS.md`, `results/phase4/phase7_result_audit.json`, `results/phase4/causal_use_summary.json` |
 | Diagnostics | Attention viz + D-token + Dfrozen | Attention heatmaps exist under `results/phase4/attn_viz/`; D-token is M-RoPE-correct and still does not beat B/D-hook on headline grounding; Dfrozen confirmed the original slot path was the problem. | `results/phase4/attn_viz/`, `results/phase4/Dtoken_*`, `results/phase4/Dfrozen_*` |
 
-Cumulative Modal spend: **~$45 of $200**.
+Cumulative Modal spend: **~$52 of $200**.
 
 Paper framing to use now:
 - **Supported:** action-type supervision improves grounding when action type is spatially predictive (`all_with_coords`).
 - **Refuted:** the literal learned prepended action embedding is not the winning mechanism; auxiliary loss B captures the benefit more simply.
+- **Mechanism:** D-token is causally used at inference (wrong/zero action embeddings hurt), so the embedding-path refutation is "used but not best", not "ignored."
 - **Mechanistic caution:** naive `inputs_embeds` injection bypasses Qwen2-VL's M-RoPE position computation and can create a false negative.
 - **Control:** when action type is not spatially informative (`taps_and_swipes`), conditioning is neutral to mildly harmful.
 
