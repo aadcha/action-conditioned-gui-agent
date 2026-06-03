@@ -71,6 +71,48 @@ action-type→location signal to exploit when tap and swipe both land anywhere.
 0.255), and the oracle→predicted gap is small (~0.02) because Stage 1 is
 accurate. Classifier error is not the bottleneck.
 
+## Result 4 — data-scaling curve (does the advantage hold at scale?)
+
+A/B/D-hook at n_train ∈ {1200, 2500, 5000} on all_with_coords (n=1200 is the
+3-seed mean; 2500/5000 are single seed). At each n, A/B/D share a val slice, so
+the **delta at each n is apples-to-apples**; absolute A varies across n because
+the val set differs (a caveat — the curve is directional, not a clean monotone).
+
+Conditioning advantage (Δ vs A), hit@0.10:
+
+| n_train | (B − A) | (D − A) |
+|---|---|---|
+| 1,200 | +0.051 | +0.045 |
+| 2,500 | +0.036 | +0.076 (noisy) |
+| 5,000 | **+0.016** | **+0.028** |
+
+And hit@0.25: (B − A) goes **+0.071 → +0.072 → −0.044** at n=5000.
+
+→ The **B − A advantage shrinks monotonically with data**, and even reverses on
+hit@0.25 at n=5000. The D − A line is noisy at n=2500 (single seed, harder val
+set) but its 1200→5000 endpoints also shrink. This **confirms the prediction**
+that action-type conditioning is a **low-data prior the flat baseline absorbs at
+scale** — the benefit is biggest with little data and erodes as A sees more.
+Figure: `results/phase4/scaling_curve.png`.
+
+## Result 5 — second benchmark: Mind2Web grounding (cross-dataset control)
+
+Stage 2 grounding on **Multimodal-Mind2Web** (a proposal-named dataset). Target =
+gold element bbox center. hit@bbox = predicted point inside the gold element box
+(Mind2Web-native element grounding). A vs D-hook, seed 42 (n_train=1000):
+
+| variant | hit@0.10 | hit@0.25 | hit@bbox | mean L2 ↓ |
+|---|---|---|---|---|
+| A (flat) | 0.340 | 0.636 | 0.096 | 0.238 |
+| D-hook | 0.336 | 0.632 | 0.072 | 0.251 |
+| (D − A) | −0.004 | −0.004 | −0.024 | — |
+
+→ **D-hook ≈ A (slightly worse).** Mind2Web is click/type-dominated (action type
+uninformative about location), so conditioning does not help — a **clean
+cross-dataset replication of the AITW taps_and_swipes control**. (hit@bbox is low
+~0.07–0.10 because element grounding on full-page screenshots is hard; the A-vs-D
+comparison is the point.) This is a *second benchmark* and a *second control*.
+
 ## The hypothesis verdict
 
 The project's hypothesis has two levels. The controlled study cleanly separates them:
