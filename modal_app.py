@@ -3411,6 +3411,7 @@ def pull_attn_viz() -> None:
 def _stage2_variantDtoken_train_remote(
     n_train: int, n_val: int, epochs: int, lr: float, batch_size: int,
     seed: int, aitw_split: str, coord_scale: int, data_mix: str, init_std: float,
+    causal_eval: bool = False,
 ) -> dict:
     import os, sys, random, json as _json
     from collections import Counter
@@ -3523,12 +3524,23 @@ def _stage2_variantDtoken_train_remote(
         action_ids = torch.tensor([ex.action_type_id for ex in examples], dtype=torch.long, device=device)
         return inputs, action_ids
 
-    def evaluate(examples):
+    def evaluate(examples, mode="gold", wrong_map=None):
+        # mode: "gold" -> true action ids (normal); "wrong" -> feed a different
+        # valid action id per example (causal test: does false conditioning
+        # hurt?); "zero" -> zero the embedding table for the eval (ablate the
+        # conditioning vector entirely). gold>>wrong/zero => embedding is used.
         model.eval()
+        saved = None
+        if mode == "zero":
+            saved = action_embeddings.weight.data.clone()
+            action_embeddings.weight.data.zero_()
         preds, targets, aids, raws = [], [], [], []
         for s in range(0, len(examples), batch_size):
             chunk = examples[s:s + batch_size]
             inputs, action_ids = build(chunk, include_labels=False)
+            if mode == "wrong" and wrong_map is not None:
+                action_ids = torch.tensor([wrong_map[int(a)] for a in action_ids.tolist()],
+                                          dtype=torch.long, device=device)
             _holder["action_id"] = action_ids
             prompt_len = inputs["input_ids"].shape[1]
             with torch.inference_mode():
@@ -3539,6 +3551,8 @@ def _stage2_variantDtoken_train_remote(
             for ex, raw in zip(chunk, processor.batch_decode(new, skip_special_tokens=True)):
                 raws.append(raw); preds.append(string_to_coord(raw, scale=coord_scale))
                 targets.append(ex.target_xy); aids.append(ex.action_type_id)
+        if saved is not None:
+            action_embeddings.weight.data.copy_(saved)
         m = _metrics_from_predictions(targets, preds, aids); m["raw_outputs"] = raws[:10]
         return m
 
@@ -3571,16 +3585,40 @@ def _stage2_variantDtoken_train_remote(
               f"hit@0.25={em['hit_at_025']:.3f} ae_norm={float(action_embeddings.weight.norm()):.3f}")
         print(f"[Dtoken] val sample: {em.get('raw_outputs', [])[:5]}")
 
+    # ---- causal-use test: is the learned embedding actually used at inference? ----
+    causal = None
+    if causal_eval:
+        distinct = sorted({e.action_type_id for e in val_examples})
+        wmap = ({d: distinct[(i + 1) % len(distinct)] for i, d in enumerate(distinct)}
+                if len(distinct) > 1 else None)
+        print(f"[Dtoken-causal] distinct val action ids={distinct}  wrong_map={wmap}")
+        em_gold = evaluate(val_examples, mode="gold")
+        em_wrong = evaluate(val_examples, mode="wrong", wrong_map=wmap) if wmap else None
+        em_zero = evaluate(val_examples, mode="zero")
+        _strip = lambda m: ({k: v for k, v in m.items() if k != "raw_outputs"} if m else None)
+        causal = {
+            "gold": _strip(em_gold), "wrong": _strip(em_wrong), "zero": _strip(em_zero),
+            "distinct_action_ids": distinct, "wrong_map": wmap,
+            "action_emb_norm": float(action_embeddings.weight.norm()),
+        }
+        gg, zz = em_gold["hit_at_010"], em_zero["hit_at_010"]
+        ww = em_wrong["hit_at_010"] if em_wrong else float("nan")
+        print(f"[Dtoken-causal] hit@0.10  gold={gg:.3f}  wrong={ww:.3f}  zero={zz:.3f}")
+        print(f"[Dtoken-causal] gold-wrong={gg-ww:+.3f}  gold-zero={gg-zz:+.3f}  "
+              f"(positive => embedding causally used at inference)")
+
     hook.remove()
     summary = {
         "variant": "D_token_prepended", "n_train": len(train_examples), "n_val": len(val_examples),
         "epochs": epochs, "lr": lr, "batch_size": batch_size, "coord_scale": coord_scale,
         "seed": seed, "aitw_split": aitw_split, "data_mix": data_mix, "init_std": init_std,
         "history": history, "final_val_metrics": history[-1] if history else None,
+        "causal_eval": causal,
     }
     cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    out_path = cache_dir / f"Dtoken_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_init{init_std}.json"
+    _ctag = "_causal" if causal_eval else ""
+    out_path = cache_dir / f"Dtoken_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_init{init_std}{_ctag}.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[Dtoken] persisted to {out_path}")
@@ -3592,10 +3630,16 @@ def train_stage2_Dtoken(
     n_train: int = 1200, n_val: int = 250, epochs: int = 2, lr: float = 2e-5,
     batch_size: int = 1, seed: int = 42, aitw_split: str = "train",
     coord_scale: int = 1000, data_mix: str = "all_with_coords", init_std: float = 0.02,
+    causal_eval: bool = False,
 ) -> None:
-    """Variant D-token (M-RoPE-correct prepended action token). Use --detach."""
+    """Variant D-token (M-RoPE-correct prepended action token). Use --detach.
+
+    --causal-eval adds a post-training 3-way eval (gold / wrong / zero action
+    embedding) that tests whether the learned embedding is causally used.
+    """
     _stage2_variantDtoken_train_remote.remote(
-        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, init_std)
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix,
+        init_std, causal_eval)
 
 
 # ---- Phase 6 Mind2Web grounding benchmark (proposal-named dataset) ----------
@@ -3870,3 +3914,80 @@ def train_m2w_grounding(
     """Stage 2 grounding on Multimodal-Mind2Web (variant A or Dhook). Use --detach."""
     _stage2_m2w_grounding_remote.remote(
         variant, n_train, n_val, epochs, lr, batch_size, seed, coord_scale, max_image_pixels)
+
+
+# ---- Phase 7: low-data sweep (extend the scaling curve into small n) --------
+#
+# Tests whether the conditioning advantage (B-A, D-A) GROWS as training data
+# shrinks — the direct prediction of the "low-data prior" mechanism. Runs the
+# WHOLE matrix for one variant (n_list x seeds) inside a SINGLE container,
+# reusing the validated per-variant remote bodies via `.local()` so the
+# train/eval/persist logic is byte-identical to the points already on the curve.
+# Each inner run persists its own JSON to the Volume as it finishes
+# (crash-resilient). Fire ONE detached run per variant (avoids the parallel-
+# detach cancellation burn from Phase 6).
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret],
+    timeout=14400,
+)
+def _stage2_lowdata_sweep_remote(
+    variant: str,
+    n_list: list,
+    seeds: list,
+    n_val: int,
+    epochs: int,
+    lr: float,
+    data_mix: str,
+) -> dict:
+    """Run one variant across (n_list x seeds) in a single container via .local()."""
+    import gc
+
+    import torch
+
+    done = []
+    for n_train in n_list:
+        for seed in seeds:
+            print(f"\n[sweep-{variant}] ===== n_train={n_train} seed={seed} =====", flush=True)
+            if variant == "A":
+                _stage2_variantA_train_remote.local(
+                    n_train, n_val, epochs, lr, 1, seed, "train", 1000, False, data_mix)
+            elif variant == "B":
+                _stage2_variantB_train_remote.local(
+                    n_train, n_val, epochs, lr, 1, seed, "train", 1000, data_mix, 1.0)
+            elif variant == "Dhook":
+                _stage2_variantDhook_train_remote.local(
+                    n_train, n_val, epochs, lr, 1, seed, "train", 1000, data_mix, 0.0, 0.0)
+            else:
+                raise ValueError(f"unknown variant {variant!r} (expected A|B|Dhook)")
+            done.append({"variant": variant, "n_train": n_train, "seed": seed})
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+    print(f"[sweep-{variant}] completed {len(done)} runs: {done}", flush=True)
+    return {"done": done}
+
+
+@app.local_entrypoint()
+def train_stage2_lowdata_sweep(
+    variant: str = "A",
+    n_list: str = "300,500,800",
+    seeds: str = "42,43,44",
+    n_val: int = 250,
+    epochs: int = 2,
+    lr: float = 2e-5,
+    data_mix: str = "all_with_coords",
+) -> None:
+    """Low-data sweep for one variant (A|B|Dhook). Fire ONE detached run per variant:
+
+        modal run --detach modal_app.py::train_stage2_lowdata_sweep --variant A
+        modal run --detach modal_app.py::train_stage2_lowdata_sweep --variant B
+        modal run --detach modal_app.py::train_stage2_lowdata_sweep --variant Dhook
+    """
+    ns = [int(x) for x in n_list.split(",")]
+    ss = [int(x) for x in seeds.split(",")]
+    _stage2_lowdata_sweep_remote.remote(variant, ns, ss, n_val, epochs, lr, data_mix)

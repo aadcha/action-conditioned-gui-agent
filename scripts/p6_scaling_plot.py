@@ -12,7 +12,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 PHASE4 = Path(__file__).resolve().parent.parent / "results" / "phase4"
-SEEDS = {1200: [42, 43, 44], 2500: [42], 5000: [42]}
+# Phase 7 extends the curve into the low-data regime (300/500/800, 3 seeds).
+SEEDS = {300: [42, 43, 44], 500: [42, 43, 44], 800: [42, 43, 44],
+         1200: [42, 43, 44], 2500: [42], 5000: [42]}
 
 
 def metric(prefix: str, n: int, suffix: str, key: str) -> float | None:
@@ -25,7 +27,7 @@ def metric(prefix: str, n: int, suffix: str, key: str) -> float | None:
 
 
 def main() -> None:
-    ns = [1200, 2500, 5000]
+    ns = [300, 500, 800, 1200, 2500, 5000]
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     for ax, key, label in [(axes[0], "hit_at_010", "hit@0.10"), (axes[1], "hit_at_025", "hit@0.25")]:
         A = [metric("variantA", n, "", key) for n in ns]
@@ -46,8 +48,8 @@ def main() -> None:
         ax.set_ylabel(f"conditioning advantage Δ {label}")
         ax.set_title(f"Δ {label} vs training size")
         ax.legend()
-    fig.suptitle("Data-scaling: action-type conditioning advantage shrinks toward larger n\n"
-                 "(AITW all_with_coords; 1200 is 3-seed mean, 2500/5000 single seed)", y=1.02)
+    fig.suptitle("Data-scaling: action-type conditioning advantage vs training size\n"
+                 "(AITW all_with_coords; 300-1200 are 3-seed means, 2500/5000 single seed)", y=1.02)
     fig.tight_layout()
     out = PHASE4 / "scaling_curve.png"
     fig.savefig(out, dpi=150, bbox_inches="tight")
