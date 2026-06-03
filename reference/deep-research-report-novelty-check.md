@@ -1,5 +1,10 @@
 # Novelty and Publishability of Action-Type-Conditioned Grounding for GUI Agents
 
+> **Historical novelty memo.** Written before the final ablations and causal
+> diagnostics; use this for proposal-era positioning only. It does not supersede
+> the final empirical framing in `../results/phase4/PHASE6_FINAL.md` and
+> `../results/phase4/PHASE7_RESULTS.md`.
+
 ## Verdict
 
 My assessment is that your current idea is **moderately novel, but not radically novel**. It is strongest as a **well-motivated architectural intervention on a real failure mode** in GUI agents, and it looks **absolutely viable as a strong CS231n final project** and plausibly **publishable as a workshop paper, arXiv paper, or systems-style empirical paper** if the empirical story is clean. I would be much more cautious about claiming it is already a clear **main-track novelty breakthrough** for a venue like CVPR, NeurIPS, or ACL, because the surrounding literature has already moved toward several related decompositions: unified action-space modeling in end-to-end agents, explicit planning-versus-grounding separation, action-aware supervision, attention-based grounding heads, and even structured multi-phase generation in which action-type prediction precedes finer spatial refinement. citeturn27view0turn32view0turn30view0turn3view4turn22view0turn4view4turn19view0turn12view0

@@ -1,5 +1,10 @@
 # Compute Budget & Plan
 
+> **Historical compute plan.** This records the original budget assumptions and
+> early allocation plan. It is useful for cost rationale, but the live
+> cumulative-spend notes are in `AGENTS.md` / `CLAUDE.md`, and the current
+> empirical state is in `README.md#status` plus the Phase 6/7 result docs.
+
 **Total cloud credits available: $750**
 
 | Provider | Credits | Best use |
@@ -53,7 +58,11 @@ training, or additional ablations (LoRA rank sweep, sampler ablation, etc.).
 
 ---
 
-## Allocation strategy
+## Historical Allocation Strategy
+
+This was the intended allocation plan before the completed runs ended up using
+Modal for Phase 6/7. Treat it as budget rationale, not a record of what actually
+ran.
 
 1. **Phase 2–3** (data pipeline + classifier): **Modal only**. ~$50 total. Iterate fast.
 2. **Phase 4** (Stage 2 development): **Modal L4 → A100**. Switch to A100 only once training-loop is verified on L4 with a tiny subset.

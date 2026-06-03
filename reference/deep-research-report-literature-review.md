@@ -1,5 +1,11 @@
 # Action-Type-Conditioned Grounding for GUI Agents
 
+> **Historical literature-review memo.** Written before the final experiments;
+> use this for related-work context and paper positioning, not for current
+> results or the final project verdict. Current empirical source of truth:
+> `../README.md#status`, `../results/phase4/PHASE6_FINAL.md`, and
+> `../results/phase4/PHASE7_RESULTS.md`.
+
 ## Executive summary
 
 Your project idea is **credible, timely, and probably novel enough for a strong CS231n final project**, but its publishability depends on how far you push it beyond a “clean engineering ablation.” The current GUI-agent literature is crowded around end-to-end vision-language-action modeling, unified action spaces, grounding-specific heads, reinforcement learning, and test-time search; however, I did not find a prior paper that **explicitly separates action-type prediction into its own learned classifier stage and then conditions grounding on that predicted action type via a learned class embedding prepended into the VLM instruction stream** in the exact way you propose. Existing systems typically serialize action type and location or arguments through one generative interface, or they improve grounding with specialized heads, verifiers, RL rewards, or test-time zoom/search rather than a classifier-first, action-conditioned grounding stack. That means the idea is **not “obviously done already,”** but it is also **not radically orthogonal** to recent trends such as GUI-Actor’s dedicated grounding head, UI-R1’s decomposition of action reward into action-type and action-argument components, and modular planner-grounder systems such as SeeAct-V with UGround. citeturn32view0turn32view4turn32view2turn33view0turn24search2turn11view6

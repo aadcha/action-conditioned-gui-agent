@@ -1,5 +1,10 @@
 # Phase 3 — AITW Stage 1 classifier (5-class action-type problem)
 
+> **Phase result snapshot.** This remains the current AITW Stage 1 result, but
+> it predates Stage 2 and the final hypothesis verdict. Use
+> `../phase4/PHASE6_FINAL.md` and `../phase4/PHASE7_RESULTS.md` for final
+> paper framing.
+
 The Phase 3 result Milestone 3 said couldn't exist on Mind2Web alone: a real
 multi-class evaluation of our Stage 1 classifier where the action space is rich
 enough to test the project's central hypothesis.
@@ -145,10 +150,9 @@ whatever vision_text does, it's coming from the actual screenshot features.
 ## Phase 3.5 success criterion: **MET**
 
 The roadmap's Phase 3.5 success criterion is `macro-F1 > 0.50 across the 5-6
-active classes`. vision_text hits **0.515** — above the bar. Training is
-still noisy (similar epoch-to-epoch swings as Phase 2), so a multi-seed
-re-run with bootstrapped CIs is the natural next step. But the headline
-clears the threshold.
+active classes`. vision_text hits **0.555 ± 0.036** over 3 seeds — above the
+bar. Training remains noisy (similar epoch-to-epoch swings as Phase 2), so the
+multi-seed mean and std are the numbers to cite.
 
 ## What this changes about the rest of the project
 
