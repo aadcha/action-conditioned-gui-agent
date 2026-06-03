@@ -42,10 +42,11 @@ src/
                            model.config.text_config.hidden_size, not
                            model.config.hidden_size — code probes both.
     stage1_classifier.py   3-layer MLP on cached VLM features
-    stage2_grounding.py    Stage 2: tokenizer adds <|action_slot|>, then the
-                           slot's embedding is REPLACED at forward time by
-                           a learned action embedding. LoRA + the embedding
-                           table are trainable; rest frozen.
+    stage2_grounding.py    Original Stage 2 slot-replacement model. Useful for
+                           smoke tests and the M-RoPE bug post-mortem, but the
+                           final Phase 6 variants live in modal_app.py:
+                           A flat, B aux loss, C hard routing, D-hook additive
+                           conditioning, D-token M-RoPE-correct prepended slot.
   train/
     stage1.py              train_stage1 + evaluate, runs on cached features
     stage2.py              build_batch (with -100 masking for assistant
@@ -60,9 +61,13 @@ scripts/
                            print A vs D table with deltas, save chart
   p5_render_writeup.py     auto-render PHASE5_HEADLINE.md from
                            ablation_summary.json
+  p6_scaling_plot.py       Data-scaling / low-data curve plotter; now strict
+                           about expected Phase 7 cells
+  p7_result_audit.py       Strict Phase 7 completeness audit
+  p7_causal_table.py       D-token gold/wrong/zero causal-use aggregation
 modal_app.py               ALL Modal entry points. See "Modal patterns" below.
 configs/                   YAML configs for smoke tests
-tests/                     22 tests; runs in seconds on CPU
+tests/                     29 tests; runs in seconds on CPU
 results/
   milestone3/              MILESTONE3.md handoff doc + numbers.json + figures
   phase2/                  Stage 1 Mind2Web: features metas, stage1_*.json,
@@ -156,7 +161,7 @@ Pattern: clone `_stage2_train_remote` or `_stage2_variantA_train_remote` and adj
 
 ---
 
-## Current state of results (May 31, 2026)
+## Current state of results (June 3, 2026)
 
 | Phase | What | Headline | Where |
 |---|---|---|---|
@@ -164,19 +169,19 @@ Pattern: clone `_stage2_train_remote` or `_stage2_variantA_train_remote` and adj
 | Phase 2 | Stage 1 MLP on Mind2Web (2-class) | vision_text 0.605 ± 0.016, +0.009 over text | `results/phase2/PHASE2_RESULTS.md` |
 | Phase 3 | Stage 1 MLP on AITW (5-class) | vision_text 0.555 ± 0.036, **+0.414 over text** | `results/phase3/PHASE3_RESULTS.md` |
 | Phase 4 | Stage 2 architecture works | hit@0.10 = 0.38 on taps (~12× random) | `results/phase4/PHASE4_RESULTS.md` |
-| Phase 5.1 first cut | A vs D on taps-only | A 0.363 vs D 0.320 hit@0.10 — within noise; mechanism understood (no action-type variance to learn from) | `results/phase4/ABLATION_v_A_vs_D.md` |
-| Phase 5.2 | A vs D on taps+swipes (n=1000, 3 seeds each) | **A 0.390 ± 0.010 vs D 0.288 ± 0.008 hit@0.10 — A wins by 8σ**. NEGATIVE RESULT for the project hypothesis | `results/phase4/NEGATIVE_RESULT.md` |
-| Phase 5.3 | Dfrozen diagnostic (D with action_embeddings frozen at random init) | IN FLIGHT | — |
-| Phase 5.4 | all_with_coords (3 active classes) smoke | IN FLIGHT | — |
+| Phase 5 | A vs D bug hunt | The initial 8σ "A beats D" result was a M-RoPE bug from the `inputs_embeds` injection path. D-hook fixes it by preserving `input_ids`; tap/swipe becomes a tie, all_with_coords becomes a real positive signal. | `results/phase4/PHASE5_CORRECTED.md` |
+| Phase 6 | Full ablation + e2e | **Broad thesis supported, specific embedding claim refuted.** all_with_coords: B≈D-hook > D-token≳C>A; B and D-hook beat A by paired bootstrap. taps_and_swipes control: no conditioned mechanism clearly beats A. E2E predicted types beat flat A with ~0.02 oracle gap. | `results/phase4/PHASE6_FINAL.md` |
+| Phase 7 | Mechanism + low-data strengthening | Low-data matrix complete for A/B/D-hook at n_train ∈ {300,500,800}, seeds 42/43/44; strict audit passes. D-hook is the most stable low-data mechanism. D-token causal-use test shows the learned embedding is used (gold − wrong +0.192 hit@0.10; gold − zero +0.093) but still not the winning mechanism. | `results/phase4/PHASE7_RESULTS.md`, `results/phase4/phase7_result_audit.json`, `results/phase4/causal_use_summary.json` |
+| Diagnostics | Attention viz + D-token + Dfrozen | Attention heatmaps exist under `results/phase4/attn_viz/`; D-token is M-RoPE-correct and still does not beat B/D-hook on headline grounding; Dfrozen confirmed the original slot path was the problem. | `results/phase4/attn_viz/`, `results/phase4/Dtoken_*`, `results/phase4/Dfrozen_*` |
 
-Cumulative Modal spend: **~$8 of $200**.
+Cumulative Modal spend: **~$52 of $200**.
 
-The Phase 5.2 8σ negative result is the BIGGEST finding of the project so far. The user's plan explicitly anticipates `D ≤ A` as a possible outcome and prescribes "paper becomes a negative result + diagnostics" — `NEGATIVE_RESULT.md` outlines the paper framing.
-
-The diagnostic experiments in flight (Dfrozen) decompose the negative result:
-- Dfrozen ≈ D → slot disrupts the prompt regardless of training
-- Dfrozen ≪ D → embedding *was* helping; D was bottlenecked by training time
-- Dfrozen ≈ A → embedding training actively harmed (unlikely)
+Paper framing to use now:
+- **Supported:** action-type supervision improves grounding when action type is spatially predictive (`all_with_coords`).
+- **Refuted:** the literal learned prepended action embedding is not the winning mechanism; auxiliary loss B captures the benefit more simply.
+- **Mechanism:** D-token is causally used at inference (wrong/zero action embeddings hurt), so the embedding-path refutation is "used but not best", not "ignored."
+- **Mechanistic caution:** naive `inputs_embeds` injection bypasses Qwen2-VL's M-RoPE position computation and can create a false negative.
+- **Control:** when action type is not spatially informative (`taps_and_swipes`), conditioning is neutral to mildly harmful.
 
 ---
 
@@ -196,9 +201,17 @@ Screenshots in `cjfcsjt/AITW_General` are raw RGB pixel bytes, no header. Common
 
 `config.hidden_size` is gone — it lives at `config.text_config.hidden_size` now. `src/models/base.py` and `src/models/stage2_grounding.py` probe both paths.
 
+### Qwen2-VL M-RoPE and embedding injection
+
+Do **not** feed Stage 2 via `inputs_embeds` unless you have explicitly preserved
+Qwen2-VL's multimodal position-id path. The original D-slot replacement bypassed
+`input_ids`-keyed M-RoPE and produced the false 8σ negative result. The final
+working variants in `modal_app.py` keep the normal `input_ids` path and inject
+conditioning through embedding-layer hooks.
+
 ### Stage 2 slot replacement
 
-`Stage2ConditionedGrounding._embed_with_action` requires EXACTLY ONE `<|action_slot|>` token per row. The chat template + `make_stage2_prompt` guarantees this. If you change the prompt template, verify the slot is still present once.
+`Stage2ConditionedGrounding._embed_with_action` requires EXACTLY ONE `<|action_slot|>` token per row. That class is now mainly historical/smoke-test code; for paper results, use the Modal variants. If you change any D-token prompt template, verify the slot is still present once and that generation still uses the full `input_ids` path.
 
 ### Training instability
 
