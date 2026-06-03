@@ -99,13 +99,13 @@ Figure: `results/phase4/scaling_curve.png`.
 
 Stage 2 grounding on **Multimodal-Mind2Web** (a proposal-named dataset). Target =
 gold element bbox center. hit@bbox = predicted point inside the gold element box
-(Mind2Web-native element grounding). A vs D-hook, seed 42 (n_train=1000):
+(Mind2Web-native element grounding). A vs D-hook, 2 seeds (n_train=1000):
 
 | variant | hit@0.10 | hit@0.25 | hit@bbox | mean L2 ↓ |
 |---|---|---|---|---|
-| A (flat) | 0.340 | 0.636 | 0.096 | 0.238 |
-| D-hook | 0.336 | 0.632 | 0.072 | 0.251 |
-| (D − A) | −0.004 | −0.004 | −0.024 | — |
+| A (flat) | 0.370 ± 0.030 | 0.660 ± 0.024 | 0.086 ± 0.010 | 0.223 |
+| D-hook | 0.364 ± 0.028 | 0.678 ± 0.046 | 0.086 ± 0.014 | 0.227 |
+| (D − A) | −0.006 | +0.018 | 0.000 | — |
 
 → **D-hook ≈ A (slightly worse).** Mind2Web is click/type-dominated (action type
 uninformative about location), so conditioning does not help — a **clean
