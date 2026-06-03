@@ -1,6 +1,14 @@
 # Action-Type-Conditioned Grounding for GUI Agents
 ### Project Overview — CS 231N, Spring 2026
 
+> **Historical proposal/spec document.** This preserves the original project
+> hypothesis and planned Qwen2-VL-7B setup. Actual experiments used
+> Qwen2-VL-2B + LoRA, and the final empirical verdict is in
+> `../results/phase4/PHASE6_FINAL.md` and
+> `../results/phase4/PHASE7_RESULTS.md`: the broad factorization thesis is
+> supported, while the literal learned prepended action-embedding claim is
+> refuted.
+
 **Team:** Aadi Chauhan, Arthur Ilyasov, Nevin Kunampuram
 **Track:** Models
 **Base model:** Qwen2-VL-7B-Instruct
@@ -159,15 +167,19 @@ Annotate each in four columns: **problem · representation of action · represen
 
 ---
 
-## 11. Milestone Status
+## 11. Historical Milestone Status
 
 - ✅ **Proposal** (Apr 24) — submitted
 - ✅ **Milestone 1** (May 15) — problem + related work
 - ✅ **Milestone 2** (May 22) — technical approach
-- ⏳ **Milestone 3** (May 29) — preliminary results
+- ✅ **Milestone 3** (May 29) — preliminary results
 - ⏳ **Final report** (Jun 5) — 6-8 pg CVPR format
 - ⏳ **Poster** (Jun 10)
 
 ---
 
-*This overview consolidates the project proposal, both milestone decks, and two GPT deep-research reviews (literature landscape + novelty/publishability). It supersedes scattered notes; treat it as the single source of truth for scope, framing, and the experiments that actually matter.*
+*Historical note: this overview consolidated the proposal-era plan, milestone
+deck framing, and early literature/novelty reviews. It is no longer the current
+empirical source of truth; use `../README.md#status`,
+`../results/phase4/PHASE6_FINAL.md`, and
+`../results/phase4/PHASE7_RESULTS.md` for current results and framing.*

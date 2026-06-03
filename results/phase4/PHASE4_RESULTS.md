@@ -1,7 +1,13 @@
 # Phase 4 — Stage 2 action-type-conditioned grounding (first training results)
 
-The actual research contribution. Stage 1 told us *what* to do; Stage 2 takes that
-discrete decision as a learned embedding and produces *where* to do it.
+> **Early Stage 2 smoke/result note.** This file proves the first grounding
+> training loop worked, but it predates the M-RoPE bug diagnosis and final
+> ablations. Keep it for provenance; use `PHASE6_FINAL.md` and
+> `PHASE7_RESULTS.md` for the current Stage 2 verdict.
+
+This early run verifies that Stage 2 can train and generate valid coordinates.
+Stage 1 told us *what* to do; Stage 2 takes that discrete decision as a learned
+embedding and produces *where* to do it.
 
 ## Setup
 
@@ -56,18 +62,18 @@ predictions** at epoch 2: `(489, 510)`, `(414, 58)`, `(489, 511)`, `(456, 108)`,
    structure.
 3. **Loss-vs-eval-quality is consistent.** Epoch 2's lower training loss
    (0.94 vs 1.07) is paired with better grounding (hit@0.10 0.38 vs 0.23).
-   The loss is a useful proxy for the downstream metric, which means a longer
-   training run is the natural next step.
+   The loss is a useful proxy for the downstream metric. At the time, that made
+   longer matched-compute training runs the immediate follow-up.
 
-## What this does NOT prove (yet)
+## What this did NOT prove at the time
 
 This is a single training run on a small slice with one configuration. It
-does not yet test:
+did not test:
 
 1. **The action-conditioning hypothesis** — does the action embedding actually
    help? Need to compare against variant A (flat baseline, no action
    conditioning). On the same data, same compute, same eval. Until that
-   comparison lands, we know vision-language LoRA can ground; we don't know
+   comparison landed, we knew vision-language LoRA could ground but did not know
    that *action-type conditioning* is doing useful work specifically.
 2. **Scale**. 500 training examples is small. Phase 5's full ablation table
    should run with the largest feasible n_train (compute-budgeted).
@@ -76,12 +82,12 @@ does not yet test:
    8-class action embedding has only 1 row's gradient signal — the others
    remain at random initialization.
 
-## What's next (Phase 4.4 / Phase 5)
+## Follow-ups that later ran
 
-1. **Implement variant A** (flat baseline, no action conditioning) using the
-   same data + loss + compute. Train, evaluate on the same 100 val taps.
-2. **Implement variants B and C** per the plan.
-3. **Run all four variants at matched compute**, 3 seeds each, with bootstrapped
+1. **Variant A** (flat baseline, no action conditioning) using the same data +
+   loss + compute.
+2. **Variants B and C** per the plan.
+3. **All four variants at matched compute**, 3 seeds each, with bootstrapped
    CIs on hit@0.10.
 4. **Train on all 8 canonical actions**, not just taps. Coordinates for
    non-tap actions need representation choices (drag = start+end, scroll =

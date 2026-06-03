@@ -1,5 +1,10 @@
 # Phase 5 — Corrected A vs D ablation (supersedes the "negative result")
 
+> **Corrected bug-hunt note, not the final synthesis.** This is the source for
+> the M-RoPE bug diagnosis and corrected A-vs-D interpretation. Use
+> `PHASE6_FINAL.md` and `PHASE7_RESULTS.md` for the final ablation, low-data,
+> and causal-use verdict.
+
 **TL;DR:** The earlier 8σ "A beats D" finding was a **measurement artifact** caused
 by a bug in variant D's injection mechanism. After fixing it, the corrected
 variant (D-hook) **ties** variant A on grounding — it does not lose, and (at the
@@ -76,8 +81,8 @@ once between-seed noise is removed. Reproduce with
 Stat note: pooling (seed, example) units has mild within-example correlation
 (each example appears once per seed). The permutation test (which pools
 identically) agrees, and the effect is strong (p ~ 1e-3), so the conclusion is
-robust to this nuance. A fully conservative example-averaged bootstrap is a
-trivial follow-up and will not change the verdict.
+robust to this nuance. Later Phase 6/7 analyses are the final source for the
+ablation and mechanism verdict.
 
 ## What this means
 

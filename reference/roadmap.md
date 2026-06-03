@@ -1,5 +1,12 @@
 # Action-Type-Conditioned Grounding for GUI Agents — Build Roadmap
 
+> **Historical planning document (May 2026).** This roadmap records the original
+> build plan and early compute assumptions. It is retained for provenance and
+> project-direction context, not as the current empirical/result state. For the
+> current status and paper framing, use `../README.md#status`,
+> `../results/phase4/PHASE6_FINAL.md`, and
+> `../results/phase4/PHASE7_RESULTS.md`.
+
 **Core principle:** Start with the dumbest possible end-to-end pipeline, then make it better. The biggest failure mode for projects like this is spending three weeks on infrastructure and one week on experiments. Flip that ratio. Spend the boring days at the start so the interesting days at the end are actually informative.
 
 Day estimates assume one person working a few hours a day. Adjust for the team.
@@ -11,8 +18,8 @@ Day estimates assume one person working a few hours a day. Adjust for the team.
 _As of May 28, 2026 — see [`../README.md`](../README.md#status) for the live checklist._
 
 - ✅ **Phase 0 — repo + env** (commit `d5ec466`). Directory tree per spec, `uv` + `pyproject.toml` + `uv.lock`, `.gitignore`, `.python-version` (3.11), W&B in deps but not yet wired.
-- ✅ **Phase 1 — Qwen2-VL + LoRA smoke test** (commits `d5ec466`, `d7a2f53`). `src/models/base.py:load_qwen2vl_with_lora()` + `scripts/smoke_test.py` (synthesizes a placeholder UI so it runs without any dataset). Import test passes locally; **GPU run still pending**. Caught `torchvision` as a missing transitive dep of `qwen_vl_utils` before the cloud did.
-- ⏳ **Phase 2 — data pipeline** is the next chunk. Start with one Mind2Web example end-to-end before touching the taxonomy.
+- ✅ **Phase 1 — Qwen2-VL + LoRA smoke test** (commits `d5ec466`, `d7a2f53`). `src/models/base.py:load_qwen2vl_with_lora()` + `scripts/smoke_test.py` (synthesizes a placeholder UI so it runs without any dataset). Import test passed locally; the GPU run was still pending at this May 28 snapshot and later completed. Caught `torchvision` as a missing transitive dep of `qwen_vl_utils` before the cloud did.
+- ⏳ **Phase 2 — data pipeline** was the next chunk at this May 28 snapshot. Start with one Mind2Web example end-to-end before touching the taxonomy.
 
 ### Scope changes from the original roadmap (compute-budget driven)
 

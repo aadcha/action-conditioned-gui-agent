@@ -1,5 +1,11 @@
 # Phase 6 — Final ablation, end-to-end pipeline, and the hypothesis verdict
 
+> **Main ablation source; read with Phase 7.** This remains the source for the
+> full A/B/C/D ablation and end-to-end result. `PHASE7_RESULTS.md` adds the
+> low-data sweep and causal-use diagnostics, and refines the mechanism story:
+> the real all_with_coords signal is click-vs-scroll/type disambiguation, not
+> field localization from AITW `type` coordinates.
+
 This consolidates the full controlled study. All Stage 2 grounding on AITW,
 Qwen2-VL-2B + LoRA, 2 epochs, 3 seeds. Paired-bootstrap comparisons are
 available for the all_with_coords setting, where every variant has aligned

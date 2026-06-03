@@ -15,9 +15,13 @@ Operational guide for future sessions working on this codebase. Skim this first.
 
 ## Project one-liner
 
-CS 231N, Spring 2026. Goal: GUI agent that decouples *what action* (Stage 1: action-type classifier) from *where to act* (Stage 2: action-type-conditioned grounding). Backbone Qwen2-VL-2B + LoRA. The central architectural claim is that a learned action-type embedding prepended to the instruction stream is better than flat decoding.
+CS 231N, Spring 2026. Goal: GUI agent that decouples *what action* (Stage 1: action-type classifier) from *where to act* (Stage 2: action-type-supervised grounding). Backbone Qwen2-VL-2B + LoRA. Final evidence supports the broad action-type supervision/factorization thesis, but refutes the literal learned prepended action-embedding claim as the winning mechanism.
 
-Source of truth for the spec: `reference/PROJECT_OVERVIEW.md` + `reference/roadmap.md`. The roadmap is prescriptive — most "what should I build next" questions are answered there.
+Source of truth for the original spec/direction:
+`reference/PROJECT_OVERVIEW.md` and `reference/roadmap.md` (both are now
+explicitly marked historical). Current empirical source of truth:
+`README.md#status`, `results/phase4/PHASE6_FINAL.md`, and
+`results/phase4/PHASE7_RESULTS.md`.
 
 ---
 

@@ -1,5 +1,10 @@
 # Milestone 3 — Preliminary Results
 
+> **Milestone snapshot.** This document is a valid historical checkpoint for the
+> preliminary presentation, but it predates Stage 2, Phase 6, and Phase 7. Use
+> `../phase4/PHASE6_FINAL.md` and `../phase4/PHASE7_RESULTS.md` for the final
+> empirical verdict.
+
 **Date:** May 29, 2026
 **Team:** Aadi Chauhan, Arthur Ilyasov, Nevin Kunampuram
 **Project:** Action-Type-Conditioned Grounding for GUI Agents (CS 231N, Spring 2026)
@@ -137,19 +142,19 @@ Both reads support the project's framing. The first explains why a Stage 1 class
 
 ---
 
-## 5. Limitations
+## 5. Limitations at milestone time
 
-1. **No Stage 2 (grounding) numbers yet.** All current results are on the action-type classifier. Stage 2 needs an LoRA fine-tune on Qwen2-VL-2B, which is scoped for the next week.
-2. **2-class evaluation surface.** macro-F1 over `{click, type}` is much coarser than the planned 8-class evaluation. AITW would lift this to 5–6 active classes.
+1. **No Stage 2 (grounding) numbers at milestone time.** Those numbers landed later in Phase 4/5/6/7.
+2. **2-class evaluation surface.** macro-F1 over `{click, type}` is much coarser than the planned 8-class evaluation. Phase 3 later lifted this to a 5-class AITW evaluation.
 3. **Single prompt for the vision-ablation.** We tested two option orderings but did not exhaustively search prompt phrasings. The "Vision doesn't help" claim is rigorously true *for this prompt family*. We will revisit with a richer prompt sweep in Phase 4 before claiming it generalizes.
 4. **500-step sample for the vision-ablation.** Computed for cost control; the bootstrapped 95% CI of macro-F1 at this n is roughly ± 0.04. The vision delta is much smaller than that band, so the conclusion is robust, but the absolute number is noisy.
-5. **No comparison to published Mind2Web baselines yet.** Mind2Web's official step-success-rate protocol uses element-prediction inputs we haven't wired into our eval harness yet. Scoped for Phase 5.
-6. **No fine-tuned Qwen2-VL number.** The "real" Stage 1 (MLP on cached Qwen2-VL features) has not been trained. The chart is incomplete until that bar lands.
-7. **Single-seed numbers.** Bootstrapped CIs scheduled for Phase 5 — they're cheap once the eval harness is in place.
+5. **No comparison to published Mind2Web baselines at milestone time.** Mind2Web's official step-success-rate protocol uses element-prediction inputs that were not wired into the eval harness then.
+6. **No fine-tuned Qwen2-VL number at milestone time.** The "real" Stage 1 MLP on cached Qwen2-VL features landed later in Phase 2.
+7. **Single-seed numbers.** Later phase writeups report multi-seed results where needed.
 
 ---
 
-## 6. Next Steps (ordered)
+## 6. Original Next Steps (now completed or superseded)
 
 | When | Action | Deliverable |
 |---|---|---|
@@ -161,7 +166,7 @@ Both reads support the project's framing. The first explains why a Stage 1 class
 | Week 3 | Stretch 7B run on variant D if credits permit (see `COMPUTE.md`) | One "we also scale to 7B" headline |
 | Week 4 | Attention/saliency visualizations + writeup | Final report |
 
-The Phase 0 + 1 work (repo, deps, smoke test) was completed in the days before this milestone; commits `d5ec466`, `d7a2f53`, `acfb4e5`, `ccdf104` and following on `main`.
+The Phase 0 + 1 work (repo, deps, smoke test) was completed in the days before this milestone; commits `d5ec466`, `d7a2f53`, `acfb4e5`, `ccdf104` and following on `main`. Later completed results are in `../phase4/PHASE6_FINAL.md` and `../phase4/PHASE7_RESULTS.md`.
 
 ---
 

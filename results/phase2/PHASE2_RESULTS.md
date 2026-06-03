@@ -1,5 +1,10 @@
 # Phase 2 — Real Stage 1 classifier on cached Qwen2-VL-2B features
 
+> **Phase result snapshot.** This remains the current Mind2Web Stage 1 result,
+> but it predates Stage 2 and the final hypothesis verdict. Use
+> `../phase4/PHASE6_FINAL.md` and `../phase4/PHASE7_RESULTS.md` for final
+> paper framing.
+
 This is the result Milestone 3 flagged as the load-bearing missing number: the
 roadmap-spec Stage 1 design (frozen VLM → mean-pooled hidden state → 3-layer
 MLP → 8-way softmax) trained on Mind2Web, evaluated against the Milestone 3

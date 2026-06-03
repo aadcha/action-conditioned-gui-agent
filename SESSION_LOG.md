@@ -1,7 +1,13 @@
-# Session log — 2026-05-31 (for next session)
+# Session log — 2026-05-31 [historical]
 
-Read this first tomorrow. It captures the full state, the headline findings,
-the one open data point, and exactly what to do next. Pairs with `CLAUDE.md`
+> **Historical session handoff.** This captured the May 31 state while Phase 5
+> work was still unfolding. It is retained for provenance, not as the current
+> task list. Current source of truth: `README.md#status`,
+> `results/phase4/PHASE6_FINAL.md`, `results/phase4/PHASE7_RESULTS.md`,
+> `AGENTS.md`, and `CLAUDE.md`.
+
+Original handoff text below captures the May 31 state, including then-open
+items that were later resolved by Phase 6/7. It pairs with `CLAUDE.md`
 (operational/how-to) and the per-phase writeups under `results/`.
 
 > **UPDATE (late session): the two open items below are now RESOLVED.**
@@ -13,8 +19,10 @@ the one open data point, and exactly what to do next. Pairs with `CLAUDE.md`
 >   95% CIs excluding zero and p < 0.005** (bootstrap + permutation).
 >   See `results/phase4/PHASE5_CORRECTED.md` and
 >   `results/phase4/paired_bootstrap_all_with_coords.json`.
-> The "open data point" and "next steps #1–2" sections below are kept for the
-> record but are DONE. Remaining open work: variants B/C, scale n, attention viz.
+> The previously open sections below are kept for the record but are DONE. The
+> later variants B/C, scaling/low-data runs, and attention/causal diagnostics
+> are covered by `results/phase4/PHASE6_FINAL.md` and
+> `results/phase4/PHASE7_RESULTS.md`.
 
 ---
 
@@ -38,8 +46,10 @@ major plot twist in the middle:
    of A.
 6. **With the fix, the hypothesis-shaped pattern emerged:**
    - tap/swipe (action type spatially *uninformative*): **D-hook ties A**
-   - all_with_coords (adds `type`→text-fields, spatially *informative*):
-     **D-hook beats A on all 4 metrics** (significant on the robust ones).
+   - all_with_coords (adds click/scroll/type disambiguation, spatially
+     *informative*): **D-hook beats A on all 4 metrics** (significant on the
+     robust ones). Phase 7 later clarified that AITW `type` coordinates are
+     degenerate rather than field-localization targets.
 
 The defensible scientific story is now: *action-type conditioning improves
 grounding precisely where action type predicts location; it is neutral where it
@@ -61,7 +71,9 @@ doesn't; and a naive injection that bypasses M-RoPE actively harms grounding.*
 
 ### all_with_coords (n_train=1200) — the TEST (action type informative via `type`)
 
-**A: 4 seeds [42,43,44,45]. D-hook: 5 seeds [42–46].** (A seed 46 pending — see below.)
+**A: 4 seeds [42,43,44,45]. D-hook: 5 seeds [42–46].** At this timestamp A seed
+46 had not landed yet; the final 5×5 table landed later and is summarized in
+the update banner above.
 
 | metric | A (flat) | D-hook (ours) | Δ (D−A) | sig (SE of mean) |
 |---|---|---|---|---|

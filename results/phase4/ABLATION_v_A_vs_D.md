@@ -1,3 +1,9 @@
+> **INTERIM / superseded.** This first-cut Phase 5.1 taps-only comparison
+> predates the M-RoPE bug diagnosis, D-hook/D-token variants, Phase 6 full
+> ablation, and Phase 7 low-data/causal diagnostics. Kept for provenance; do not
+> cite as the final result. Use `PHASE5_CORRECTED.md`, `PHASE6_FINAL.md`, and
+> `PHASE7_RESULTS.md`.
+
 # Phase 5.1 first-cut ablation — variant A vs variant D (taps only)
 
 Matched-compute comparison: variant D (action-type-conditioned, the project's
@@ -87,10 +93,11 @@ parse rate is 100%, the model learns grounding) but it cannot test the
   scale; n=100 val is small enough that 8 prediction flips move hit@0.10 by
   0.08.
 
-## The right next experiment
+## Historical follow-up proposed at the time
 
-The project's hypothesis (action conditioning improves grounding) needs
-training data with multiple canonical action types. Concretely:
+At the time, the project's hypothesis (action conditioning improves grounding)
+needed training data with multiple canonical action types. The proposed
+follow-up was:
 
 1. **Replace taps-only with all DUAL_POINT actions** (taps + 4 swipe
    directions) plus typing actions. This populates 3–4 of the 8 canonical
