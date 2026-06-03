@@ -90,17 +90,16 @@ trivial follow-up and will not change the verdict.
    strongly determined by the action *type* (both are touch points the model
    can localize from the screenshot+goal), so the type adds little spatial info.
 
-## Open follow-ups (in flight / candidate)
+## Follow-up resolution
 
-- **Higher action-embedding LR** (`action_lr` param): `ae_norm≈0.06` suggests the
-  zero-init embedding is *undertrained* at the shared lr=2e-5. A dedicated higher
-  LR lets it develop. Clean test — if hit@0.10 rises, conditioning helped and was
-  undertrained; if the embedding grows but the metric doesn't move, conditioning
-  is genuinely neutral. (probes: action_lr ∈ {1e-3, 5e-3}, seed 42)
-- **`all_with_coords` mix** (adds `type` actions): action types are more spatially
-  distinct there (text entry → input fields), the setting where conditioning
-  *should* help most. Needs its own 3-seed A baseline.
-- **D-text** (action word in the prompt): independent mechanism; staged.
+- **Higher action-embedding LR** (`action_lr` param): seed-42 probes were run and
+  did not become the headline mechanism.
+- **`all_with_coords` mix**: completed in Phase 6/7. Action-type supervision
+  helps there, but the actual signal is click-vs-scroll/type disambiguation;
+  AITW `type` coordinates are degenerate rather than field-localization targets.
+- **D-token**: completed in Phase 6/7. The M-RoPE-correct prepended embedding is
+  causally used at inference, but it does not beat B/D-hook on the headline
+  grounding setting.
 
 ## Honesty note
 

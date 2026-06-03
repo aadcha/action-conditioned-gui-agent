@@ -5,7 +5,7 @@ Qwen2-VL-2B + LoRA, 2 epochs, 3 seeds. Paired-bootstrap comparisons are
 available for the all_with_coords setting, where every variant has aligned
 per-example distances. The taps_and_swipes control is reported as 3-seed
 mean/stdev because the A and D-hook control runs predate per-example logging.
-This file supersedes the partial PHASE6_ABLATION_ABCD.md (which lacked D-token).
+This file supersedes the interim PHASE6_ABLATION_ABCD.md (which lacked D-token).
 
 ## The variants
 

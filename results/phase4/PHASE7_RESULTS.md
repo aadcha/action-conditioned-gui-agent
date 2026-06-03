@@ -6,9 +6,9 @@ decompositions and new regimes. All on AITW Stage 2 grounding, Qwen2-VL-2B + LoR
 
 1. **Compounding-error / per-action-type decomposition** — *where* does
    conditioning help? (DONE)
-2. **Low-data sweep** — does the advantage grow as data shrinks? (IN FLIGHT)
+2. **Low-data sweep** — does the advantage grow as data shrinks? (DONE)
 3. **Embedding causal-use test** — is the learned action embedding actually
-   used at inference, or ignored? (IN FLIGHT)
+   used at inference, or ignored? (DONE)
 
 ---
 
@@ -76,31 +76,75 @@ directly.
 
 ---
 
-## Result 7.2 — low-data sweep (IN FLIGHT)
+## Result 7.2 — low-data sweep
 
 Extending the scaling curve down to n_train ∈ {300, 500, 800} (3 seeds, A/B/D-hook)
 to test the *low-data prior* prediction: the conditioning advantage should be
 *largest* with little data and erode as the flat baseline sees more.
-Runs submitted via `train_stage2_lowdata_sweep` (one detached container per
-variant, looping n×seed). Numbers + replotted `scaling_curve.png` to follow.
+All cells are complete: 3 variants × 3 train sizes × 3 seeds = 27 runs. The
+strict completeness check is `scripts/p7_result_audit.py`; raw audit output is
+`phase7_result_audit.json`; the replotted curve is `scaling_curve.png`.
+
+**3-seed mean hit rates:**
+
+| n_train | A hit@0.10 | B hit@0.10 | D-hook hit@0.10 | B − A | D-hook − A | A hit@0.25 | B hit@0.25 | D-hook hit@0.25 |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 300 | 0.139 | 0.205 | **0.208** | +0.067 | +0.069 | 0.489 | 0.435 | **0.556** |
+| 500 | 0.315 | **0.325** | 0.316 | +0.011 | +0.001 | 0.503 | 0.507 | **0.561** |
+| 800 | 0.261 | 0.222 | **0.311** | −0.040 | +0.050 | 0.545 | 0.507 | **0.613** |
+
+### What this says
+
+1. **There is no clean monotonic low-data curve.** The largest hit@0.10 gain is
+   at n=300, but n=500 is essentially a tie and n=800 swings back toward
+   D-hook. Small-data optimization noise is real.
+2. **D-hook is the stable low-data conditioned mechanism.** It is best on
+   hit@0.25 at every low-data size and has the best mean normalized L2 at every
+   low-data size (see `phase7_result_audit.json`). The additive embedding path
+   is not just a high-data artifact.
+3. **B is not uniformly better in the low-data regime.** The auxiliary loss has
+   a strong n=300 hit@0.10 bump and wins n=500 hit@0.10 narrowly, but it loses
+   hit@0.25 and mean L2 to D-hook throughout. Phase 6's "B is simplest/best" is
+   true at the headline n=1200 setting, not as a universal small-data rule.
 
 ---
 
-## Result 7.3 — embedding causal-use test (IN FLIGHT)
+## Result 7.3 — embedding causal-use test
 
 Train D-token, then evaluate three ways on the same val set:
 - **gold**: true action id (normal),
 - **wrong**: each example fed a *different* valid action id (cyclic permutation),
 - **zero**: action embedding table zeroed for the eval.
 
-If gold ≫ wrong/zero, the learned embedding is *causally used* at inference (the
-refutation is "used but not superior to an aux loss"); if gold ≈ wrong ≈ zero,
-the model *ignores* the slot (the refutation is "the conditioning path is
-inert"). Submitted via `train_stage2_Dtoken --causal-eval` (3 seeds). Numbers to
-follow.
+All 3 seeds are complete. Aggregation script: `scripts/p7_causal_table.py`;
+summary JSON: `causal_use_summary.json`.
+
+| condition | hit@0.05 | hit@0.10 | hit@0.25 | mean L2 |
+|---|---:|---:|---:|---:|
+| **gold action id** | 0.183 | **0.276** | **0.529** | **0.375** |
+| wrong action id | 0.015 | 0.084 | 0.200 | 0.721 |
+| zeroed embedding | 0.087 | 0.183 | 0.417 | 0.492 |
+
+**Paired bootstrap over pooled per-example distances:**
+
+| contrast | metric | Δ | 95% CI | p |
+|---|---|---:|---:|---:|
+| gold − wrong | hit@0.10 | +0.192 | [+0.156, +0.228] | <0.001 |
+| gold − wrong | hit@0.25 | +0.329 | [+0.289, +0.369] | <0.001 |
+| gold − zero | hit@0.10 | +0.093 | [+0.060, +0.128] | <0.001 |
+| gold − zero | hit@0.25 | +0.112 | [+0.077, +0.148] | <0.001 |
+
+### What this says
+
+The learned D-token embedding is **causally used at inference**. Feeding the
+wrong action id badly damages grounding, and zeroing the embedding also hurts.
+So the D-token refutation is precise: the path is *not inert*; it is used, but
+it is not the best way to exploit action supervision compared with B/D-hook at
+the headline setting.
 
 ---
 
 ## Cost
-Phase 7 adds ~$3–4 of L4 time (low-data runs are small; causal runs are eval-only
-on top of training). Cumulative project spend tracked in README.
+Phase 7 added roughly $6–8 of L4 time after completing the missing cells. The
+extra cost came from running each missing low-data cell independently to avoid
+another long-container stop, plus two D-token causal reruns.

@@ -82,7 +82,8 @@ a SOTA claim. Concretely:
      (5+ epochs, larger n_train) let the embedding specialize?
   4. The variance question — does training data with all 5+ canonical
      action classes (using the `all_with_coords` data mix) change the
-     picture? (1-seed runs of all_with_coords are in flight as a smoke test.)
+     picture? This was resolved later in `PHASE5_CORRECTED.md`,
+     `PHASE6_FINAL.md`, and `PHASE7_RESULTS.md`.
 
 ## What to NOT do
 
@@ -107,16 +108,13 @@ a SOTA claim. Concretely:
   already showed vision delta = +0.009 macro-F1 — also small. Mind2Web is
   not a great test of D either.
 
-## What we still need
+## Resolution
 
-- [x] 3rd D seed for multi-action — **landed**, headline updated above.
-- [ ] 1-seed `all_with_coords` smoke (3 active classes: click+scroll+type) — in flight.
-- [ ] 3-seed `Dfrozen` diagnostic (action_embeddings frozen at random init) — in flight.
-  - If Dfrozen ≈ D: the slot disrupts the prompt regardless of embedding training.
-  - If Dfrozen ≪ D: the embedding *was* doing useful work; D just couldn't
-    learn it fast enough.
-  - If Dfrozen ≈ A: shouldn't happen given the slot disruption, but if it
-    does, the slot at this position is benign and our embedding training
-    actively harmed things.
+- [x] 3rd D seed for multi-action landed.
+- [x] `all_with_coords` was run and became the setting where action-type
+  supervision helps grounding.
+- [x] Dfrozen and D-hook diagnostics showed the original negative result was
+  caused by the `inputs_embeds`/M-RoPE path, not by action conditioning itself.
 
-The headline result (taps_and_swipes 8σ gap) will not change.
+The headline in this file is superseded. Cite `PHASE6_FINAL.md` and
+`PHASE7_RESULTS.md` for the current conclusion.

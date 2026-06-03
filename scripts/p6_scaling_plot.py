@@ -17,13 +17,19 @@ SEEDS = {300: [42, 43, 44], 500: [42, 43, 44], 800: [42, 43, 44],
          1200: [42, 43, 44], 2500: [42], 5000: [42]}
 
 
-def metric(prefix: str, n: int, suffix: str, key: str) -> float | None:
+def metric(prefix: str, n: int, suffix: str, key: str) -> float:
     xs = []
+    missing = []
     for s in SEEDS[n]:
         p = PHASE4 / f"{prefix}_seed{s}_n{n}_ep2_lr2e-05_mix-all_with_coords{suffix}.json"
         if p.exists():
             xs.append(json.loads(p.read_text())["final_val_metrics"][key])
-    return st.mean(xs) if xs else None
+        else:
+            missing.append(p)
+    if missing:
+        rel = ", ".join(str(p.relative_to(PHASE4.parent.parent)) for p in missing)
+        raise FileNotFoundError(f"scaling curve is missing expected result file(s): {rel}")
+    return st.mean(xs)
 
 
 def main() -> None:

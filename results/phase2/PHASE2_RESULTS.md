@@ -162,9 +162,9 @@ Cumulative Modal spend through Phase 2: **~$1.87 of $200 (0.9%)**.
 - ✅ Phase 2.3 vision-ablation: at the feature level, vision = +0.009 ± 0.005.
   Real but small.
 - ✅ A working Stage 1 number for downstream Stage 2 conditioning.
-- ⏳ Phase 3 — AITW ingest is in flight (`results/phase3/aitw_distribution.json`
-  documents the 5-active-class structure). The MLP recipe carries over with no
-  changes; the meaningful 8-class evaluation lives there.
+- ✅ Phase 3 — AITW ingest and multi-class Stage 1 evaluation completed in
+  `results/phase3/PHASE3_RESULTS.md`. The MLP recipe carried over with no
+  changes; AITW is where the meaningful multi-class action-type story lives.
 
 ## Reproducibility
 
