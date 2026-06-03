@@ -23,9 +23,20 @@
 %%%%%%%%% TITLE
 \title{Decoupling What from Where: Action-Type-Conditioned Grounding for GUI Agents}
 
-\author{Aadi Chauhan \quad Arthur Ilyasov \quad Nevin Kunampuram\\
+\author{
+\begin{tabular}{cc}
+\begin{tabular}{c}
+\textbf{Aadi Chauhan*}\\
 Stanford University\\
-{\tt\small \{aadic, ailyasov, nevink\}@stanford.edu}
+{\tt\small aadic@stanford.edu}
+\end{tabular}
+&
+\begin{tabular}{c}
+\textbf{Arthur Ilyasov*}\\
+Stanford University\\
+{\tt\small arthuri@stanford.edu}
+\end{tabular}
+\end{tabular}
 }
 
 \maketitle
@@ -44,7 +55,7 @@ This design has a documented failure mode. When the model commits to an incorrec
 
 \begin{figure}[t]
 \begin{center}
-\includegraphics[width=0.98\linewidth]{results/phase3/stage1_mind2web_vs_aitw.png}
+\includegraphics[width=0.98\linewidth]{figures/stage1_mind2web_vs_aitw.png}
 \end{center}
 \caption{Stage 1 action-type classifier macro-F1 on Mind2Web (2 active classes) and AITW (5 active classes). Vision is essential on AITW ($+0.414$ over text-only) but redundant on Mind2Web ($+0.009$), because AITW instructions describe \emph{goals} rather than physically specifying the action.}
 \label{fig:stage1_comparison}
@@ -125,7 +136,7 @@ We evaluate five variants, each sharing identical data, optimizer ($\text{lr} = 
 
 \begin{figure}[t]
 \begin{center}
-\includegraphics[width=0.98\linewidth]{results/phase4/ablation_ABCD_all_with_coords.png}
+\includegraphics[width=0.98\linewidth]{figures/ablation_ABCD_all_with_coords.png}
 \end{center}
 \caption{Stage~2 ablation on AITW \texttt{all\_with\_coords} (action type spatially informative). B and D-hook significantly outperform the flat baseline A (paired bootstrap, $p < 0.002$). D-token, the literal hypothesized architecture, does not reach B/D-hook on headline hit@0.10 or hit@0.25.}
 \label{fig:ablation}
@@ -254,7 +265,7 @@ Table~\ref{tab:e2e} shows the end-to-end result with Stage~1 predicted types fee
 
 \begin{figure}[t]
 \begin{center}
-\includegraphics[width=0.98\linewidth]{results/phase4/compounding_error_per_class.png}
+\includegraphics[width=0.98\linewidth]{figures/compounding_error_per_class.png}
 \end{center}
 \caption{Stage~2 hit@0.10 broken down by action class on \texttt{all\_with\_coords}. The conditioning advantage ($\Delta$ vs.\ A) is concentrated in \emph{click}. The \emph{type} class scores 0.000 across all variants due to degenerate AITW coordinates. The real grounding signal is \emph{click-vs-scroll/type} disambiguation.}
 \label{fig:perclass}
@@ -285,7 +296,7 @@ C's mediocrity is now explained: it has the \emph{largest} click gain ($+0.122$)
 
 \begin{figure}[t]
 \begin{center}
-\includegraphics[width=0.98\linewidth]{results/phase4/scaling_curve.png}
+\includegraphics[width=0.98\linewidth]{figures/scaling_curve.png}
 \end{center}
 \caption{Conditioning advantage ($\Delta$ hit@0.10 vs.\ Variant~A) as a function of $n_{\text{train}}$, ranging from 300 to 5000. The advantage is largest at low data and shrinks with scale, confirming that action-type conditioning acts as a low-data prior that the flat baseline absorbs at scale.}
 \label{fig:scaling}
