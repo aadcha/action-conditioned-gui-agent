@@ -1,0 +1,49 @@
+{
+  "variant": "m2w_A",
+  "dataset": "Multimodal-Mind2Web",
+  "n_train": 1000,
+  "n_val": 250,
+  "epochs": 2,
+  "lr": 2e-05,
+  "seed": 43,
+  "coord_scale": 1000,
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.0788403424024582,
+      "n_total": 250,
+      "n_parsed": 250,
+      "parse_rate": 1.0,
+      "mean_normalized_l2": 0.2339224578748597,
+      "hit_at_005": 0.156,
+      "hit_at_010": 0.312,
+      "hit_at_025": 0.668,
+      "hit_at_bbox": 0.064
+    },
+    {
+      "epoch": 2,
+      "train_loss": 1.0026203646361829,
+      "n_total": 250,
+      "n_parsed": 250,
+      "parse_rate": 1.0,
+      "mean_normalized_l2": 0.20933447308725553,
+      "hit_at_005": 0.188,
+      "hit_at_010": 0.4,
+      "hit_at_025": 0.684,
+      "hit_at_bbox": 0.076
+    }
+  ],
+  "final_val_metrics": {
+    "epoch": 2,
+    "train_loss": 1.0026203646361829,
+    "n_total": 250,
+    "n_parsed": 250,
+    "parse_rate": 1.0,
+    "mean_normalized_l2": 0.20933447308725553,
+    "hit_at_005": 0.188,
+    "hit_at_010": 0.4,
+    "hit_at_025": 0.684,
+    "hit_at_bbox": 0.076
+  },
+  "_file": "m2w_A_seed43_n1000_ep2.json"
+}
