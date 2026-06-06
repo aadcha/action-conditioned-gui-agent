@@ -1,0 +1,146 @@
+{
+  "n_train": 800,
+  "n_val": 150,
+  "click_hit_A": 0.4657534246575342,
+  "click_hit_D": 0.4794520547945205,
+  "panels": [
+    {
+      "panel": 0,
+      "file": "panel_0.png",
+      "title": "click: conditioning rescues",
+      "action": "click",
+      "goal": "What is the speed of a bicycle?",
+      "W": 412,
+      "H": 732,
+      "gold": [
+        0.5717034339904785,
+        0.10051596909761429
+      ],
+      "predA": [
+        0.5,
+        0.8
+      ],
+      "predD": [
+        0.5,
+        0.062
+      ],
+      "distA": 0.7031495516129387,
+      "distD": 0.08139325722414166
+    },
+    {
+      "panel": 1,
+      "file": "panel_1.png",
+      "title": "click: conditioning rescues",
+      "action": "click",
+      "goal": "Play the latest video from the Washington Post",
+      "W": 412,
+      "H": 732,
+      "gold": [
+        0.44692838191986084,
+        0.19037246704101562
+      ],
+      "predA": [
+        0.5,
+        0.793
+      ],
+      "predD": [
+        0.45,
+        0.22
+      ],
+      "distA": 0.6049599491915775,
+      "distD": 0.029786331544282913
+    },
+    {
+      "panel": 2,
+      "file": "panel_2.png",
+      "title": "click: both correct",
+      "action": "click",
+      "goal": "Search for flights from Buenos aires to Seoul",
+      "W": 412,
+      "H": 732,
+      "gold": [
+        0.48988232016563416,
+        0.5163388848304749
+      ],
+      "predA": [
+        0.5,
+        0.511
+      ],
+      "predD": [
+        0.5,
+        0.51
+      ],
+      "distA": 0.011439892327456918,
+      "distD": 0.011939384662735236
+    },
+    {
+      "panel": 3,
+      "file": "panel_3.png",
+      "title": "scroll: conditioning helps",
+      "action": "scroll",
+      "goal": "Search for good Korean restaurants",
+      "W": 412,
+      "H": 732,
+      "gold": [
+        0.5148463249206543,
+        0.7500908374786377
+      ],
+      "predA": [
+        0.5,
+        0.846
+      ],
+      "predD": [
+        0.533,
+        0.753
+      ],
+      "distA": 0.09705143388533075,
+      "distD": 0.018385296991404773
+    },
+    {
+      "panel": 4,
+      "file": "panel_4.png",
+      "title": "scroll: conditioning helps",
+      "action": "scroll",
+      "goal": "What is the speed of a bicycle?",
+      "W": 412,
+      "H": 732,
+      "gold": [
+        0.5115469694137573,
+        0.7676749229431152
+      ],
+      "predA": [
+        0.5,
+        0.844
+      ],
+      "predD": [
+        0.533,
+        0.783
+      ],
+      "distA": 0.07719358710658315,
+      "distD": 0.026364569181644554
+    },
+    {
+      "panel": 5,
+      "file": "panel_5.png",
+      "title": "type: degenerate (both fail)",
+      "action": "type",
+      "goal": "Search for flights from Buenos aires to Seoul",
+      "W": 412,
+      "H": 732,
+      "gold": [
+        -1.0,
+        -1.0
+      ],
+      "predA": [
+        0.0,
+        0.0
+      ],
+      "predD": [
+        0.0,
+        0.0
+      ],
+      "distA": 1.4142135623730951,
+      "distD": 1.4142135623730951
+    }
+  ]
+}
