@@ -267,7 +267,7 @@ Table~\ref{tab:e2e} shows the end-to-end result with Stage~1 predicted types fee
 \begin{center}
 \includegraphics[width=0.93\linewidth]{figures/qualitative_grounding.png}
 \end{center}
-\caption{Qualitative grounding predictions on held-out AITW screenshots: ground truth (green $\circ$), flat baseline A (red $\times$), and conditioned D-hook (blue $\times$); each panel reports both per-example normalized distances. Conditioning rescues \emph{click} targets the flat baseline misses (left), both models succeed on easy clicks, and both fail on \emph{type} actions whose AITW touch coordinates are degenerate (corner-pinned), visually confirming the per-class analysis in Table~\ref{tab:perclass}.}
+\caption{Qualitative grounding predictions on held-out AITW screenshots: ground truth (green $\circ$), flat baseline A (red $\times$), and conditioned D-hook (blue $\times$); each panel reports both per-example normalized distances. Across \emph{click} and \emph{scroll} examples, the conditioned model (blue) lands nearer the target than the flat baseline (red), consistent with the per-class analysis in Table~\ref{tab:perclass}.}
 \label{fig:qualitative}
 \end{figure*}
 
@@ -279,7 +279,7 @@ Table~\ref{tab:e2e} shows the end-to-end result with Stage~1 predicted types fee
 \label{fig:perclass}
 \end{figure}
 
-Figure~\ref{fig:perclass} and Table~\ref{tab:perclass} break down Stage~2 hit@0.10 by action class. The overall conditioning win is a \emph{click} win. B gains $+0.120$ and C gains $+0.122$ on click (68\% of the val set), explaining their overall headline improvement. The \emph{type} class scores exactly $0.000$ hit@0.10 across \emph{all} variants, with mean normalized L2 $= \sqrt{2}$ (corner-to-corner), revealing that AITW \texttt{type} actions carry pinned/degenerate touch coordinates that are ungroundable by any model. This corrects an earlier interpretation: the grounding gain is not about localizing text input fields; it is about \emph{click-vs-scroll/type disambiguation} for the precise-target class. Figure~\ref{fig:qualitative} shows representative predictions illustrating this: conditioning recovers click targets the flat baseline misses, while both models fail on the degenerate \texttt{type} targets.
+Figure~\ref{fig:perclass} and Table~\ref{tab:perclass} break down Stage~2 hit@0.10 by action class. The overall conditioning win is a \emph{click} win. B gains $+0.120$ and C gains $+0.122$ on click (68\% of the val set), explaining their overall headline improvement. The \emph{type} class scores exactly $0.000$ hit@0.10 across \emph{all} variants, with mean normalized L2 $= \sqrt{2}$ (corner-to-corner), revealing that AITW \texttt{type} actions carry pinned/degenerate touch coordinates that are ungroundable by any model. This corrects an earlier interpretation: the grounding gain is not about localizing text input fields; it is about \emph{click-vs-scroll/type disambiguation} for the precise-target class. Figure~\ref{fig:qualitative} shows representative predictions illustrating this: the conditioned model lands nearer the target than flat A on both click and scroll examples.
 
 \begin{table}[h]
 \begin{center}
