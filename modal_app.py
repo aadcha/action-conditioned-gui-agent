@@ -3991,3 +3991,254 @@ def train_stage2_lowdata_sweep(
     ns = [int(x) for x in n_list.split(",")]
     ss = [int(x) for x in seeds.split(",")]
     _stage2_lowdata_sweep_remote.remote(variant, ns, ss, n_val, epochs, lr, data_mix)
+
+
+# ---- Phase 7 qualitative figure: predicted-vs-ground-truth grounding ---------
+#
+# Trains flat A and D-hook on the SAME all_with_coords data/val set, predicts on
+# the shared val examples (whose PIL screenshots are retained), then renders a
+# grid of real screenshots with ground-truth (o), flat-A (x red) and conditioned
+# D-hook (x blue) points. Selects a representative spread: a click where
+# conditioning rescues a flat-A miss, a both-correct click, a scroll, and the
+# degenerate `type` case (both miss). Saves one paper-ready PNG to the Volume.
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret],
+    timeout=14400,
+)
+def _stage2_qualitative_remote(
+    n_train: int = 800, n_val: int = 150, epochs: int = 2, lr: float = 2e-5,
+    seed: int = 42, coord_scale: int = 1000,
+) -> dict:
+    import math
+    import os
+    import random
+    import sys
+    import json as _json
+    from collections import Counter
+    from pathlib import Path as _Path
+
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import torch
+    import torch.nn as nn
+    from peft import LoraConfig, get_peft_model
+    from qwen_vl_utils import process_vision_info
+    from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+
+    from src.data.aitw import iter_aitw_steps
+    from src.data.taxonomy import ID_TO_ACTION
+    from src.train.stage2 import Stage2Example, coord_to_string, string_to_coord
+
+    allowed = {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"}
+    print("[qual] streaming all_with_coords...")
+    examples_all: list[Stage2Example] = []
+    need = n_train + n_val
+    for step in iter_aitw_steps(split="train", n_max=max(need * 4, 1000), include_images=True):
+        if step.string_label not in allowed:
+            continue
+        examples_all.append(Stage2Example(
+            image=step.open_image(), goal_info=step.goal_info,
+            action_type_id=step.canonical_action_id,
+            target_xy=(step.touch_yx[1], step.touch_yx[0])))
+        if len(examples_all) >= need:
+            break
+    train_examples = examples_all[:n_train]
+    val_examples = examples_all[n_train:n_train + n_val]
+    print(f"[qual] train {len(train_examples)} val {len(val_examples)} "
+          f"val_dist={Counter(e.action_type_id for e in val_examples)}")
+
+    processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")
+    PROMPT = "Goal: {goal}\nPredict the action coordinate."
+
+    def build(model, examples, include_labels, device):
+        msgs = []
+        for ex in examples:
+            content = [{"type": "image", "image": ex.image},
+                       {"type": "text", "text": PROMPT.format(goal=ex.goal_info)}]
+            m = [{"role": "user", "content": content}]
+            if include_labels:
+                m.append({"role": "assistant",
+                          "content": [{"type": "text", "text": coord_to_string(ex.target_xy, coord_scale)}]})
+            msgs.append(m)
+        texts = [processor.apply_chat_template(m, tokenize=False, add_generation_prompt=(not include_labels)) for m in msgs]
+        img_in, vid_in = process_vision_info(msgs)
+        inputs = processor(text=texts, images=img_in, videos=vid_in, padding=True, return_tensors="pt").to(device)
+        if include_labels:
+            labels = inputs["input_ids"].clone()
+            im_start = processor.tokenizer.convert_tokens_to_ids("<|im_start|>")
+            assistant_id = processor.tokenizer.convert_tokens_to_ids("assistant")
+            for b in range(labels.shape[0]):
+                row = inputs["input_ids"][b]
+                starts = (row == im_start).nonzero(as_tuple=True)[0].tolist()
+                cut = 0
+                for idx in reversed(starts):
+                    if idx + 1 < row.shape[0] and row[idx + 1].item() == assistant_id:
+                        cut = idx + 2
+                        if cut < row.shape[0]:
+                            cut += 1
+                        break
+                labels[b, :cut] = -100
+            inputs["labels"] = labels
+        return inputs
+
+    def make_model():
+        base = Qwen2VLForConditionalGeneration.from_pretrained(
+            "Qwen/Qwen2-VL-2B-Instruct", torch_dtype=torch.bfloat16, device_map="auto")
+        model = get_peft_model(base, LoraConfig(
+            r=16, lora_alpha=32, target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+            lora_dropout=0.05, task_type="CAUSAL_LM"))
+        hf_cache.commit()
+        return model
+
+    def train_and_predict(use_hook: bool):
+        torch.manual_seed(seed); random.seed(seed)  # identical data order for both
+        model = make_model(); device = next(model.parameters()).device
+        holder = {"action_id": None}; action_embeddings = None; hook = None
+        params = [p for p in model.parameters() if p.requires_grad]
+        if use_hook:
+            hidden = model.get_input_embeddings().embedding_dim
+            action_embeddings = nn.Embedding(8, hidden).to(device=device, dtype=torch.bfloat16)
+            nn.init.zeros_(action_embeddings.weight)
+
+            def _hook(mod, inp, out):
+                aid = holder["action_id"]
+                if aid is None:
+                    return out
+                return out + action_embeddings(aid).unsqueeze(1).to(out.dtype)
+            hook = model.get_input_embeddings().register_forward_hook(_hook)
+            params = params + list(action_embeddings.parameters())
+        opt = torch.optim.AdamW(params, lr=lr, weight_decay=0.01)
+        tag = "D-hook" if use_hook else "flat-A"
+        for epoch in range(1, epochs + 1):
+            rng = random.Random(seed + epoch); order = list(range(len(train_examples))); rng.shuffle(order)
+            model.train()
+            for n, i in enumerate(order):
+                ex = train_examples[i]; inputs = build(model, [ex], True, device)
+                if use_hook:
+                    holder["action_id"] = torch.tensor([ex.action_type_id], device=device)
+                out = model(**inputs)
+                if use_hook:
+                    holder["action_id"] = None
+                opt.zero_grad(); out.loss.backward()
+                torch.nn.utils.clip_grad_norm_(params, 1.0); opt.step()
+            print(f"[qual] {tag} epoch {epoch} done", flush=True)
+        model.eval(); preds = []
+        for ex in val_examples:
+            inputs = build(model, [ex], False, device); plen = inputs["input_ids"].shape[1]
+            if use_hook:
+                holder["action_id"] = torch.tensor([ex.action_type_id], device=device)
+            with torch.inference_mode():
+                gen = model.generate(**inputs, max_new_tokens=16, do_sample=False,
+                                     pad_token_id=processor.tokenizer.eos_token_id)
+            if use_hook:
+                holder["action_id"] = None
+            new = gen[:, plen:] if gen.shape[1] > plen else gen
+            raw = processor.batch_decode(new, skip_special_tokens=True)[0]
+            preds.append(string_to_coord(raw, scale=coord_scale))
+        if hook:
+            hook.remove()
+        del model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        return preds
+
+    print("[qual] training flat A...")
+    predA = train_and_predict(False)
+    print("[qual] training D-hook...")
+    predD = train_and_predict(True)
+
+    def dist(p, t):
+        return 1.4142 if p is None else math.hypot(p[0] - t[0], p[1] - t[1])
+
+    rows = []
+    for k, ex in enumerate(val_examples):
+        t = ex.target_xy
+        rows.append({"i": k, "action": ID_TO_ACTION[ex.action_type_id], "gold": t,
+                     "predA": predA[k], "predD": predD[k],
+                     "distA": dist(predA[k], t), "distD": dist(predD[k], t)})
+
+    clicks = [r for r in rows if r["action"] == "click"]
+    scrolls = [r for r in rows if r["action"] == "scroll"]
+    types = [r for r in rows if r["action"] == "type"]
+    wins = [r for r in clicks if r["distD"] <= 0.10 and r["distA"] >= 0.18]
+    both_ok = [r for r in clicks if r["distA"] <= 0.10 and r["distD"] <= 0.10]
+
+    sel: list = []; used: set = set()
+
+    def take(lst, title, n=1, key=None):
+        for r in (sorted(lst, key=key) if key else lst):
+            if len(sel) >= 6 or r["i"] in used:
+                continue
+            sel.append((title, r)); used.add(r["i"])
+            if sum(1 for s in sel if s[0] == title) >= n:
+                break
+
+    take(wins, "click: conditioning rescues", 2, key=lambda r: -(r["distA"] - r["distD"]))
+    take(both_ok, "click: both correct", 1, key=lambda r: r["distA"] + r["distD"])
+    take(scrolls, "scroll", 1, key=lambda r: r["distD"])
+    take(types, "type: degenerate target", 2, key=lambda r: r["distD"])
+    for r in sorted(rows, key=lambda r: r["distD"]):  # pad
+        if len(sel) >= 6:
+            break
+        if r["i"] not in used:
+            sel.append((r["action"], r)); used.add(r["i"])
+
+    cols = 3; rowsn = max(1, math.ceil(len(sel) / cols))
+    fig, axes = plt.subplots(rowsn, cols, figsize=(cols * 3.3, rowsn * 4.4))
+    axes = np.array(axes).reshape(-1)
+    for ax in axes:
+        ax.axis("off")
+    for ax, (title, r) in zip(axes, sel):
+        ex = val_examples[r["i"]]; img = np.array(ex.image.convert("RGB")); H, W = img.shape[:2]
+        ax.imshow(img)
+        gx, gy = r["gold"]
+        ax.scatter([gx * W], [gy * H], s=180, marker="o", facecolors="none",
+                   edgecolors="#00c000", linewidths=2.6, label="ground truth")
+        if r["predA"]:
+            ax.scatter([r["predA"][0] * W], [r["predA"][1] * H], s=150, marker="x",
+                       c="#e01010", linewidths=2.6, label="flat A")
+        if r["predD"]:
+            ax.scatter([r["predD"][0] * W], [r["predD"][1] * H], s=150, marker="x",
+                       c="#1060e0", linewidths=2.6, label="D-hook (conditioned)")
+        ax.set_title(f"{title}\nA dist={r['distA']:.2f}   D dist={r['distD']:.2f}", fontsize=8)
+        ax.axis("off")
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=3, fontsize=10)
+    fig.suptitle("Qualitative grounding: predicted vs. ground-truth point "
+                 "(AITW all_with_coords, n_train=800)", y=0.99, fontsize=11)
+    fig.tight_layout(rect=[0, 0.05, 1, 0.96])
+
+    out_dir = _Path(STAGE1_CACHE_PATH) / "qualitative"; out_dir.mkdir(parents=True, exist_ok=True)
+    figpath = out_dir / "qualitative_grounding.png"
+    fig.savefig(figpath, dpi=150, bbox_inches="tight")
+    (out_dir / "manifest.json").write_text(_json.dumps(
+        {"n_val": len(val_examples),
+         "click_hit_A": sum(1 for r in clicks if r["distA"] <= 0.10) / max(len(clicks), 1),
+         "click_hit_D": sum(1 for r in clicks if r["distD"] <= 0.10) / max(len(clicks), 1),
+         "selected": [{"title": t, **{k: r[k] for k in ("i", "action", "gold", "predA", "predD", "distA", "distD")}}
+                      for t, r in sel]}, indent=2, default=float))
+    stage1_cache.commit()
+    print(f"[qual] saved {figpath} with {len(sel)} panels")
+    return {"figure": "qualitative/qualitative_grounding.png", "n_selected": len(sel)}
+
+
+@app.local_entrypoint()
+def stage2_qualitative(
+    n_train: int = 800, n_val: int = 150, epochs: int = 2, lr: float = 2e-5, seed: int = 42,
+) -> None:
+    """Generate the predicted-vs-ground-truth qualitative figure. Use --detach.
+
+    Pull afterwards with:
+        modal volume get stage1-cache qualitative/qualitative_grounding.png results/phase4/
+    """
+    _stage2_qualitative_remote.remote(n_train, n_val, epochs, lr, seed)
