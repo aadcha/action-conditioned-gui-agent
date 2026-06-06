@@ -38,3 +38,4 @@ env/
 
 # Jupyter
 .ipynb_checkpoints/
+results/phase4/qual_data/

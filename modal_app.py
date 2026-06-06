@@ -4170,65 +4170,90 @@ def _stage2_qualitative_remote(
     clicks = [r for r in rows if r["action"] == "click"]
     scrolls = [r for r in rows if r["action"] == "scroll"]
     types = [r for r in rows if r["action"] == "type"]
-    wins = [r for r in clicks if r["distD"] <= 0.10 and r["distA"] >= 0.18]
+    click_wins = [r for r in clicks if r["distD"] <= 0.10 and r["distA"] >= 0.18]
     both_ok = [r for r in clicks if r["distA"] <= 0.10 and r["distD"] <= 0.10]
+    scroll_wins = [r for r in scrolls if r["distD"] <= 0.12]
+    # prefer 'type' examples whose predictions stay on-canvas (cleaner panel)
+    types_clean = [r for r in types if r["distA"] <= 1.45 and r["distD"] <= 1.45] or types
 
     sel: list = []; used: set = set()
 
     def take(lst, title, n=1, key=None):
+        c = 0
         for r in (sorted(lst, key=key) if key else lst):
             if len(sel) >= 6 or r["i"] in used:
                 continue
-            sel.append((title, r)); used.add(r["i"])
-            if sum(1 for s in sel if s[0] == title) >= n:
+            sel.append({"title": title, **r}); used.add(r["i"]); c += 1
+            if c >= n:
                 break
 
-    take(wins, "click: conditioning rescues", 2, key=lambda r: -(r["distA"] - r["distD"]))
+    take(click_wins, "click: conditioning rescues", 2, key=lambda r: -(r["distA"] - r["distD"]))
     take(both_ok, "click: both correct", 1, key=lambda r: r["distA"] + r["distD"])
-    take(scrolls, "scroll", 1, key=lambda r: r["distD"])
-    take(types, "type: degenerate target", 2, key=lambda r: r["distD"])
-    for r in sorted(rows, key=lambda r: r["distD"]):  # pad
+    take(scroll_wins, "scroll: conditioning helps", 2, key=lambda r: r["distD"])
+    take(types_clean, "type: degenerate (both fail)", 1, key=lambda r: r["distD"])
+    for r in sorted(rows, key=lambda r: r["distD"]):  # pad to 6 with best remaining
         if len(sel) >= 6:
             break
         if r["i"] not in used:
-            sel.append((r["action"], r)); used.add(r["i"])
+            sel.append({"title": r["action"], **r}); used.add(r["i"])
+    sel = sel[:6]
+
+    out_dir = _Path(STAGE1_CACHE_PATH) / "qualitative"; out_dir.mkdir(parents=True, exist_ok=True)
+
+    # ---- dump raw selected screenshots + coords (for fast local re-rendering) ----
+    data_dir = out_dir / "data"; data_dir.mkdir(parents=True, exist_ok=True)
+    render_panels = []
+    for k, r in enumerate(sel):
+        ex = val_examples[r["i"]]; im = ex.image.convert("RGB")
+        im.save(data_dir / f"panel_{k}.png")
+        render_panels.append({"panel": k, "file": f"panel_{k}.png", "title": r["title"],
+                              "action": r["action"], "goal": ex.goal_info,
+                              "W": im.width, "H": im.height, "gold": r["gold"],
+                              "predA": r["predA"], "predD": r["predD"],
+                              "distA": r["distA"], "distD": r["distD"]})
+    (out_dir / "render.json").write_text(_json.dumps(
+        {"n_train": n_train, "n_val": len(val_examples),
+         "click_hit_A": sum(1 for r in clicks if r["distA"] <= 0.10) / max(len(clicks), 1),
+         "click_hit_D": sum(1 for r in clicks if r["distD"] <= 0.10) / max(len(clicks), 1),
+         "panels": render_panels}, indent=2, default=float))
+
+    # ---- inline render: axes LOCKED to image, off-canvas markers CLAMPED ----
+    import matplotlib.patheffects as pe
+    halo = [pe.withStroke(linewidth=3, foreground="white")]
+
+    def clamp(p, W, H):
+        return None if p is None else (min(max(p[0], 0.0), 1.0) * W, min(max(p[1], 0.0), 1.0) * H)
 
     cols = 3; rowsn = max(1, math.ceil(len(sel) / cols))
-    fig, axes = plt.subplots(rowsn, cols, figsize=(cols * 3.3, rowsn * 4.4))
+    fig, axes = plt.subplots(rowsn, cols, figsize=(cols * 2.4, rowsn * 4.7))
     axes = np.array(axes).reshape(-1)
     for ax in axes:
         ax.axis("off")
-    for ax, (title, r) in zip(axes, sel):
+    for ax, r in zip(axes, sel):
         ex = val_examples[r["i"]]; img = np.array(ex.image.convert("RGB")); H, W = img.shape[:2]
         ax.imshow(img)
-        gx, gy = r["gold"]
-        ax.scatter([gx * W], [gy * H], s=180, marker="o", facecolors="none",
-                   edgecolors="#00c000", linewidths=2.6, label="ground truth")
-        if r["predA"]:
-            ax.scatter([r["predA"][0] * W], [r["predA"][1] * H], s=150, marker="x",
-                       c="#e01010", linewidths=2.6, label="flat A")
-        if r["predD"]:
-            ax.scatter([r["predD"][0] * W], [r["predD"][1] * H], s=150, marker="x",
-                       c="#1060e0", linewidths=2.6, label="D-hook (conditioned)")
-        ax.set_title(f"{title}\nA dist={r['distA']:.2f}   D dist={r['distD']:.2f}", fontsize=8)
+        ax.set_xlim(0, W); ax.set_ylim(H, 0)  # lock to image extent: no whitespace blowup
+        ax.scatter([r["gold"][0] * W], [r["gold"][1] * H], s=320, marker="o", facecolors="none",
+                   edgecolors="#11cc11", linewidths=3.0, path_effects=halo, zorder=6, label="ground truth")
+        a = clamp(r["predA"], W, H); d = clamp(r["predD"], W, H)
+        if a:
+            ax.scatter([a[0]], [a[1]], s=240, marker="X", c="#ec1c1c", edgecolors="white",
+                       linewidths=1.4, zorder=7, label="flat A")
+        if d:
+            ax.scatter([d[0]], [d[1]], s=240, marker="X", c="#1f6fe0", edgecolors="white",
+                       linewidths=1.4, zorder=8, label="D-hook (conditioned)")
+        ax.set_title(f"{r['title']}\nA dist={r['distA']:.2f}   D dist={r['distD']:.2f}", fontsize=9)
         ax.axis("off")
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=3, fontsize=10)
+    fig.legend(handles, labels, loc="lower center", ncol=3, fontsize=11, frameon=False)
     fig.suptitle("Qualitative grounding: predicted vs. ground-truth point "
-                 "(AITW all_with_coords, n_train=800)", y=0.99, fontsize=11)
-    fig.tight_layout(rect=[0, 0.05, 1, 0.96])
+                 "(AITW all_with_coords, n_train=800)", y=0.995, fontsize=12)
+    fig.tight_layout(rect=[0, 0.045, 1, 0.965])
 
-    out_dir = _Path(STAGE1_CACHE_PATH) / "qualitative"; out_dir.mkdir(parents=True, exist_ok=True)
     figpath = out_dir / "qualitative_grounding.png"
-    fig.savefig(figpath, dpi=150, bbox_inches="tight")
-    (out_dir / "manifest.json").write_text(_json.dumps(
-        {"n_val": len(val_examples),
-         "click_hit_A": sum(1 for r in clicks if r["distA"] <= 0.10) / max(len(clicks), 1),
-         "click_hit_D": sum(1 for r in clicks if r["distD"] <= 0.10) / max(len(clicks), 1),
-         "selected": [{"title": t, **{k: r[k] for k in ("i", "action", "gold", "predA", "predD", "distA", "distD")}}
-                      for t, r in sel]}, indent=2, default=float))
+    fig.savefig(figpath, dpi=150, bbox_inches="tight"); plt.close(fig)
     stage1_cache.commit()
-    print(f"[qual] saved {figpath} with {len(sel)} panels")
+    print(f"[qual] saved {figpath} with {len(sel)} panels; raw dump in {data_dir}")
     return {"figure": "qualitative/qualitative_grounding.png", "n_selected": len(sel)}
 
 
