@@ -40,12 +40,17 @@ def clamp(p, W, H):
 
 def main() -> None:
     meta = json.loads(RENDER.read_text())
-    panels = meta["panels"][:6]
+    # Keep only the informative panels (drop 'both correct' and 'type degenerate'),
+    # laid out in a single wide row so the figure fits the page width.
+    KEEP = [0, 1, 3, 4]
+    NCOLS = 4
+    allp = meta["panels"]
+    panels = [allp[i] for i in KEEP if i < len(allp)]
     print(f"click hit: A={meta.get('click_hit_A'):.3f}  D-hook={meta.get('click_hit_D'):.3f}")
     halo = [pe.withStroke(linewidth=3, foreground="white")]
-    cols = 3
+    cols = NCOLS
     rowsn = max(1, (len(panels) + cols - 1) // cols)
-    fig, axes = plt.subplots(rowsn, cols, figsize=(cols * 2.5, rowsn * 5.6))
+    fig, axes = plt.subplots(rowsn, cols, figsize=(cols * 2.5, rowsn * 5.8))
     axes = np.array(axes).reshape(-1)
     for ax in axes:
         ax.axis("off")
@@ -70,12 +75,12 @@ def main() -> None:
                      fontsize=9, pad=6)
         ax.axis("off")
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.subplots_adjust(left=0.02, right=0.98, top=0.93, bottom=0.065,
-                        wspace=0.06, hspace=0.40)
-    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.012),
+    fig.subplots_adjust(left=0.015, right=0.985, top=0.88, bottom=0.105,
+                        wspace=0.05, hspace=0.40)
+    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.025),
                ncol=3, fontsize=11, frameon=False)
     fig.suptitle("Qualitative grounding: predicted vs. ground-truth point "
-                 "(AITW all_with_coords, n_train=800)", y=0.975, fontsize=12)
+                 "(AITW all_with_coords, n_train=800)", y=0.965, fontsize=12)
     fig.savefig(OUT, dpi=150, bbox_inches="tight")
     print(f"wrote {OUT}")
 
