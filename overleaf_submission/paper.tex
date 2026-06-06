@@ -9,6 +9,20 @@
 \usepackage{booktabs}
 \usepackage{multirow}
 
+\makeatletter
+\def\@maketitle{%
+   \newpage \null
+   \vskip .15in
+   \begin{center}
+      {\Large \bf \@title \par}
+      \vspace*{12pt}
+      {\large \lineskip .5em
+       \begin{tabular}[t]{c}\@author\end{tabular}\par}
+      \vskip .3em
+   \end{center}%
+}
+\makeatother
+
 % Include other packages here, before hyperref.
 \usepackage[breaklinks=true,bookmarks=false]{hyperref}
 
@@ -132,6 +146,22 @@ We evaluate five variants, each sharing identical data, optimizer ($\text{lr} = 
 
 \textbf{D-token (prepended token, the hypothesis).} A dedicated sentinel token \texttt{<|action\_slot|>} is appended to the tokenizer vocabulary. During training and inference, this token is prepended to the instruction, and its embedding is replaced in-place with the row of $E$ corresponding to the current action type. Because the token is in the normal \texttt{input\_ids} path, Qwen2-VL's M-RoPE position computation is preserved. The embedding norm at convergence is $\approx 2.2$, making the conditioning signal routable and localized.
 
+\paragraph{Training objective.}
+Let $s$ be the screenshot, $g$ the instruction, $a \in \{1,\dots,8\}$ the action type, and $y_{1:T}$ the ground-truth coordinate token string. Every variant minimizes the autoregressive grounding loss, computed only over coordinate tokens,
+\begin{equation}
+\mathcal{L}_{\mathrm{coord}} = -\sum_{t=1}^{T} \log p_\theta\!\big(y_t \mid y_{<t},\, s,\, g,\, c\big),
+\label{eq:coord}
+\end{equation}
+where $c$ is the variant-specific conditioning. The flat baseline (A) uses $c=\varnothing$. The auxiliary-loss variant (B) adds a linear head $h_\phi$ on the mean-pooled hidden state $\bar{z}$ and minimizes
+\begin{equation}
+\mathcal{L}_{\mathrm{B}} = \mathcal{L}_{\mathrm{coord}} + \lambda\,\mathrm{CE}\!\big(h_\phi(\bar{z}),\, a\big), \qquad \lambda = 1,
+\label{eq:aux}
+\end{equation}
+with no conditioning at inference ($c=\varnothing$). The embedding variants set $c = E[a]$, the learned row of $E$, injected additively across all token embeddings (D-hook) or substituted at the slot position (D-token); both optimize Eq.~\eqref{eq:coord} with $E$ trained jointly by backpropagation. Hard routing (C) appends the action word to the target and optimizes Eq.~\eqref{eq:coord} over the word-plus-coordinate string, forcing the word as a decode prefix at test time.
+
+\paragraph{Implementation.}
+Our code builds on HuggingFace Transformers and the PEFT LoRA implementation for the Qwen2-VL-2B backbone; all Stage~1 feature extraction and MLP training, the five Stage~2 conditioning mechanisms, the grounding evaluation and paired-bootstrap harness, and the AITW/Mind2Web preprocessing are our own. Training and feature extraction are orchestrated on Modal (NVIDIA L4 GPUs).
+
 \subsection{M-RoPE Implementation Pitfall}
 
 \begin{figure}[t]
@@ -158,7 +188,7 @@ All Stage~2 experiments use AITW unless noted. We run 3 seeds (42, 43, 44) for e
 
 \subsection{Stage 1: Vision Is Essential on AITW}
 
-\begin{table}[h]
+\begin{table}[tb]
 \begin{center}
 \small
 \begin{tabular}{lcc}
@@ -188,7 +218,7 @@ The sanity check passes: \texttt{vision\_zeroed} (zero features) collapses to th
 
 The primary ablation uses AITW data where all five action classes are present and coordinates are meaningful: $n_{\text{train}} = 1200$, 2 epochs, \texttt{all\_with\_coords} data mix. Table~\ref{tab:ablation} and Figure~\ref{fig:ablation} show the results.
 
-\begin{table}[h]
+\begin{table}[tb]
 \begin{center}
 \small
 \begin{tabular}{lccc}
@@ -215,7 +245,7 @@ C (hard routing) performs middling: it forces the action-type word as a decode p
 
 \subsection{Control Condition: taps\_and\_swipes}
 
-\begin{table}[h]
+\begin{table}[tb]
 \begin{center}
 \small
 \begin{tabular}{lccc}
@@ -239,7 +269,7 @@ A second control benchmark, Multimodal-Mind2Web (click/type-dominated), replicat
 
 \subsection{End-to-End Pipeline}
 
-\begin{table}[h]
+\begin{table}[tb]
 \begin{center}
 \small
 \begin{tabular}{lc}
@@ -281,7 +311,7 @@ Table~\ref{tab:e2e} shows the end-to-end result with Stage~1 predicted types fee
 
 Figure~\ref{fig:perclass} and Table~\ref{tab:perclass} break down Stage~2 hit@0.10 by action class. The overall conditioning win is a \emph{click} win. B gains $+0.120$ and C gains $+0.122$ on click (68\% of the val set), explaining their overall headline improvement. The \emph{type} class scores exactly $0.000$ hit@0.10 across \emph{all} variants, with mean normalized L2 $= \sqrt{2}$ (corner-to-corner), revealing that AITW \texttt{type} actions carry pinned/degenerate touch coordinates that are ungroundable by any model. This corrects an earlier interpretation: the grounding gain is not about localizing text input fields; it is about \emph{click-vs-scroll/type disambiguation} for the precise-target class. Figure~\ref{fig:qualitative} shows representative predictions illustrating this: the conditioned model lands nearer the target than flat A on both click and scroll examples.
 
-\begin{table}[h]
+\begin{table}[tb]
 \begin{center}
 \small
 \begin{tabular}{lcccc}
@@ -318,7 +348,7 @@ D-hook is the most stable low-data mechanism: it has the best hit@0.25 and mean 
 
 \subsection{D-Token Causal-Use Test}
 
-\begin{table}[h]
+\begin{table}[tb]
 \begin{center}
 \small
 \begin{tabular}{lccc}
@@ -340,35 +370,37 @@ gold $-$ zero & $+0.093^{**}$ & $+0.112^{**}$ & — \\
 
 If the D-token embedding were ignored at inference (a plausible explanation for its failure to beat B), swapping in the wrong action id should have no effect. Table~\ref{tab:causal} rules this out. Feeding a wrong action id collapses hit@0.10 from 0.276 to 0.084 ($-0.192$, $p < 0.001$); zeroing the embedding also hurts ($-0.093$, $p < 0.001$). The learned D-token embedding is \textbf{causally used at inference}. The refutation of D-token as the winning mechanism is therefore precise: the embedding is not inert, but it is not the best way to exploit action-type supervision compared to B's auxiliary loss or D-hook's additive conditioning.
 
-% ---- OPTIONAL: attention-visualization figure (asset already in figures/) ----
-% Uncomment this block to include the attention heatmap. NOTE: if you use it,
-% update the "Future directions" sentence in the Conclusion that currently lists
-% attention visualization as future work, since you would then have done it.
-% \begin{figure}[t]
-% \begin{center}
-% \includegraphics[width=0.98\linewidth]{figures/attn_example_1.png}
-% \end{center}
-% \caption{Image-region attention for a held-out \emph{click} example under three
-% action-type conditionings. Conditioning on the correct type (click) places more
-% attention mass on the screenshot ($0.204$) than conditioning on \emph{type}
-% ($0.132$) or \emph{scroll} ($0.110$), indicating the conditioning signal reshapes
-% spatial attention.}
-% \label{fig:attention}
-% \end{figure}
+\paragraph{Attention visualization.}
+Figure~\ref{fig:attention} visualizes image-region attention for a held-out \emph{click} example under three action-type conditionings. Conditioning on the correct type concentrates more attention mass on the screenshot ($0.204$) than conditioning on \emph{type} ($0.132$) or \emph{scroll} ($0.110$), indicating that the conditioning signal reshapes where the model attends.
+
+\begin{figure}[tb]
+\begin{center}
+\includegraphics[width=0.98\linewidth]{figures/attn_example_1.png}
+\end{center}
+\caption{Image-region attention for a held-out \emph{click} example under three action-type conditionings. Conditioning on the correct type (click) places more attention mass on the screenshot ($0.204$) than conditioning on \emph{type} ($0.132$) or \emph{scroll} ($0.110$), indicating the conditioning signal reshapes spatial attention.}
+\label{fig:attention}
+\end{figure}
 
 \section{Conclusion}
 
 We studied action-type-conditioned grounding for GUI agents through a controlled five-variant ablation with paired-bootstrap significance. The main findings:
 
-\textbf{Supported}: Factoring action-type prediction from spatial grounding significantly improves hit rates when action type is spatially informative (click-vs-scroll/type discrimination). The advantage is largest at low data and concentrated in the click class. A full two-stage pipeline with predicted types beats the flat end-to-end baseline end-to-end.
+\textbf{Supported}: Factoring action-type prediction from spatial grounding significantly improves hit rates when action type is spatially informative (click-vs-scroll/type discrimination). The advantage is largest at low data and concentrated in the click class. A full two-stage pipeline with predicted types beats the flat baseline end-to-end.
 
 \textbf{Refuted}: The specific mechanism proposed — a learned prepended action-type embedding — is not the winning approach. An auxiliary training loss (Variant B), which provides no inference-time conditioning, captures the full benefit of action-type supervision with less complexity. Stronger embedding signals (D-token, norm 2.2) compete with the image/instruction for attention rather than complement them.
 
 \textbf{Documented}: A M-RoPE implementation pitfall where \texttt{inputs\_embeds} injection bypasses position-ID computation in Qwen2-VL, producing large false negatives that mask true model behavior.
 
-\textbf{Mechanistic insight}: The grounding gain is click-specific click disambiguation (68\% of val), not field localization. AITW \texttt{type} coordinates are degenerate, so the residual vision-grounding challenge on this dataset is click-vs-scroll/type classification, not precise text-field targeting.
+\textbf{Mechanistic insight}: The grounding gain is click-specific disambiguation (68\% of val), not field localization. AITW \texttt{type} coordinates are degenerate, so the residual vision-grounding challenge on this dataset is click-vs-scroll/type classification, not precise text-field targeting.
 
-\textbf{Future directions}: The auxiliary-loss finding suggests that better action-type training signal — even without explicit inference-time routing — is the more promising lever. Future work could explore attention visualization to confirm that the auxiliary loss reshapes spatial attention differently for click vs.\ scroll, test the conditioning advantage on ScreenSpot~\cite{seeclick} where grounding targets are diverse, and extend to larger backbones (Qwen2-VL-7B) to test whether the scaling behavior changes.
+\textbf{Future directions}: The auxiliary-loss finding suggests that better action-type training signal — even without explicit inference-time routing — is the more promising lever. Future work could test the conditioning advantage on ScreenSpot~\cite{seeclick} where grounding targets are diverse, and extend to larger backbones (Qwen2-VL-7B) to test whether the scaling behavior changes.
+
+%%%%%%%%% CONTRIBUTIONS + GENAI (not counted toward the page limit)
+\section*{Contributions}
+\emph{[Template --- replace with your actual breakdown.]} \textbf{A.\ Chauhan}: [e.g., Stage~2 conditioning variants, Modal training/evaluation infrastructure, ablation experiments, statistical analysis, writing]. \textbf{A.\ Ilyasov}: [e.g., Stage~1 classifier, data pipeline, figures, error analysis, writing]. Both authors contributed to problem formulation, experimental design, and the final manuscript. [If all members contributed equally, state that explicitly here.]
+
+\section*{Generative AI Usage Statement}
+\emph{[Template --- verify and edit to accurately reflect your usage.]} We used generative AI tools ([tool name(s)]) as a coding and formatting aid: generating and debugging Stage~1/Stage~2 training and evaluation code, scaffolding the Modal entry points, producing figures and tables, and LaTeX formatting. All research design, hypotheses, experiments, analysis, and interpretation are our own, and we independently verified every reported number against our logged experimental results. Generative AI was not used to write the substantive analytical content of this report.
 
 {\small
 \bibliographystyle{ieee}
