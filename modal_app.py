@@ -4225,7 +4225,7 @@ def _stage2_qualitative_remote(
         return None if p is None else (min(max(p[0], 0.0), 1.0) * W, min(max(p[1], 0.0), 1.0) * H)
 
     cols = 3; rowsn = max(1, math.ceil(len(sel) / cols))
-    fig, axes = plt.subplots(rowsn, cols, figsize=(cols * 2.4, rowsn * 4.7))
+    fig, axes = plt.subplots(rowsn, cols, figsize=(cols * 2.5, rowsn * 5.6))
     axes = np.array(axes).reshape(-1)
     for ax in axes:
         ax.axis("off")
@@ -4242,13 +4242,17 @@ def _stage2_qualitative_remote(
         if d:
             ax.scatter([d[0]], [d[1]], s=240, marker="X", c="#1f6fe0", edgecolors="white",
                        linewidths=1.4, zorder=8, label="D-hook (conditioned)")
-        ax.set_title(f"{r['title']}\nA dist={r['distA']:.2f}   D dist={r['distD']:.2f}", fontsize=9)
+        ax.set_anchor("N")  # top-align image in its cell so titles never collide
+        ax.set_title(f"{r['title']}\nA dist={r['distA']:.2f}   D dist={r['distD']:.2f}",
+                     fontsize=9, pad=6)
         ax.axis("off")
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=3, fontsize=11, frameon=False)
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.93, bottom=0.065,
+                        wspace=0.06, hspace=0.40)
+    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.012),
+               ncol=3, fontsize=11, frameon=False)
     fig.suptitle("Qualitative grounding: predicted vs. ground-truth point "
-                 "(AITW all_with_coords, n_train=800)", y=0.995, fontsize=12)
-    fig.tight_layout(rect=[0, 0.045, 1, 0.965])
+                 "(AITW all_with_coords, n_train=800)", y=0.975, fontsize=12)
 
     figpath = out_dir / "qualitative_grounding.png"
     fig.savefig(figpath, dpi=150, bbox_inches="tight"); plt.close(fig)
