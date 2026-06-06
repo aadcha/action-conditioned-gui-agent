@@ -34,7 +34,7 @@ Stanford University\\
 \begin{tabular}{c}
 \textbf{Arthur Ilyasov*}\\
 Stanford University\\
-{\tt\small arthuri@stanford.edu}
+{\tt\small ailyasov@stanford.edu}
 \end{tabular}
 \end{tabular}
 }
@@ -263,6 +263,14 @@ Table~\ref{tab:e2e} shows the end-to-end result with Stage~1 predicted types fee
 \subsection{Per-Action-Type Decomposition}
 \label{sec:perclass}
 
+\begin{figure*}[t]
+\begin{center}
+\includegraphics[width=0.93\linewidth]{figures/qualitative_grounding.png}
+\end{center}
+\caption{Qualitative grounding predictions on held-out AITW screenshots: ground truth (green $\circ$), flat baseline A (red $\times$), and conditioned D-hook (blue $\times$); each panel reports both per-example normalized distances. Conditioning rescues \emph{click} targets the flat baseline misses (left), both models succeed on easy clicks, and both fail on \emph{type} actions whose AITW touch coordinates are degenerate (corner-pinned), visually confirming the per-class analysis in Table~\ref{tab:perclass}.}
+\label{fig:qualitative}
+\end{figure*}
+
 \begin{figure}[t]
 \begin{center}
 \includegraphics[width=0.98\linewidth]{figures/compounding_error_per_class.png}
@@ -271,7 +279,7 @@ Table~\ref{tab:e2e} shows the end-to-end result with Stage~1 predicted types fee
 \label{fig:perclass}
 \end{figure}
 
-Figure~\ref{fig:perclass} and Table~\ref{tab:perclass} break down Stage~2 hit@0.10 by action class. The overall conditioning win is a \emph{click} win. B gains $+0.120$ and C gains $+0.122$ on click (68\% of the val set), explaining their overall headline improvement. The \emph{type} class scores exactly $0.000$ hit@0.10 across \emph{all} variants, with mean normalized L2 $= \sqrt{2}$ (corner-to-corner), revealing that AITW \texttt{type} actions carry pinned/degenerate touch coordinates that are ungroundable by any model. This corrects an earlier interpretation: the grounding gain is not about localizing text input fields; it is about \emph{click-vs-scroll/type disambiguation} for the precise-target class.
+Figure~\ref{fig:perclass} and Table~\ref{tab:perclass} break down Stage~2 hit@0.10 by action class. The overall conditioning win is a \emph{click} win. B gains $+0.120$ and C gains $+0.122$ on click (68\% of the val set), explaining their overall headline improvement. The \emph{type} class scores exactly $0.000$ hit@0.10 across \emph{all} variants, with mean normalized L2 $= \sqrt{2}$ (corner-to-corner), revealing that AITW \texttt{type} actions carry pinned/degenerate touch coordinates that are ungroundable by any model. This corrects an earlier interpretation: the grounding gain is not about localizing text input fields; it is about \emph{click-vs-scroll/type disambiguation} for the precise-target class. Figure~\ref{fig:qualitative} shows representative predictions illustrating this: conditioning recovers click targets the flat baseline misses, while both models fail on the degenerate \texttt{type} targets.
 
 \begin{table}[h]
 \begin{center}
@@ -331,6 +339,22 @@ gold $-$ zero & $+0.093^{**}$ & $+0.112^{**}$ & — \\
 \end{table}
 
 If the D-token embedding were ignored at inference (a plausible explanation for its failure to beat B), swapping in the wrong action id should have no effect. Table~\ref{tab:causal} rules this out. Feeding a wrong action id collapses hit@0.10 from 0.276 to 0.084 ($-0.192$, $p < 0.001$); zeroing the embedding also hurts ($-0.093$, $p < 0.001$). The learned D-token embedding is \textbf{causally used at inference}. The refutation of D-token as the winning mechanism is therefore precise: the embedding is not inert, but it is not the best way to exploit action-type supervision compared to B's auxiliary loss or D-hook's additive conditioning.
+
+% ---- OPTIONAL: attention-visualization figure (asset already in figures/) ----
+% Uncomment this block to include the attention heatmap. NOTE: if you use it,
+% update the "Future directions" sentence in the Conclusion that currently lists
+% attention visualization as future work, since you would then have done it.
+% \begin{figure}[t]
+% \begin{center}
+% \includegraphics[width=0.98\linewidth]{figures/attn_example_1.png}
+% \end{center}
+% \caption{Image-region attention for a held-out \emph{click} example under three
+% action-type conditionings. Conditioning on the correct type (click) places more
+% attention mass on the screenshot ($0.204$) than conditioning on \emph{type}
+% ($0.132$) or \emph{scroll} ($0.110$), indicating the conditioning signal reshapes
+% spatial attention.}
+% \label{fig:attention}
+% \end{figure}
 
 \section{Conclusion}
 
