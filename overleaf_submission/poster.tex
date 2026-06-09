@@ -1,575 +1,236 @@
-% ============================================================
-%  40 x 30 inch LANDSCAPE research poster
-%  For Overleaf: change graphicspath to {figures/}
-%  Compile: pdflatex poster.tex
-% ============================================================
+% Stanford Gemini Poster — pdfLaTeX compatible
+% Compiler: pdfLaTeX (default on Overleaf)
+
 \documentclass[final]{beamer}
 
-\usepackage[
-  orientation=landscape,
-  size=custom,
-  width=101.6,   % 40 inches in cm
-  height=76.2,   % 30 inches in cm
-  scale=1.15
-]{beamerposter}
-
-\usepackage{graphicx}
-\usepackage{booktabs}
-\usepackage{multirow}
-\usepackage{amsmath,amssymb}
-\usepackage{tikz}
-\usepackage{xcolor}
-\usepackage{ragged2e}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
-\usepackage[most]{tcolorbox}
-\usepackage{setspace}
+\usepackage[size=custom,width=101.6,height=76.2,scale=1.0]{beamerposter}
+\usetheme{gemini}
+\usecolortheme{stanford}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usepackage{amsmath}
+\usepackage{amssymb}
 \usepackage{array}
-\usepackage{tabularx}
+\usepackage{enumitem}
 
-\usetikzlibrary{positioning,arrows.meta,shapes.rounded,calc}
+\graphicspath{{figures/}{overleaf_submission/figures/}}
 
-%% ── Figure path: change to {figures/} on Overleaf ──────────
-\graphicspath{{figures/}}
-  {results/phase2/}
-  {results/phase3/}
-  {results/phase4/}
+% ====================
+% Lengths — 3 columns
+% ====================
+\newlength{\sepwidth}
+\newlength{\colwidth}
+\setlength{\sepwidth}{0.020\paperwidth}
+\setlength{\colwidth}{0.313\paperwidth}
+
+\newcommand{\separatorcolumn}{\begin{column}{\sepwidth}\end{column}}
+
+\setlength{\abovecaptionskip}{0.2ex}
+\setlength{\belowcaptionskip}{0ex}
+\setlist{nosep, leftmargin=1.5em, topsep=0pt, itemsep=1pt, parsep=0pt}
+
+% ====================
+% Title / Authors
+% ====================
+\title{Decoupling What from Where: Action-Type-Conditioned Grounding for GUI Agents}
+\author{Aadi Chauhan \and Arthur Ilyasov}
+\institute[Stanford]{Stanford University \quad CS 231N, Spring 2026}
+
+\footercontent{
+  CS 231N: Deep Learning for Computer Vision \hfill
+  Stanford University, Spring 2026 \hfill
+  \{aadic, ailyasov\}@stanford.edu
 }
 
-%% ── Palette ─────────────────────────────────────────────────
-\definecolor{Cardinal}{HTML}{8C1515}
-\definecolor{CardinalDk}{HTML}{5E0000}
-\definecolor{CardinalLt}{HTML}{F6E8E8}
-\definecolor{PaloAlto}{HTML}{175E54}
-\definecolor{Bay}{HTML}{005F86}
-\definecolor{Sand}{HTML}{D2C295}
-\definecolor{FogGray}{HTML}{F2F2F2}
-\definecolor{BorderGray}{HTML}{CCCCCC}
-\definecolor{TextDark}{HTML}{111111}
-\definecolor{TextMid}{HTML}{555555}
-\definecolor{Gold}{HTML}{B26F16}
+\begin{document}
 
-%% ── Beamer defaults ─────────────────────────────────────────
-\usetheme{default}
-\setbeamercolor{background canvas}{bg=white}
-\setbeamercolor{normal text}{fg=TextDark}
-\setbeamertemplate{navigation symbols}{}
-\setbeamertemplate{caption}{\raggedright\insertcaption\par}
-
-%% ── tcolorbox: main content block ───────────────────────────
-\tcbset{
-  block/.style={
-    enhanced, breakable,
-    colback=white, colframe=BorderGray,
-    coltitle=white, colbacktitle=Cardinal,
-    fonttitle=\bfseries\large,
-    attach boxed title to top left={yshift=-1mm, xshift=2mm},
-    boxed title style={
-      colback=Cardinal, colframe=Cardinal,
-      arc=1pt, outer arc=1pt,
-      boxrule=0pt,
-      left=5pt, right=5pt, top=2pt, bottom=2pt
-    },
-    arc=2pt, boxrule=0.7pt,
-    top=8pt, bottom=6pt, left=7pt, right=7pt,
-    before skip=5pt, after skip=5pt,
-  },
-  %% ── callout variants ──
-  greenbox/.style={
-    enhanced, colback=PaloAlto!8, colframe=PaloAlto,
-    arc=2pt, boxrule=1pt,
-    top=5pt, bottom=5pt, left=7pt, right=7pt,
-    before skip=3pt, after skip=3pt,
-  },
-  redbox/.style={
-    enhanced, colback=CardinalLt, colframe=Cardinal,
-    arc=2pt, boxrule=1pt,
-    top=5pt, bottom=5pt, left=7pt, right=7pt,
-    before skip=3pt, after skip=3pt,
-  },
-  bluebox/.style={
-    enhanced, colback=Bay!8, colframe=Bay,
-    arc=2pt, boxrule=1pt,
-    top=5pt, bottom=5pt, left=7pt, right=7pt,
-    before skip=3pt, after skip=3pt,
-  },
+\addtobeamertemplate{headline}{}
+{
+  \begin{tikzpicture}[remember picture,overlay]
+    \node [anchor=north east, inner sep=1.4cm]
+      at ([xshift=0.0cm,yshift=1.4cm]current page.north east)
+      {\includegraphics[height=4.8cm]{Block_S_2_color.png}};
+  \end{tikzpicture}
 }
 
-%% ── Variant badge ────────────────────────────────────────────
-\newcommand{\vbadge}[2][Cardinal]{%
-  \colorbox{#1}{\textcolor{white}{\bfseries\small\;#2\;}}}
-
-%% ── List spacing ─────────────────────────────────────────────
-\setlength{\leftmargini}{1.3em}
+\begin{frame}[t]
+\begin{columns}[t]
+\separatorcolumn
 
 % ============================================================
-\begin{document}
-\begin{frame}[t]{}
+% COLUMN 1
+% ============================================================
+\begin{column}{\colwidth}
 
-%% ══════════════════════════════════════════════════════════
-%%  HEADER
-%% ══════════════════════════════════════════════════════════
-\begin{tikzpicture}[remember picture, overlay]
-  %% Cardinal banner
-  \fill[Cardinal]
-    (current page.north west) rectangle
-    ([yshift=-5.4cm] current page.north east);
-  %% Gold rule
-  \fill[Gold]
-    ([yshift=-5.4cm] current page.north west) rectangle
-    ([yshift=-5.75cm] current page.north east);
+  \begin{block}{Motivation: The Compounding-Error Problem}
+    GUI agents must predict an \textbf{action type} (\emph{click, scroll, type, \ldots}) and a \textbf{pixel-level target} from a screenshot and instruction. State-of-the-art models (UI-TARS, OS-Atlas, SeeClick) emit both in one autoregressive decode, entangling the two sub-problems.
 
-  %% Left Stanford seal
-  \node[circle, draw=white, line width=2pt,
-        fill=CardinalDk, text=white,
-        font=\fontsize{28}{28}\bfseries\selectfont,
-        minimum size=3.4cm, anchor=north west]
-    at ([xshift=1.0cm, yshift=-0.9cm] current page.north west) {S};
-  %% Right Stanford seal
-  \node[circle, draw=white, line width=2pt,
-        fill=CardinalDk, text=white,
-        font=\fontsize{28}{28}\bfseries\selectfont,
-        minimum size=3.4cm, anchor=north east]
-    at ([xshift=-1.0cm, yshift=-0.9cm] current page.north east) {S};
+    \textbf{Failure mode:} Committing to the wrong action type causes coherent-but-wrong grounding: the model clicks precisely within the wrong semantic region. On long-horizon tasks these errors compound --- each mistyped action corrupts screen state for every subsequent step.
 
-  %% Title
-  \node[text=white, anchor=north,
-        font=\fontsize{42}{50}\bfseries\selectfont,
-        text width=88cm, align=center]
-    at ([yshift=-0.7cm] current page.north)
-    {Decoupling What from Where: Action-Type-Conditioned Grounding for GUI Agents};
+    \textbf{Our question:} Does explicitly factoring action-type prediction from spatial grounding reduce this error? We show it does, but the \emph{mechanism} that captures the benefit is not the one we hypothesized.
 
-  %% Authors
-  \node[text=white, anchor=north,
-        font=\fontsize{24}{30}\selectfont,
-        text width=88cm, align=center]
-    at ([yshift=-3.0cm] current page.north)
-    {Aadi Chauhan \quad $\bullet$ \quad Arthur Ilyasov};
+    \begin{figure}
+      \centering
+      \includegraphics[width=\linewidth]{qualitative_grounding.png}
+      \caption{Qualitative grounding examples. Conditioned model (right) correctly targets the intended element; flat baseline (left) grounds in the wrong semantic region of the screen.}
+    \end{figure}
+  \end{block}
 
-  %% Affiliation
-  \node[text=Sand, anchor=north,
-        font=\fontsize{19}{24}\selectfont,
-        text width=88cm, align=center]
-    at ([yshift=-4.15cm] current page.north)
-    {Stanford University $\;\cdot\;$ Department of Computer Science
-     $\;\cdot\;$ CS 231N, Spring 2026};
-\end{tikzpicture}
+  \begin{block}{Two-Stage Pipeline}
+    \heading{Stage 1 --- Action-Type Classifier}
+    A \textbf{frozen} Qwen2-VL-2B backbone extracts mean-pooled visual + text features; a 3-layer MLP classifies the action type (click / scroll / type). Vision is critical on AITW ($+0.414$ macro-F1 over text-only) but negligible on Mind2Web ($+0.009$), because AITW instructions describe \emph{goals} rather than explicitly naming the action. Stage 1 achieves \textbf{0.843 accuracy, 0.795 macro-F1} with no extra backbone cost at inference.
 
-\vspace{6.1cm}
+    \heading{Stage 2 --- Conditioned Grounder}
+    A LoRA-fine-tuned Qwen2-VL-2B predicts the coordinate \texttt{(x,y)} on a 0--999 grid, conditioned on the Stage~1 action-type prediction via one of five mechanisms (A through D-token, described in the center column). The oracle$\to$predicted end-to-end gap is only $\approx\!0.02$ hit@0.10 --- classifier error is not the bottleneck.
 
-%% ══════════════════════════════════════════════════════════
-%%  BODY — four columns
-%% ══════════════════════════════════════════════════════════
-\begin{columns}[t, totalwidth=\linewidth]
-
-%% ─────────────────────────── COL 1  (23%) ──────────────────
-\begin{column}{0.232\linewidth}
-
-%%-- Summary
-\begin{tcolorbox}[block, title=Summary]
-\small\justifying
-GUI agents jointly predict an \textbf{action type}
-(\textit{click, scroll, type,~\ldots}) and a \textbf{target coordinate}
-from a screenshot. Existing end-to-end models entangle both in one
-autoregressive decode, creating the \textbf{coherent-but-wrong} failure:
-commit to the wrong action type, ground precisely within that wrong frame.
-
-\smallskip
-\textbf{We study a two-stage factorization:}
-\begin{enumerate}\setlength\itemsep{2pt}\small
-  \item \textbf{Stage 1 —} Frozen VLM + MLP $\to$ action type
-  \item \textbf{Stage 2 —} LoRA grounder conditioned on predicted type $\to$ \texttt{(x,\,y)}
-\end{enumerate}
-We evaluate \textbf{five conditioning variants} across two benchmarks
-with paired-bootstrap significance.
-\end{tcolorbox}
-
-\begin{tcolorbox}[greenbox]
-\small\textcolor{PaloAlto}{\bfseries $\checkmark$ Supported:}\;
-B \& D-hook significantly beat flat baseline when action type
-is spatially informative ($p<0.002$).
-Two-stage pipeline beats flat E2E ($0.271$ vs $0.255$).
-\end{tcolorbox}
-
-\begin{tcolorbox}[redbox]
-\small\textcolor{Cardinal}{\bfseries $\times$ Refuted:}\;
-Learned prepended embedding (D-token) is \emph{not} the best
-mechanism. A plain auxiliary loss (B) wins with no inference-time
-conditioning.
-\end{tcolorbox}
-
-\begin{tcolorbox}[bluebox]
-\small\textcolor{Bay}{\bfseries $\bullet$ Pitfall documented:}\;
-\texttt{inputs\_embeds} injection in Qwen2-VL silently bypasses
-M-RoPE, producing an $8\sigma$ false negative.
-\end{tcolorbox}
-
-\vspace{1pt}
-
-%%-- Motivation
-\begin{tcolorbox}[block, title=Motivation]
-\small\justifying
-State-of-the-art GUI agents (UI-TARS, OS-Atlas, SeeClick, ShowUI)
-emit action type + coordinates in \emph{one} joint decode.
-
-\smallskip
-\textbf{Compounding-error failure mode:}
-
-\smallskip
-\begin{center}
-\begin{tikzpicture}[font=\footnotesize, node distance=0.35cm,
-    b/.style={draw, rounded corners=2pt, inner sep=4pt,
-              text width=2.3cm, align=center}]
-  \node[b, draw=TextMid, fill=FogGray] (i)
-    {Screen\\+ Instruction};
-  \node[b, draw=Cardinal, fill=CardinalLt, right=0.35cm of i] (t)
-    {\textbf{Wrong type}\\scroll $\neq$ click};
-  \node[b, draw=TextMid, fill=FogGray, right=0.35cm of t] (o)
-    {Wrong coord\\(coherent)};
-  \draw[->,thick,Cardinal] (i)--(t);
-  \draw[->,thick,TextMid]  (t)--(o);
-  \node[font=\tiny, Cardinal, below=0.1cm of t]
-    {compounds across steps};
-\end{tikzpicture}
-\end{center}
-\end{tcolorbox}
-
-%%-- Data
-\begin{tcolorbox}[block, title=Data]
-\small
-Two datasets under a canonical \textbf{8-class taxonomy}.\par\smallskip
-
-\begin{tabular}{@{}lll@{}}
-\toprule
-\textbf{Dataset} & \textbf{Scale} & \textbf{Role}\\
-\midrule
-Mind2Web & 137k steps, web & Control\\
-AITW & 715k episodes, Android & Primary\\
-\bottomrule
-\end{tabular}
-
-\smallskip
-Mind2Web has a severe click majority (88\%),
-AITW provides rich 5-class diversity:
-
-\begin{center}
-\includegraphics[width=0.92\linewidth,trim=0 20 0 10,clip]{class_distribution.png}
-\end{center}
-\vspace{-4pt}
-{\footnotesize Mind2Web canonical action distribution — 88\% click, motivating AITW.}
-\end{tcolorbox}
+    \begin{figure}
+      \centering
+      \includegraphics[width=\linewidth]{stage1_mind2web_vs_aitw.png}
+      \caption{Stage~1 macro-F1 on Mind2Web vs.\ AITW across modalities. The large vision gain on AITW ($+0.414$) confirms that screenshots carry strong action-type signal when instructions describe task goals.}
+    \end{figure}
+  \end{block}
 
 \end{column}
+\separatorcolumn
 
-%% ─────────────────────────── COL 2  (27%) ──────────────────
-\begin{column}{0.272\linewidth}
+% ============================================================
+% COLUMN 2
+% ============================================================
+\begin{column}{\colwidth}
 
-%%-- Methods
-\begin{tcolorbox}[block, title=Methods \& Pipeline]
-\small
+  \begin{block}{Five Stage-2 Conditioning Mechanisms}
+    All five variants share identical data, optimizer, backbone (Qwen2-VL-2B + LoRA), and evaluation; only the conditioning mechanism changes.
 
-\begin{columns}[t]
-\begin{column}{0.50\linewidth}
-\textbf{Stage 1 — Classifier}\par\smallskip
-\begin{tikzpicture}[font=\footnotesize, node distance=0.32cm,
-    b/.style={draw=Cardinal,rounded corners=2pt,fill=white,
-              inner sep=4pt,text width=3.8cm,align=center}]
-  \node[b] (a) {Screenshot + Instruction};
-  \node[b, below=0.28cm of a, fill=CardinalLt] (b)
-    {Frozen Qwen2-VL-2B\\mean-pool → 1536-dim};
-  \node[b, below=0.28cm of b, fill=CardinalLt] (c)
-    {3-layer MLP\\(1536→1024→256→8)};
-  \node[b, below=0.28cm of c, fill=Cardinal!20,draw=Cardinal] (d)
-    {\textbf{Predicted action type}};
-  \draw[->,thick,Cardinal] (a)--(b);
-  \draw[->,thick,Cardinal] (b)--(c);
-  \draw[->,thick,Cardinal] (c)--(d);
-\end{tikzpicture}
+    \begin{tabular}{@{}lp{0.72\linewidth}@{}}
+      \toprule
+      \textbf{Var.} & \textbf{Mechanism} \\
+      \midrule
+      \textbf{A} & Flat baseline --- plain prompt $\to$ coords; no action signal anywhere \\[0.15ex]
+      \textbf{B} & Auxiliary action-type classification head (joint loss); action signal at training time only \\[0.15ex]
+      \textbf{C} & Hard routing --- emit \texttt{\{word\} (x,y)} format; gold action word forced at decode \\[0.15ex]
+      \textbf{D-hook} & Additive action embedding hook, broadcast to all input token positions \\[0.15ex]
+      \textbf{D-token} & Dedicated \texttt{<|action\_slot|>} prepended token; learned embedding, M-RoPE-correct \\
+      \bottomrule
+    \end{tabular}
+  \end{block}
+
+  \begin{alertblock}{Main Results --- all\_with\_coords (Spatially Informative)}
+    AITW Stage~2 grounding, $n_{\text{train}}=1200$, 3 seeds, Qwen2-VL-2B + LoRA:
+
+    \begin{tabular}{@{}lcccc@{}}
+      \toprule
+      \textbf{Variant} & \textbf{hit@0.05} & \textbf{hit@0.10} & \textbf{hit@0.25} & \textbf{L2$\downarrow$} \\
+      \midrule
+      A (flat)        & 0.148 & 0.255$\pm$0.021 & 0.515 & 0.392 \\
+      \textbf{B}      & 0.177 & \textbf{0.305$\pm$0.012} & \textbf{0.585} & \textbf{0.362} \\
+      C               & 0.148 & 0.279$\pm$0.032 & 0.543 & 0.412 \\
+      \textbf{D-hook} & 0.177 & \textbf{0.300$\pm$0.028} & \textbf{0.569} & \textbf{0.365} \\
+      D-token         & 0.175 & 0.269$\pm$0.025 & 0.533 & 0.375 \\
+      \bottomrule
+    \end{tabular}
+
+    Paired bootstrap ($n{=}750$): \textbf{B and D-hook beat A on all metrics} ($p{<}0.002$). \textbf{Ranking: B $\approx$ D-hook $>$ D-token $\gtrsim$ C $>$ A.}
+  \end{alertblock}
+
+  \begin{block}{Control --- taps\_and\_swipes (Not Spatially Informative)}
+    When action type carries no spatial signal, conditioning is neutral to harmful --- confirming the benefit is mechanism-specific, not a general training artifact.
+
+    \begin{tabular}{@{}lccc@{}}
+      \toprule
+      \textbf{Variant} & \textbf{hit@0.10} & \textbf{hit@0.25} & \textbf{L2$\downarrow$} \\
+      \midrule
+      A (flat)   & \textbf{0.390$\pm$0.008} & 0.727 & 0.184 \\
+      B          & 0.368$\pm$0.009 & 0.730 & \textbf{0.173} \\
+      C          & 0.325$\pm$0.032 & 0.635 & 0.271 \\
+      D-hook     & 0.392$\pm$0.035 & 0.723 & 0.179 \\
+      \bottomrule
+    \end{tabular}
+  \end{block}
+
+  \begin{block}{Ablation Summary}
+    \begin{figure}
+      \centering
+      \includegraphics[width=\linewidth]{ablation_ABCD_all_with_coords.png}
+      \caption{Hit@0.10 across all five variants on \texttt{all\_with\_coords} (mean$\pm$std, 3 seeds). B and D-hook significantly outperform the flat baseline A; D-token and C trail despite using richer conditioning signals.}
+    \end{figure}
+  \end{block}
+
 \end{column}
-\begin{column}{0.48\linewidth}
-\textbf{Stage 2 — Grounder}\par\smallskip
-\begin{tikzpicture}[font=\footnotesize, node distance=0.32cm,
-    b/.style={draw=PaloAlto,rounded corners=2pt,fill=white,
-              inner sep=4pt,text width=3.6cm,align=center}]
-  \node[b] (a) {Screenshot + Instruction\\+ Predicted type};
-  \node[b, below=0.28cm of a, fill=PaloAlto!10] (b)
-    {Qwen2-VL-2B + LoRA\\rank 16, Q/K/V/O};
-  \node[b, below=0.28cm of b, fill=PaloAlto!20, draw=PaloAlto] (c)
-    {\textbf{Coordinate (x,\,y)}};
-  \draw[->,thick,PaloAlto] (a)--(b);
-  \draw[->,thick,PaloAlto] (b)--(c);
-\end{tikzpicture}
+\separatorcolumn
 
-\vspace{6pt}
-Loss on coord tokens only\\
-($-100$ mask on prompt)\\
-AdamW $2\!\times\!10^{-5}$, 2 epochs\\
-3 seeds per variant
+% ============================================================
+% COLUMN 3
+% ============================================================
+\begin{column}{\colwidth}
+
+  \begin{block}{Where Does Conditioning Help?}
+    Breaking results by action type reveals the gain is entirely in \textbf{click} (68\% of val). \texttt{type} actions score 0.000 on every variant --- AITW stores a fixed degenerate coordinate for type events, making them ungroundable.
+
+    \begin{figure}
+      \centering
+      \includegraphics[width=\linewidth,height=11cm,keepaspectratio]{compounding_error_per_class.png}
+      \caption{Hit@0.10 by action type. The conditioning advantage is concentrated in \emph{click}; \texttt{scroll} is split; \texttt{type} is degenerate.}
+    \end{figure}
+
+    \begin{tabular}{@{}lcccc@{}}
+      \toprule
+      \textbf{Action} & \textbf{A} & \textbf{B$-$A} & \textbf{D-hook$-$A} & \textbf{C$-$A} \\
+      \midrule
+      click (68\%) & 0.253 & \textbf{+0.120} & +0.058 & +0.122 \\
+      scroll (18\%) & 0.313 & $-$0.023 & \textbf{+0.039} & $-$0.144 \\
+      type (14\%)  & 0.000 & 0.000 & 0.000 & 0.000 \\
+      \bottomrule
+    \end{tabular}
+
+    The signal is \textbf{click-vs-scroll/type disambiguation}, not field localization. C wins click ($+0.122$) but destroys scroll ($-0.144$), explaining its mediocre overall score.
+  \end{block}
+
+  \begin{block}{Low-Data Regime \& Scaling}
+    \begin{figure}
+      \centering
+      \includegraphics[width=\linewidth,height=10cm,keepaspectratio]{scaling_curve.png}
+      \caption{Conditioning advantage vs.\ $n_\text{train}$. Gap largest at $n{=}300$, shrinks at $n{=}5000$ --- action-type supervision is a \textbf{low-data prior} absorbed at scale.}
+    \end{figure}
+
+    \begin{tabular}{@{}rcc@{}}
+      \toprule
+      $n_\text{train}$ & B$-$A (hit@0.10) & D-hook$-$A \\
+      \midrule
+      300  & +0.067 & +0.069 \\
+      1200 & +0.051 & +0.045 \\
+      5000 & +0.016 & +0.028 \\
+      \bottomrule
+    \end{tabular}
+
+    \textbf{D-token causal test:} wrong action id drops hit@0.10 from 0.276$\to$0.084 ($\Delta{=}{+}0.192$, $p{<}0.001$); zeroed embedding also drops to 0.183. The embedding is causally used at inference --- the refutation is ``\emph{used but not best},'' not ``ignored.''
+  \end{block}
+
+  \begin{alertblock}{Conclusions}
+    \begin{itemize}
+      \item \textbf{Broad thesis supported:} B and D-hook beat flat A ($p{<}0.002$) when action type is spatially predictive; effect vanishes on the taps/swipes control and on Mind2Web.
+      \item \textbf{Architectural claim refuted:} Auxiliary loss B is the best variant; the hypothesized prepended embedding D-token does not beat B/D-hook on headline metrics despite being causally used.
+      \item \textbf{Mechanism:} Click-vs-scroll/type disambiguation, largest at low data.
+      \item \textbf{Pitfall:} \texttt{inputs\_embeds} bypass of Qwen2-VL M-RoPE produces $8\sigma$ false negative --- fixed by preserving \texttt{input\_ids}.
+    \end{itemize}
+  \end{alertblock}
+
+  \begin{block}{References}
+    \scriptsize
+    \begin{enumerate}[leftmargin=1.8em, label={[\arabic*]}, itemsep=0pt, topsep=0pt, parsep=0pt]
+      \item Yao et al. \textit{UI-TARS: Pioneering Automated GUI Interaction.} arXiv:2501.12326, 2025.
+      \item Wu et al. \textit{OS-Atlas: A Foundation Action Model for Generalist GUI Agents.} arXiv:2410.23218, 2024.
+      \item Cheng et al. \textit{SeeClick: Harnessing GUI Grounding.} arXiv:2401.10935, 2024.
+      \item Deng et al. \textit{Mind2Web: Towards a Generalist Agent for the Web.} NeurIPS, 2023.
+      \item Rawles et al. \textit{Android in the Wild.} NeurIPS, 2023.
+      \item Wang et al. \textit{Qwen2-VL: Enhancing Vision-Language Model Perception.} arXiv:2409.12191, 2024.
+    \end{enumerate}
+  \end{block}
+
 \end{column}
+\separatorcolumn
 \end{columns}
-
-\vspace{8pt}
-\textbf{Five Stage-2 conditioning variants} (same data, optimizer, eval):
-
-\vspace{4pt}
-\renewcommand{\arraystretch}{1.35}
-\begin{tabular}{@{}p{1.0cm}p{5.8cm}p{2.2cm}@{}}
-\toprule
-\textbf{Var.} & \textbf{Mechanism} & \textbf{Signal}\\
-\midrule
-\vbadge[TextMid]{A}
-  & No conditioning — flat joint decode
-  & None\\
-\vbadge[Bay]{B}
-  & Aux.\ loss head, joint training; \textit{no inference signal}
-  & Train only\\
-\vbadge[PaloAlto]{C}
-  & Emit action word; force at decode time
-  & Output\\
-\vbadge[Cardinal]{D-h}
-  & Add embedding to all tokens via hook (norm$\approx$0.06)
-  & Input, diffuse\\
-\vbadge[CardinalDk]{D-t}
-  & Prepended \texttt{<|action\_slot|>}, M-RoPE-correct (norm$\approx$2.2)
-  & Input, local\\
-\bottomrule
-\end{tabular}
-\end{tcolorbox}
-
-%%-- M-RoPE
-\begin{tcolorbox}[block, title=M-RoPE Implementation Pitfall]
-\small\justifying
-Qwen2-VL assigns 3D position IDs to visual tokens via \texttt{input\_ids}.
-An earlier implementation injected action conditioning via
-\texttt{inputs\_embeds}, bypassing this path entirely —
-misaligning positions for \emph{all} visual tokens.
-
-\textbf{Effect:} Variant A appeared to beat D by $\mathbf{8\sigma}$ — a pure false negative.
-\textbf{Fix:} Preserve the \texttt{input\_ids} path (both D-hook and D-token do this).
-\end{tcolorbox}
-
-%%-- Stage 1 results
-\begin{tcolorbox}[block, title=Stage 1: Action-Type Classification]
-
-\begin{center}
-\includegraphics[width=0.97\linewidth,keepaspectratio]{aitw_stage1_headline.png}
-\end{center}
-\vspace{-2pt}
-{\footnotesize AITW Stage 1 — MLP vision+text vs text baselines (3-seed mean $\pm$ std). Vision is decisive: $+0.414$ delta vs text-only; TF-IDF ceiling is 0.168.}
-
-\vspace{4pt}
-\begin{center}
-\includegraphics[width=0.85\linewidth,keepaspectratio]{stage1_variants_multiseed.png}
-\end{center}
-\vspace{-2pt}
-{\footnotesize Mind2Web Stage 1 — vision adds only $+0.009$ (instructions contain action verb).}
-\end{tcolorbox}
-
-\end{column}
-
-%% ─────────────────────────── COL 3  (28%) ──────────────────
-\begin{column}{0.277\linewidth}
-
-%%-- Main ablation
-\begin{tcolorbox}[block, title=Results: Stage 2 Ablation (all\_with\_coords)]
-\begin{center}
-\includegraphics[width=0.97\linewidth,keepaspectratio]{ablation_ABCD_all_with_coords.png}
-\end{center}
-\vspace{2pt}
-\small
-\renewcommand{\arraystretch}{1.25}
-\begin{tabular}{@{}lcccc@{}}
-\toprule
-\textbf{Variant} & \textbf{h@.05} & \textbf{h@.10} & \textbf{h@.25} & \textbf{L2}$\downarrow$\\
-\midrule
-\vbadge[TextMid]{A} flat
-  & — & $0.255{\pm}.021$ & $0.515$ & $0.392$\\
-\vbadge[Bay]{B} aux loss
-  & — & $\mathbf{0.305{\pm}.012}$ & $\mathbf{0.585}$ & $\mathbf{0.362}$\\
-\vbadge[PaloAlto]{C} hard
-  & — & $0.279{\pm}.032$ & $0.543$ & $0.412$\\
-\vbadge[Cardinal]{D-h}
-  & — & $\mathbf{0.300{\pm}.028}$ & $0.569$ & $0.365$\\
-\vbadge[CardinalDk]{D-t}
-  & — & $0.269{\pm}.025$ & $0.533$ & $0.375$\\
-\bottomrule
-\end{tabular}
-\vspace{4pt}
-
-\small\justifying
-Paired bootstrap ($n=750$, 1k resamples):
-\textbf{B and D-hook each beat A on all metrics} ($p<0.002$).
-Ranking: \textbf{B $\approx$ D-hook $>$ D-token $\gtrsim$ C $>$ A.}
-D-token (the hypothesis) does \emph{not} beat B/D-hook on headline metrics.
-A stronger embedding ($\|e\|{=}2.2$) competes with image attention rather than synergizing.
-\end{tcolorbox}
-
-%%-- Qualitative
-\begin{tcolorbox}[block, title=Qualitative Grounding Examples]
-\begin{center}
-\includegraphics[width=0.99\linewidth,keepaspectratio]{qualitative_grounding.png}
-\end{center}
-\vspace{-2pt}
-{\footnotesize Predicted vs ground-truth points (AITW, $n$=800). \textcolor{PaloAlto}{$\bullet$} ground truth, \textcolor{Cardinal}{$\times$} flat A, \textcolor{Bay}{$\times$} D-hook. Conditioning visibly sharpens click predictions (left panels); scroll differences are subtler (right panels).}
-\end{tcolorbox}
-
-%%-- Control
-\begin{tcolorbox}[block, title=Control: taps\_and\_swipes]
-\small
-\renewcommand{\arraystretch}{1.2}
-\begin{tabular}{@{}lccc@{}}
-\toprule
-\textbf{Variant} & \textbf{h@.10} & \textbf{h@.25} & \textbf{L2}$\downarrow$\\
-\midrule
-\vbadge[TextMid]{A}  & 0.390 & 0.727 & 0.184\\
-\vbadge[Bay]{B}      & 0.368 & 0.730 & 0.173\\
-\vbadge[PaloAlto]{C} & 0.325 & 0.635 & 0.271\\
-\vbadge[Cardinal]{D-h} & 0.392 & 0.723 & 0.179\\
-\bottomrule
-\end{tabular}
-
-\vspace{3pt}\justifying
-When type carries \textbf{no spatial information}, no variant beats A.
-D-hook is neutral; C is worse. Confirms: conditioning requires
-a spatially predictive signal. Replicated on Mind2Web (D$-$A$\approx$0).
-\end{tcolorbox}
-
-\end{column}
-
-%% ─────────────────────────── COL 4  (22%) ──────────────────
-\begin{column}{0.219\linewidth}
-
-%%-- Per-class
-\begin{tcolorbox}[block, title=Per-Class Decomposition]
-\begin{center}
-\includegraphics[width=0.97\linewidth,keepaspectratio]{compounding_error_per_class.png}
-\end{center}
-\vspace{2pt}
-\small
-\renewcommand{\arraystretch}{1.2}
-\begin{tabular}{@{}lp{1.0cm}p{1.0cm}p{1.0cm}@{}}
-\toprule
-& $\Delta$\textbf{B} & $\Delta$\textbf{D-h} & $\Delta$\textbf{D-t}\\
-\midrule
-click (68\%) & $\mathbf{+.120}$ & $+.058$ & $+.064$\\
-scroll (18\%) & $-.023$ & $\mathbf{+.039}$ & $-.016$\\
-type (14\%)   & $0$ & $0$ & $0$\\
-\bottomrule
-\end{tabular}
-\vspace{3pt}
-
-\small\justifying
-\textbf{The gain is a click win.}
-Type scores 0.000 on all variants — AITW type coordinates are
-degenerate (pinned). Real signal: \textbf{click-vs-scroll disambiguation}.
-D-hook is the only variant improving \emph{both} click and scroll.
-\end{tcolorbox}
-
-%%-- Scaling
-\begin{tcolorbox}[block, title=Scaling Curve: Low-Data Prior]
-\begin{center}
-\includegraphics[width=0.97\linewidth,keepaspectratio]{scaling_curve.png}
-\end{center}
-\vspace{2pt}
-\small\justifying
-At $n{=}300$: B and D-hook gain $+0.067/+0.069$.
-At $n{=}5000$: B$-$A shrinks to $+0.016$.
-\textbf{Conditioning is a low-data prior} absorbed at scale.
-D-hook is most stable: best h@.25 and L2 at every low-data size.
-\end{tcolorbox}
-
-%%-- E2E + Causal
-\begin{tcolorbox}[block, title=E2E Pipeline \& Causal Test]
-\small
-\begin{columns}[t]
-\begin{column}{0.47\linewidth}
-\textbf{E2E pipeline:}\par\smallskip
-\begin{tabular}{@{}lc@{}}
-\toprule
-Config & h@.10\\
-\midrule
-Flat A     & 0.255\\
-Oracle     & 0.292\\
-\textbf{Predicted} & \textbf{0.271}\\
-\midrule
-Gap        & 0.021\\
-\bottomrule
-\end{tabular}
-\par\vspace{3pt}
-{\footnotesize S1 acc=0.843.\\Pipeline beats A.}
-\end{column}
-\begin{column}{0.50\linewidth}
-\textbf{D-token causal:}\par\smallskip
-\begin{tabular}{@{}lc@{}}
-\toprule
-Condition & h@.10\\
-\midrule
-\textbf{gold id} & \textbf{0.276}\\
-wrong id  & 0.084\\
-zero emb  & 0.183\\
-\bottomrule
-\end{tabular}
-\par\vspace{3pt}
-{\footnotesize $\Delta$(g$-$w)$=+.192^{**}$\\D-token \textit{used},\\not optimal.}
-\end{column}
-\end{columns}
-\end{tcolorbox}
-
-%%-- Conclusions
-\begin{tcolorbox}[block, title=Conclusions]
-\small
-\begin{itemize}\setlength\itemsep{3pt}
-  \item[\textcolor{PaloAlto}{\bfseries$\checkmark$}]
-    Type factorization helps when spatially predictive
-  \item[\textcolor{PaloAlto}{\bfseries$\checkmark$}]
-    Two-stage pipeline beats flat baseline E2E
-  \item[\textcolor{PaloAlto}{\bfseries$\checkmark$}]
-    Advantage is largest at low data \& click-concentrated
-  \item[\textcolor{Cardinal}{\bfseries$\times$}]
-    Learned embedding $\neq$ best mechanism; aux loss wins
-  \item[\textcolor{Cardinal}{\bfseries$\times$}]
-    Stronger signal ($\|e\|{=}2.2$) worse than diffuse (0.06)
-  \item[\textcolor{Bay}{\bfseries$\bullet$}]
-    M-RoPE pitfall documented \& corrected
-\end{itemize}
-\end{tcolorbox}
-
-%%-- Future
-\begin{tcolorbox}[block, title=Future Directions]
-\small
-\begin{itemize}\setlength\itemsep{3pt}
-  \item Attention viz — confirm aux loss reshapes spatial attention
-  \item Evaluate on ScreenSpot (diverse grounding targets)
-  \item Scale to Qwen2-VL-7B backbone
-  \item Confidence-weighted soft routing at inference
-  \item Per-step compounding on full agent trajectories
-\end{itemize}
-\end{tcolorbox}
-
-\end{column}
-\end{columns}
-
-%% ══════════════════════════════════════════════════════════
-%%  FOOTER
-%% ══════════════════════════════════════════════════════════
-\begin{tikzpicture}[remember picture, overlay]
-  \fill[Gold]
-    ([yshift=2.2cm] current page.south west) rectangle
-    ([yshift=2.55cm] current page.south east);
-  \fill[CardinalDk]
-    (current page.south west) rectangle
-    ([yshift=2.2cm] current page.south east);
-  \node[text=white, font=\large\bfseries, anchor=west]
-    at ([yshift=1.1cm, xshift=1.4cm] current page.south west)
-    {Stanford University $\;\cdot\;$ CS 231N, Spring 2026};
-  \node[text=white!65!CardinalDk, font=\normalsize, anchor=east]
-    at ([yshift=1.1cm, xshift=-1.4cm] current page.south east)
-    {Backbone: Qwen2-VL-2B-Instruct
-     $\;\cdot\;$ LoRA rank 16
-     $\;\cdot\;$ AITW + Mind2Web
-     $\;\cdot\;$ Modal NVIDIA L4
-     $\;\cdot\;$ ${\sim}\$52$ compute};
-\end{tikzpicture}
-
 \end{frame}
 \end{document}
