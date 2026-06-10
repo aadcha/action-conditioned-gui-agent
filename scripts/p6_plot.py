@@ -9,6 +9,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size":19,"axes.titlesize":23,"axes.labelsize":21,"xtick.labelsize":17,"ytick.labelsize":17,"legend.fontsize":17,"legend.title_fontsize":18,"figure.titlesize":24})
 import numpy as np
 
 PHASE4 = Path(__file__).resolve().parent.parent / "results" / "phase4"
@@ -21,7 +22,7 @@ def main(mix: str = "all_with_coords") -> None:
     labels = {"A": "A\nflat", "B": "B\naux loss", "C": "C\nhard route", "D-hook": "D\nembedding (ours)"}
     colors = {"A": "#888888", "B": "#2a9d4a", "C": "#c0852f", "D-hook": "#9d4edd"}
 
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(15, 8.5))
 
     # Left: hit@r grouped bars
     ax = axes[0]
@@ -34,8 +35,8 @@ def main(mix: str = "all_with_coords") -> None:
         ax.bar(x + (i - 1.5) * w, vals, w, label=labels[v].replace("\n", " "), color=colors[v])
     ax.set_xticks(x); ax.set_xticklabels(mlabels)
     ax.set_ylabel("hit@r (higher better)")
-    ax.set_title(f"Grounding hit@r — A/B/C/D ({mix})")
-    ax.legend(fontsize=8)
+    ax.set_title("Grounding hit@r by variant")
+    ax.legend(fontsize=17)
     ax.axhline(np.pi * 0.10**2, ls=":", color="#444", lw=0.8)
 
     # Right: mean normalized L2 (lower better)
@@ -43,16 +44,16 @@ def main(mix: str = "all_with_coords") -> None:
     vals = [means[v]["mean_normalized_l2"] for v in order]
     bars = ax.bar([labels[v] for v in order], vals, color=[colors[v] for v in order])
     for b, val in zip(bars, vals):
-        ax.text(b.get_x() + b.get_width() / 2, val + 0.004, f"{val:.3f}", ha="center", fontsize=10)
+        ax.text(b.get_x() + b.get_width() / 2, val + 0.004, f"{val:.3f}", ha="center", fontsize=17)
     ax.set_ylabel("mean normalized L2 (lower better)")
     ax.set_title("Mean grounding error")
     ax.set_ylim(0, max(vals) * 1.15)
 
-    fig.suptitle("Phase 6 ablation (AITW all_with_coords, paired bootstrap): B ≈ D > C > A",
-                 fontsize=13, y=1.02)
+    fig.suptitle("Stage 2 ablation (AITW all_with_coords): B ≈ D-hook > C > A",
+                 fontsize=22, y=1.02)
     fig.tight_layout()
     out = PHASE4 / f"ablation_ABCD_{mix}.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=350, bbox_inches="tight")
     print(f"wrote {out}")
 
 

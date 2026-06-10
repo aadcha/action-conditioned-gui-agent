@@ -22,6 +22,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size":19,"axes.titlesize":23,"axes.labelsize":21,"xtick.labelsize":17,"ytick.labelsize":17,"legend.fontsize":17,"legend.title_fontsize":18,"figure.titlesize":24})
 import numpy as np
 
 PHASE4 = Path(__file__).resolve().parent.parent / "results" / "phase4"
@@ -48,7 +49,7 @@ def main() -> None:
     means = {v: {c: per_class_mean(p, c)[0] for c in CLASSES} for v, p in PATTERNS.items()}
     stds = {v: {c: per_class_mean(p, c)[1] for c in CLASSES} for v, p in PATTERNS.items()}
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
     x = np.arange(len(CLASSES))
     w = 0.2
     order = ["A", "B", "D-hook", "D-token"]
@@ -62,7 +63,7 @@ def main() -> None:
     ax1.set_title("Grounding accuracy by action type (all_with_coords)")
     ax1.legend(title="variant")
     ax1.annotate("type targets degenerate\n(0.000 for every variant)",
-                 xy=(2, 0.02), xytext=(1.45, 0.22), fontsize=9,
+                 xy=(2, 0.02), xytext=(1.45, 0.22), fontsize=16,
                  arrowprops=dict(arrowstyle="->", color="#b00"))
 
     # right: advantage vs A
@@ -81,13 +82,13 @@ def main() -> None:
             d = means[v][c] - a[c]
             ax2.annotate(f"{d:+.2f}", (j + (i - 1) * w, d),
                          textcoords="offset points", xytext=(0, 3 if d >= 0 else -11),
-                         ha="center", fontsize=7)
+                         ha="center", fontsize=15)
 
-    fig.suptitle("Where does action-type conditioning help? — per-class decomposition "
-                 "(AITW all_with_coords, n=1200)", y=1.02, fontsize=12)
+    fig.suptitle("Per-class decomposition "
+                 "(AITW all_with_coords, n=1200)", y=1.02, fontsize=22)
     fig.tight_layout()
     out = PHASE4 / "compounding_error_per_class.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=350, bbox_inches="tight")
     print(f"wrote {out}")
 
 

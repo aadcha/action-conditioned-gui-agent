@@ -9,6 +9,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size":19,"axes.titlesize":23,"axes.labelsize":21,"xtick.labelsize":17,"ytick.labelsize":17,"legend.fontsize":17,"legend.title_fontsize":18,"figure.titlesize":24})
 import numpy as np
 
 from src.data.taxonomy import ID_TO_ACTION
@@ -42,7 +43,7 @@ def plot_variant_comparison(results: dict, out_path: Path) -> None:
     )
     ax.legend(loc="lower right")
     fig.tight_layout()
-    fig.savefig(out_path, dpi=150)
+    fig.savefig(out_path, dpi=350)
     plt.close(fig)
 
 
@@ -61,10 +62,10 @@ def plot_confusion_per_variant(results: dict, out_path: Path) -> None:
         for i in range(cm.shape[0]):
             for j in range(cm.shape[1]):
                 ax.text(j, i, str(cm[i, j]), ha="center", va="center",
-                        color="white" if cm[i, j] > cm.max() / 2 else "black", fontsize=9)
+                        color="white" if cm[i, j] > cm.max() / 2 else "black", fontsize=17)
         ax.set_xlabel("predicted"); ax.set_ylabel("true")
     fig.tight_layout()
-    fig.savefig(out_path, dpi=150)
+    fig.savefig(out_path, dpi=350)
     plt.close(fig)
 
 
@@ -78,7 +79,7 @@ def plot_per_class_f1(results: dict, out_path: Path) -> None:
                 class_names.append(c)
     x = np.arange(len(class_names))
     width = 0.35
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(12, 6.5))
     colors = ["#3a6ea5", "#9d4edd"]
     for i, v in enumerate(variants):
         per_class = results["variants"][v]["best_val_metrics"]["per_class"]
@@ -94,7 +95,7 @@ def plot_per_class_f1(results: dict, out_path: Path) -> None:
     ax.set_title("Phase 3.5 — Per-class F1 on AITW val")
     ax.legend(loc="upper right")
     fig.tight_layout()
-    fig.savefig(out_path, dpi=150)
+    fig.savefig(out_path, dpi=350)
     plt.close(fig)
 
 
@@ -113,15 +114,15 @@ def plot_mind2web_vs_aitw(out_path: Path) -> None:
 
     x = np.arange(len(variants))
     width = 0.35
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(12, 6.5))
     ax.bar(x - width / 2, m2w_values, width, yerr=m2w_err, capsize=4,
            label="Mind2Web (2-class, 3 seeds)", color="#3a6ea5")
     ax.bar(x + width / 2, aitw_values, width,
            label="AITW (5-class, 1 seed)", color="#c08552")
     for i, v in enumerate(m2w_values):
-        ax.text(x[i] - width / 2, v + m2w_err[i] + 0.012, f"{v:.3f}", ha="center", va="bottom", fontsize=9)
+        ax.text(x[i] - width / 2, v + m2w_err[i] + 0.012, f"{v:.3f}", ha="center", va="bottom", fontsize=17)
     for i, v in enumerate(aitw_values):
-        ax.text(x[i] + width / 2, v + 0.012, f"{v:.3f}", ha="center", va="bottom", fontsize=9)
+        ax.text(x[i] + width / 2, v + 0.012, f"{v:.3f}", ha="center", va="bottom", fontsize=17)
     ax.set_xticks(x)
     ax.set_xticklabels(variants)
     ax.set_ylabel("val macro-F1")
@@ -129,7 +130,7 @@ def plot_mind2web_vs_aitw(out_path: Path) -> None:
     ax.set_title("Stage 1 MLP: Mind2Web (2-class) vs AITW (5-class)")
     ax.legend(loc="lower right")
     fig.tight_layout()
-    fig.savefig(out_path, dpi=150)
+    fig.savefig(out_path, dpi=350)
     plt.close(fig)
 
 
@@ -193,9 +194,9 @@ def plot_aitw_multiseed_bar(agg: dict, tfidf: list[dict] | None, out_path: Path)
     colors = ["#888"] * len(extra_values) + ["#bdbdbd", "#3a6ea5", "#9d4edd"]
     ax.bar(x, all_values, yerr=all_errs, capsize=4, color=colors)
     for i, (v, e) in enumerate(zip(all_values, all_errs)):
-        ax.text(i, v + (e or 0) + 0.015, f"{v:.3f}", ha="center", va="bottom", fontsize=9)
+        ax.text(i, v + (e or 0) + 0.015, f"{v:.3f}", ha="center", va="bottom", fontsize=17)
     ax.set_xticks(x)
-    ax.set_xticklabels(all_labels, fontsize=9)
+    ax.set_xticklabels(all_labels, fontsize=17)
     ax.set_ylabel(f"val macro-F1 on AITW test (n=1000)")
     ax.set_ylim(0, 1.0)
     ax.axhline(1.0 / 5, ls=":", color="#444", label="uniform-prior macro-F1 (5 classes = 0.2)")
@@ -205,7 +206,7 @@ def plot_aitw_multiseed_bar(agg: dict, tfidf: list[dict] | None, out_path: Path)
     )
     ax.legend(loc="upper left")
     fig.tight_layout()
-    fig.savefig(out_path, dpi=150)
+    fig.savefig(out_path, dpi=350)
     plt.close(fig)
 
 
