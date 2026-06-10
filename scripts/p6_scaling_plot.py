@@ -10,6 +10,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size":19,"axes.titlesize":23,"axes.labelsize":21,"xtick.labelsize":17,"ytick.labelsize":17,"legend.fontsize":17,"legend.title_fontsize":18,"figure.titlesize":24})
 
 PHASE4 = Path(__file__).resolve().parent.parent / "results" / "phase4"
 # Phase 7 extends the curve into the low-data regime (300/500/800, 3 seeds).
@@ -34,7 +35,7 @@ def metric(prefix: str, n: int, suffix: str, key: str) -> float:
 
 def main() -> None:
     ns = [300, 500, 800, 1200, 2500, 5000]
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(15, 7))
     for ax, key, label in [(axes[0], "hit_at_010", "hit@0.10"), (axes[1], "hit_at_025", "hit@0.25")]:
         A = [metric("variantA", n, "", key) for n in ns]
         B = [metric("variantB", n, "_aux1.0", key) for n in ns]
@@ -45,9 +46,9 @@ def main() -> None:
         ax.plot(ns, bda, "o-", color="#2a9d4a", label="B − A (aux loss)")
         ax.plot(ns, dda, "s-", color="#9d4edd", label="D − A (embedding)")
         for x, y in zip(ns, bda):
-            ax.annotate(f"{y:+.3f}", (x, y), textcoords="offset points", xytext=(0, 8), fontsize=8, color="#2a9d4a")
+            ax.annotate(f"{y:+.3f}", (x, y), textcoords="offset points", xytext=(0, 8), fontsize=15, color="#2a9d4a")
         for x, y in zip(ns, dda):
-            ax.annotate(f"{y:+.3f}", (x, y), textcoords="offset points", xytext=(0, -14), fontsize=8, color="#9d4edd")
+            ax.annotate(f"{y:+.3f}", (x, y), textcoords="offset points", xytext=(0, -14), fontsize=15, color="#9d4edd")
         ax.set_xscale("log")
         ax.set_xticks(ns); ax.set_xticklabels([str(n) for n in ns])
         ax.set_xlabel("n_train (log scale)")
@@ -58,7 +59,7 @@ def main() -> None:
                  "(AITW all_with_coords; 300-1200 are 3-seed means, 2500/5000 single seed)", y=1.02)
     fig.tight_layout()
     out = PHASE4 / "scaling_curve.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=350, bbox_inches="tight")
     print(f"wrote {out}")
 
 

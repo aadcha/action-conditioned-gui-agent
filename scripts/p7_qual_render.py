@@ -81,7 +81,7 @@ def main() -> None:
                ncol=3, fontsize=11, frameon=False)
     fig.suptitle("Qualitative grounding: predicted vs. ground-truth point "
                  "(AITW all_with_coords, n_train=800)", y=0.965, fontsize=12)
-    fig.savefig(OUT, dpi=150, bbox_inches="tight")
+    fig.savefig(OUT, dpi=350, bbox_inches="tight")
     print(f"wrote {OUT}")
 
 
