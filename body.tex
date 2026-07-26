@@ -27,8 +27,8 @@ $p=\ConfBvsAHolm$) and the end-to-end predicted-type pipeline versus A is
 \ConfEtoEvsA{} (Holm $p=\ConfEtoEvsAHolm$). The mechanism our proposal bet
 on is refuted as the winner: D-token is causally used at inference (wrong
 or zeroed embeddings severely hurt) yet never beats the plain auxiliary
-loss, and the grounding gain is concentrated in click-vs-scroll/type
-disambiguation rather than field localization. We release the frozen
+loss, and exploratory per-class decompositions locate the gain in
+click-vs-scroll/type disambiguation rather than field localization. We release the frozen
 splits, per-example predictions, and the clustered-inference code; we argue
 that offline step-level grounding studies at this scale are unusually easy
 to contaminate, and that the three artifacts we document are likely present
@@ -233,7 +233,8 @@ at inference the gold action word is forced as the decode prefix.
 \textbf{D-hook (additive embedding).} A learned table
 $E\in\mathbb{R}^{8\times d}$; the row for the current action type is added
 to \emph{all} token embeddings via a forward hook, preserving the normal
-\texttt{input\_ids} path (embedding norm at convergence $\approx0.06$).
+\texttt{input\_ids} path (embedding norm at convergence $\approx0.07$ at
+the headline setting).
 
 \textbf{D-token (prepended token -- the original hypothesis).} A sentinel
 \texttt{<|action\_slot|>} token is prepended to the instruction and its
@@ -333,8 +334,9 @@ $p$-values reported no smaller than Monte Carlo resolution -- never
 $p{=}0$). \textbf{Estimand.} This tests the \emph{fixed trained
 checkpoints} on new data from the eval population. It is \emph{not}
 calibrated for claims about the training procedure: adding run-level
-(seed) offsets to the synthetic null drives any fixed-checkpoint test to
-\TypeIProc{} rejection. With only three seeds per variant we therefore
+(seed) offsets to the synthetic null drives the episode-clustered test to
+\TypeIProc{} rejection (and the pooled test to 70\%). With only three
+seeds per variant we therefore
 report per-seed means everywhere and make no procedure-level significance
 claims. The retracted pooled $p$-values (including a headline
 $p{=}\ExpBvsApooled$) should not be cited.
@@ -402,7 +404,8 @@ not significant.}
 \end{table}
 
 Table~\ref{tab:exploratory} re-scores the historical headline with the
-repaired statistics. Three observations. First, the auxiliary-loss effect
+repaired statistics (per-seed values in Figure~\ref{fig:ablation}). Three
+observations. First, the auxiliary-loss effect
 survives: B$-$A on hit@0.10 is \ExpBvsA{} ($p=\ExpBvsAp$), where the
 invalid pooled analysis had claimed $p=\ExpBvsApooled$ -- the conclusion
 stands but the evidence was overstated by an order of magnitude. Second,
@@ -433,8 +436,8 @@ Table~\ref{tab:confirmatory} the confirmatory test-set versions.}
 \end{center}
 \caption{Exploratory hit@0.10 by action class (\texttt{all\_with\_coords}).
 The conditioning advantage concentrates in \emph{click}; \emph{type} is
-degenerate on AITW (all variants score exactly 0.000, mean L2
-$=\sqrt{2}$).}
+degenerate on AITW (all variants score exactly 0.000, mean L2 at the
+$\approx\sqrt{2}$ corner-to-corner distance).}
 \label{fig:perclass}
 \end{figure}
 
@@ -443,8 +446,9 @@ $+0.120$ on click (68\% of examples) with a small scroll cost; C has the
 largest click gain ($+0.122$) but destroys scroll ($-0.144$) by forcing a
 decode prefix that derails the gesture class; D-hook alone improves both
 (click $+0.058$, scroll $+0.039$). The \emph{type} class scores exactly
-$0.000$ across all variants with mean normalized L2 $=\sqrt{2}$
-(corner-to-corner): AITW \texttt{type} events carry degenerate touch
+$0.000$ across all variants with mean normalized L2 at or slightly above
+$\sqrt{2}$, the corner-to-corner distance (a few predictions land outside
+the unit square): AITW \texttt{type} events carry degenerate touch
 coordinates and are ungroundable by any model. This corrects our earlier
 ``type$\to$text-field localization'' interpretation: the real signal is
 \textbf{click-vs-scroll/type disambiguation} for the precise-target class,
@@ -453,9 +457,10 @@ and the ``type'' rows merely add a constant drag that cancels in deltas.
 \subsection{Control conditions}
 
 On \texttt{taps\_and\_swipes} (action type spatially uninformative), the
-historical 3-seed means show no conditioned variant beating A (A
-$0.390{\pm}0.008$, B $0.368{\pm}0.009$, D-hook $0.392{\pm}0.035$, C
-$0.325{\pm}0.032$ hit@0.10); per-example logs were not retained for A on
+historical 3-seed means show no conditioned variant meaningfully above A
+(A $0.390{\pm}0.008$, D-hook $0.392{\pm}0.035$ -- a difference well inside
+one seed-std -- with B $0.368{\pm}0.009$ and C $0.325{\pm}0.032$ at or
+below A on hit@0.10); per-example logs were not retained for A on
 this mix, so the clustered version of this control appears only in the
 confirmatory rerun (Table~\ref{tab:control}). On Multimodal-Mind2Web
 (click/type-dominated), D-hook vs.\ A was $-0.006$ hit@0.10 / $+0.018$
@@ -483,10 +488,15 @@ Our proposal predicted the advantage is a low-data prior. The historical
 grid ($n\in\{300,500,800\}$, 3 seeds) does \emph{not} show a clean
 monotone: B$-$A on hit@0.10 is $+0.067$ at $n{=}300$ but $+0.011$ at
 $n{=}500$ and $-0.040$ at $n{=}800$; D-hook is more stable ($+0.069$,
-$+0.001$, $+0.050$) and leads hit@0.25 and mean L2 at every low-data size.
-At the high end ($n{=}2500, 5000$; single seed) deltas shrink and
-partially reverse. We report this as: \emph{directionally consistent with
-a low-data prior, but noisy, and confounded by per-size val sets}
+$+0.001$, $+0.048$) and leads hit@0.25 and mean L2 at every low-data size.
+The two single-seed high-end cells disagree with each other: at
+$n{=}5000$ the deltas shrink and partially reverse (B$-$A hit@0.25 goes
+negative), while at $n{=}2500$ D-hook posts the \emph{largest}
+conditioning deltas anywhere in the study ($+0.076$ hit@0.10, $+0.204$
+hit@0.25) -- single-seed noise on a differently-leaky val slice, cutting
+in the direction \emph{favorable} to conditioning. We report all of this
+as: \emph{inconclusive on the low-data-prior hypothesis -- noisy,
+non-monotone, and confounded by per-size val sets}
 (Figure~\ref{fig:scaling}); the prespecified low-data claim is evaluated
 on the frozen test set in Section~\ref{sec:confirmatory}. An earlier draft
 of this work called the low-data prediction ``confirmed''; that claim did
@@ -520,9 +530,10 @@ Feeding the trained D-token model a \emph{wrong} action id collapses
 grounding, and zeroing the embedding hurts substantially
 (Table~\ref{tab:causal}). The refutation of the proposal's mechanism is
 therefore precise: the prepended embedding is causally used, it is simply
-not the best way to exploit action-type supervision. Attention maps
-(Figure~\ref{fig:attention}) illustrate the same qualitatively: correct
-conditioning concentrates more attention mass on the screenshot.
+not the best way to exploit action-type supervision. Figure~\ref{fig:attention}
+shows one example where correct conditioning concentrates more attention
+mass on the screenshot; across the three examples we probed the pattern is
+not uniform, so we present it strictly as illustration, not evidence.
 
 \begin{figure}[tb]
 \begin{center}
@@ -605,7 +616,8 @@ logged single steps, without interaction, recovery, or compounding-error
 dynamics -- the motivating failure mode is measured here only via its
 step-level signature. The backbone is a single 2B model; conclusions are
 about this scale and training recipe, not about GUI agents generally, and
-our baselines are matched-compute course-scale models, not SOTA systems.
+our baselines are small matched-compute models trained by us, not
+state-of-the-art systems.
 The confirmatory estimand is fixed checkpoints, not the training
 procedure (three seeds; per-seed effects reported). AITW's \texttt{type}
 coordinates are degenerate, so ``grounding'' on

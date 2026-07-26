@@ -49,12 +49,25 @@ def ci(r: dict, digits: int = 3) -> str:
             f"[{d.format(r['ci_low'])}, {d.format(r['ci_high'])}]")
 
 
+def _metric_from_ped(ped: list[float], key: str) -> float:
+    """Metric from per-example distances with parse failures ALREADY scored at
+    the sqrt(2) sentinel — the paper's declared convention (misses counted).
+    The run JSONs' headline hit/L2 fields use a parsed-only denominator and
+    must never feed paper tables (audit finding: C's parse_rate < 1 made its
+    raw headline numbers inconsistent with the reanalysis + delta columns)."""
+    a = np.asarray(ped, dtype=np.float64)
+    if key == "mean_normalized_l2":
+        return float(a.mean())
+    r = {"hit_at_005": 0.05, "hit_at_010": 0.10, "hit_at_025": 0.25}[key]
+    return float((a <= r).mean())
+
+
 def seed_stats(files: list[str], which: str, key: str) -> tuple[float, float, list[float]]:
     vals = []
     for f in files:
         d = json.loads(Path(f).read_text())
         m = d["final_test_metrics"] if which == "test" else d["final_val_metrics"]
-        vals.append(m[key])
+        vals.append(m[key] if key == "parse_rate" else _metric_from_ped(m["per_example_dist"], key))
     a = np.asarray(vals, dtype=np.float64)
     return float(a.mean()), float(a.std(ddof=0)), [float(v) for v in a]
 
@@ -63,7 +76,7 @@ def hist_stats(pattern: str, key: str) -> tuple[float, float]:
     vals = []
     for f in sorted(glob.glob(str(P4 / pattern))):
         d = json.loads(Path(f).read_text())
-        vals.append(d["final_val_metrics"][key])
+        vals.append(_metric_from_ped(d["final_val_metrics"]["per_example_dist"], key))
     a = np.asarray(vals, dtype=np.float64)
     return float(a.mean()), float(a.std(ddof=0))
 
@@ -285,8 +298,8 @@ def confirmatory(p9: dict) -> None:
         for f in e2f:
             d = json.loads(Path(f).read_text())
             tb = d["final_test_metrics"]
-            po.append(tb["oracle_metrics"]["hit_at_010"])
-            pp.append(tb["predicted_metrics"]["hit_at_010"])
+            po.append(_metric_from_ped(tb["oracle_metrics"]["per_example_dist"], "hit_at_010"))
+            pp.append(_metric_from_ped(tb["predicted_metrics"]["per_example_dist"], "hit_at_010"))
             s1a.append(tb["stage1_test_acc"])
         macro("ConfEtoEOracle", f"{np.mean(po):.3f} \\pm {np.std(po):.3f}")
         macro("ConfEtoEPred", f"{np.mean(pp):.3f} \\pm {np.std(pp):.3f}")
