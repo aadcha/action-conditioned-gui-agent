@@ -1955,7 +1955,10 @@ def train_stage2_variantA(
     if result is not None and result.get("final_val_metrics"):
         import json
         from pathlib import Path
-        out = Path(f"results/phase4/variantA_seed{seed}_n{n_train}_ep{epochs}_lr{lr}.json")
+        _fs = f"_fs-{frozen_split}" if frozen_split else ""
+        # Tagged name so a frozen-split rerun can never clobber a historical
+        # results/phase4 artifact that used the legacy untagged filename.
+        out = Path(f"results/phase4/variantA_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}{_fs}.json")
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(result, indent=2))
         m = result["final_val_metrics"]
