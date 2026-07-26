@@ -416,6 +416,9 @@ historical data we cannot even claim the prepended embedding is
 significantly \emph{worse} than the auxiliary loss, only that it shows no
 sign of being better.
 
+% In the workshop build these three exploratory figures move to the
+% appendix (excluded from the page limit); the arXiv build keeps them here.
+\newcommand{\figexpablation}{%
 \begin{figure}[t]
 \begin{center}
 \includegraphics[width=0.98\linewidth]{ablation_ABCD_all_with_coords.png}
@@ -425,7 +428,8 @@ splits; per-seed values). Shown for continuity with the historical record;
 Table~\ref{tab:exploratory} carries the calibrated statistics and
 Table~\ref{tab:confirmatory} the confirmatory test-set versions.}
 \label{fig:ablation}
-\end{figure}
+\end{figure}}
+\ifworkshopbuild\else\figexpablation\fi
 
 \subsection{Per-class decomposition: the gain is click disambiguation}
 \label{sec:perclass}
@@ -471,6 +475,7 @@ dataset.
 \subsection{Low-data behavior: no clean curve}
 \label{sec:lowdata}
 
+\newcommand{\figexpscaling}{%
 \begin{figure}[t]
 \begin{center}
 \includegraphics[width=0.98\linewidth]{scaling_curve.png}
@@ -482,7 +487,8 @@ leakage (up to \LeakGoalMax), so this curve is directional at best; the
 confirmatory grid (Table~\ref{tab:lowdata}) fixes one frozen test set for
 all sizes.}
 \label{fig:scaling}
-\end{figure}
+\end{figure}}
+\ifworkshopbuild\else\figexpscaling\fi
 
 Our proposal predicted the advantage is a low-data prior. The historical
 grid ($n\in\{300,500,800\}$, 3 seeds) does \emph{not} show a clean
@@ -535,6 +541,7 @@ shows one example where correct conditioning concentrates more attention
 mass on the screenshot; across the three examples we probed the pattern is
 not uniform, so we present it strictly as illustration, not evidence.
 
+\newcommand{\figexpattention}{%
 \begin{figure}[tb]
 \begin{center}
 \includegraphics[width=0.98\linewidth]{attn_example_1.png}
@@ -544,7 +551,8 @@ three action-type conditionings (qualitative illustration; screenshot
 attention mass 0.204 under \emph{click} vs.\ 0.132/0.110 under
 \emph{type}/\emph{scroll}).}
 \label{fig:attention}
-\end{figure}
+\end{figure}}
+\ifworkshopbuild\else\figexpattention\fi
 
 \section{Confirmatory Results (untouched test, prespecified)}
 \label{sec:confirmatory}

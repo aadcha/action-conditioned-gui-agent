@@ -22,6 +22,11 @@
 
 \graphicspath{{figures/}}
 
+% Workshop build: relocate three exploratory figures to the appendix
+% (IAEval counts pages excluding references and appendices).
+\newif\ifworkshopbuild
+\workshopbuildtrue
+
 % Every results number comes from committed artifacts via generated tables;
 % see scripts/p10_render_paper_tables.py. Do not hand-type result numbers.
 \input{tables/macros}
@@ -68,5 +73,13 @@ Separating Real Effects from Evaluation Artifacts}
 
 \bibliographystyle{ieee}
 \bibliography{paper}
+
+\appendix
+\section{Additional exploratory figures}
+These figures accompany Section~6 (exploratory results on the historical
+splits) and are referenced from the main text.
+\figexpablation
+\figexpscaling
+\figexpattention
 
 \end{document}
