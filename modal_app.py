@@ -1717,10 +1717,16 @@ def _stage2_variantA_train_remote(
     coord_scale: int,
     only_taps: bool,
     data_mix: str = "taps_only",
+    frozen_split: str = "",
+    eval_test: bool = False,
+    n_test: int = 0,
 ) -> dict:
     """Flat-baseline Stage 2 — plain Qwen2-VL-2B + LoRA, no action conditioning.
 
     `data_mix` controls eligible step types; mirror of `_stage2_train_remote`.
+    `frozen_split` switches data loading to the frozen episode/goal-disjoint
+    manifest splits; `eval_test` additionally evaluates ONCE on the untouched
+    test split (first `n_test` steps under the mix filter; 0 = all).
     """
     import os
     import sys
@@ -1743,9 +1749,6 @@ def _stage2_variantA_train_remote(
     torch.manual_seed(seed)
     random.seed(seed)
 
-    print(f"[A-train] streaming AITW {aitw_split} for {n_train + n_val} taps...")
-    examples_all: list[Stage2Example] = []
-    target_needed = n_train + n_val
     _DATA_MIX_LABELS = {
         "taps_only": {"tap"},
         "taps_and_swipes": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right"},
@@ -1754,20 +1757,28 @@ def _stage2_variantA_train_remote(
     allowed_labels = _DATA_MIX_LABELS.get(data_mix, {"tap"})
     if only_taps:
         allowed_labels = {"tap"}
-    for step in iter_aitw_steps(split=aitw_split, n_max=max(target_needed * 4, 1000), include_images=True):
-        if step.string_label not in allowed_labels:
-            continue
-        examples_all.append(Stage2Example(
-            image=step.open_image(),
-            goal_info=step.goal_info,
-            action_type_id=step.canonical_action_id,
-            target_xy=(step.touch_yx[1], step.touch_yx[0]),
-        ))
-        if len(examples_all) >= target_needed:
-            break
+    train_keys = val_keys = None
+    if frozen_split:
+        train_examples, train_keys = _load_frozen_examples(frozen_split, "train", allowed_labels, n_train)
+        val_examples, val_keys = _load_frozen_examples(frozen_split, "val", allowed_labels, n_val)
+    else:
+        print(f"[A-train] streaming AITW {aitw_split} for {n_train + n_val} taps...")
+        examples_all: list[Stage2Example] = []
+        target_needed = n_train + n_val
+        for step in iter_aitw_steps(split=aitw_split, n_max=max(target_needed * 4, 1000), include_images=True):
+            if step.string_label not in allowed_labels:
+                continue
+            examples_all.append(Stage2Example(
+                image=step.open_image(),
+                goal_info=step.goal_info,
+                action_type_id=step.canonical_action_id,
+                target_xy=(step.touch_yx[1], step.touch_yx[0]),
+            ))
+            if len(examples_all) >= target_needed:
+                break
 
-    train_examples = examples_all[:n_train]
-    val_examples = examples_all[n_train:n_train + n_val]
+        train_examples = examples_all[:n_train]
+        val_examples = examples_all[n_train:n_train + n_val]
     print(f"[A-train] data_mix={data_mix}  train n={len(train_examples)}  val n={len(val_examples)}")
     print(f"[A-train] train action dist: {Counter(e.action_type_id for e in train_examples)}")
 
@@ -1877,6 +1888,14 @@ def _stage2_variantA_train_remote(
         print(f"[A-train] val: hit@0.05={eval_m['hit_at_005']:.3f}  hit@0.10={eval_m['hit_at_010']:.3f}  hit@0.25={eval_m['hit_at_025']:.3f}")
         print(f"[A-train] val sample outputs: {eval_m['raw_outputs'][:5]}")
 
+    test_metrics = test_keys = None
+    if frozen_split and eval_test:
+        test_examples, test_keys = _load_frozen_examples(frozen_split, "test", allowed_labels, n_test)
+        print(f"[A-train] UNTOUCHED-TEST eval: n={len(test_examples)}")
+        tm = evaluate(test_examples)
+        test_metrics = {k: v for k, v in tm.items() if k != "raw_outputs"}
+        print(f"[A-train] test: hit@0.10={tm['hit_at_010']:.3f}  hit@0.25={tm['hit_at_025']:.3f}")
+
     summary = {
         "variant": "A_flat_baseline",
         "n_train": len(train_examples),
@@ -1889,16 +1908,21 @@ def _stage2_variantA_train_remote(
         "aitw_split": aitw_split,
         "only_taps": only_taps,
         "data_mix": data_mix,
+        "frozen_split": frozen_split or None,
         "train_action_distribution": dict(Counter(e.action_type_id for e in train_examples)),
         "val_action_distribution": dict(Counter(e.action_type_id for e in val_examples)),
         "trainable_params": int(n_trainable),
         "all_params": int(n_all),
         "history": history,
         "final_val_metrics": history[-1] if history else None,
+        "final_test_metrics": test_metrics,
+        "val_step_keys": val_keys,
+        "test_step_keys": test_keys,
     }
     cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    out_path = cache_dir / f"variantA_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}.json"
+    _fs_tag = f"_fs-{frozen_split}" if frozen_split else ""
+    out_path = cache_dir / f"variantA_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}{_fs_tag}.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[A-train] persisted result to {out_path}")
@@ -1917,12 +1941,16 @@ def train_stage2_variantA(
     coord_scale: int = 1000,
     only_taps: bool = True,
     data_mix: str = "taps_only",
+    frozen_split: str = "",
+    eval_test: bool = False,
+    n_test: int = 0,
 ) -> None:
     """Train variant A (flat baseline, no action conditioning). Use `modal run --detach`."""
     if data_mix != "taps_only":
         only_taps = False
     result = _stage2_variantA_train_remote.remote(
         n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, only_taps, data_mix,
+        frozen_split, eval_test, n_test,
     )
     if result is not None and result.get("final_val_metrics"):
         import json
@@ -2146,6 +2174,9 @@ def _stage2_variantDhook_train_remote(
     data_mix: str,
     init_std: float,
     action_lr: float = 0.0,
+    frozen_split: str = "",
+    eval_test: bool = False,
+    n_test: int = 0,
 ) -> dict:
     """Variant D-hook: additive action conditioning via embedding-layer hook.
 
@@ -2181,21 +2212,26 @@ def _stage2_variantDhook_train_remote(
     }
     allowed = _DATA_MIX_LABELS.get(data_mix, {"tap"})
 
-    print(f"[Dhook] streaming AITW {aitw_split} (data_mix={data_mix}, init_std={init_std})...")
-    examples_all: list[Stage2Example] = []
-    need = n_train + n_val
-    for step in iter_aitw_steps(split=aitw_split, n_max=max(need * 4, 1000), include_images=True):
-        if step.string_label not in allowed:
-            continue
-        examples_all.append(Stage2Example(
-            image=step.open_image(), goal_info=step.goal_info,
-            action_type_id=step.canonical_action_id,
-            target_xy=(step.touch_yx[1], step.touch_yx[0]),
-        ))
-        if len(examples_all) >= need:
-            break
-    train_examples = examples_all[:n_train]
-    val_examples = examples_all[n_train:n_train + n_val]
+    train_keys = val_keys = None
+    if frozen_split:
+        train_examples, train_keys = _load_frozen_examples(frozen_split, "train", allowed, n_train)
+        val_examples, val_keys = _load_frozen_examples(frozen_split, "val", allowed, n_val)
+    else:
+        print(f"[Dhook] streaming AITW {aitw_split} (data_mix={data_mix}, init_std={init_std})...")
+        examples_all: list[Stage2Example] = []
+        need = n_train + n_val
+        for step in iter_aitw_steps(split=aitw_split, n_max=max(need * 4, 1000), include_images=True):
+            if step.string_label not in allowed:
+                continue
+            examples_all.append(Stage2Example(
+                image=step.open_image(), goal_info=step.goal_info,
+                action_type_id=step.canonical_action_id,
+                target_xy=(step.touch_yx[1], step.touch_yx[0]),
+            ))
+            if len(examples_all) >= need:
+                break
+        train_examples = examples_all[:n_train]
+        val_examples = examples_all[n_train:n_train + n_val]
     print(f"[Dhook] train n={len(train_examples)} val n={len(val_examples)}")
     print(f"[Dhook] train action dist: {Counter(e.action_type_id for e in train_examples)}")
 
@@ -2333,6 +2369,14 @@ def _stage2_variantDhook_train_remote(
         print(f"[Dhook] epoch {epoch} loss={avg:.4f} hit@0.10={em['hit_at_010']:.3f} hit@0.25={em['hit_at_025']:.3f} ae_norm={float(action_embeddings.weight.norm()):.4f}")
         print(f"[Dhook] val sample: {em.get('raw_outputs', [])[:5]}")
 
+    test_metrics = test_keys = None
+    if frozen_split and eval_test:
+        test_examples, test_keys = _load_frozen_examples(frozen_split, "test", allowed, n_test)
+        print(f"[Dhook] UNTOUCHED-TEST eval: n={len(test_examples)}")
+        tm = evaluate(test_examples)
+        test_metrics = {k: v for k, v in tm.items() if k != "raw_outputs"}
+        print(f"[Dhook] test: hit@0.10={tm['hit_at_010']:.3f}  hit@0.25={tm['hit_at_025']:.3f}")
+
     hook_handle.remove()
 
     summary = {
@@ -2341,12 +2385,16 @@ def _stage2_variantDhook_train_remote(
         "epochs": epochs, "lr": lr, "batch_size": batch_size, "coord_scale": coord_scale,
         "seed": seed, "aitw_split": aitw_split, "data_mix": data_mix, "init_std": init_std,
         "action_lr": action_lr,
+        "frozen_split": frozen_split or None,
         "history": history, "final_val_metrics": history[-1] if history else None,
+        "final_test_metrics": test_metrics,
+        "val_step_keys": val_keys, "test_step_keys": test_keys,
     }
     cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
     cache_dir.mkdir(parents=True, exist_ok=True)
     _alr_tag = f"_alr{action_lr}" if action_lr and action_lr > 0 else ""
-    out_path = cache_dir / f"Dhook_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_init{init_std}{_alr_tag}.json"
+    _fs_tag = f"_fs-{frozen_split}" if frozen_split else ""
+    out_path = cache_dir / f"Dhook_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_init{init_std}{_alr_tag}{_fs_tag}.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[Dhook] persisted result to {out_path}")
@@ -2366,13 +2414,17 @@ def train_stage2_Dhook(
     data_mix: str = "taps_and_swipes",
     init_std: float = 0.0,
     action_lr: float = 0.0,
+    frozen_split: str = "",
+    eval_test: bool = False,
+    n_test: int = 0,
 ) -> None:
     """Variant D-hook (additive conditioning, true superset of A). Use --detach.
 
     --action-lr 1e-3 gives the action embedding its own (higher) learning rate.
     """
     _stage2_variantDhook_train_remote.remote(
-        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, init_std, action_lr)
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, init_std, action_lr,
+        frozen_split, eval_test, n_test)
 
 
 # ---- Phase 5 variant D-text: action type as natural language in the prompt -
@@ -2562,6 +2614,7 @@ def train_stage2_Dtext(
 def _stage2_variantB_train_remote(
     n_train: int, n_val: int, epochs: int, lr: float, batch_size: int,
     seed: int, aitw_split: str, coord_scale: int, data_mix: str, lambda_aux: float,
+    frozen_split: str = "", eval_test: bool = False, n_test: int = 0,
 ) -> dict:
     import os, sys, random, json as _json
     from collections import Counter
@@ -2585,20 +2638,25 @@ def _stage2_variantB_train_remote(
         "all_with_coords": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"},
     }
     allowed = _DATA_MIX_LABELS.get(data_mix, {"tap"})
-    print(f"[B-train] streaming AITW {aitw_split} (data_mix={data_mix}, lambda_aux={lambda_aux})...")
-    examples_all = []
-    need = n_train + n_val
-    for step in iter_aitw_steps(split=aitw_split, n_max=max(need * 4, 1000), include_images=True):
-        if step.string_label not in allowed:
-            continue
-        examples_all.append(Stage2Example(
-            image=step.open_image(), goal_info=step.goal_info,
-            action_type_id=step.canonical_action_id,
-            target_xy=(step.touch_yx[1], step.touch_yx[0])))
-        if len(examples_all) >= need:
-            break
-    train_examples = examples_all[:n_train]
-    val_examples = examples_all[n_train:n_train + n_val]
+    train_keys = val_keys = None
+    if frozen_split:
+        train_examples, train_keys = _load_frozen_examples(frozen_split, "train", allowed, n_train)
+        val_examples, val_keys = _load_frozen_examples(frozen_split, "val", allowed, n_val)
+    else:
+        print(f"[B-train] streaming AITW {aitw_split} (data_mix={data_mix}, lambda_aux={lambda_aux})...")
+        examples_all = []
+        need = n_train + n_val
+        for step in iter_aitw_steps(split=aitw_split, n_max=max(need * 4, 1000), include_images=True):
+            if step.string_label not in allowed:
+                continue
+            examples_all.append(Stage2Example(
+                image=step.open_image(), goal_info=step.goal_info,
+                action_type_id=step.canonical_action_id,
+                target_xy=(step.touch_yx[1], step.touch_yx[0])))
+            if len(examples_all) >= need:
+                break
+        train_examples = examples_all[:n_train]
+        val_examples = examples_all[n_train:n_train + n_val]
     print(f"[B-train] train n={len(train_examples)} val n={len(val_examples)}")
     print(f"[B-train] train action dist: {Counter(e.action_type_id for e in train_examples)}")
 
@@ -2696,15 +2754,27 @@ def _stage2_variantB_train_remote(
         print(f"[B-train] epoch {epoch} lm={ep_lm/max(nstep,1):.4f} aux={ep_aux/max(nstep,1):.4f} "
               f"aux_acc={ep_acc/max(nstep,1):.3f} hit@0.10={em['hit_at_010']:.3f} hit@0.25={em['hit_at_025']:.3f}")
 
+    test_metrics = test_keys = None
+    if frozen_split and eval_test:
+        test_examples, test_keys = _load_frozen_examples(frozen_split, "test", allowed, n_test)
+        print(f"[B-train] UNTOUCHED-TEST eval: n={len(test_examples)}")
+        tm = evaluate(test_examples)
+        test_metrics = {k: v for k, v in tm.items() if k != "raw_outputs"}
+        print(f"[B-train] test: hit@0.10={tm['hit_at_010']:.3f}  hit@0.25={tm['hit_at_025']:.3f}")
+
     summary = {
         "variant": "B_aux_loss", "n_train": len(train_examples), "n_val": len(val_examples),
         "epochs": epochs, "lr": lr, "batch_size": batch_size, "coord_scale": coord_scale,
         "seed": seed, "aitw_split": aitw_split, "data_mix": data_mix, "lambda_aux": lambda_aux,
+        "frozen_split": frozen_split or None,
         "history": history, "final_val_metrics": history[-1] if history else None,
+        "final_test_metrics": test_metrics,
+        "val_step_keys": val_keys, "test_step_keys": test_keys,
     }
     cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    out_path = cache_dir / f"variantB_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_aux{lambda_aux}.json"
+    _fs_tag = f"_fs-{frozen_split}" if frozen_split else ""
+    out_path = cache_dir / f"variantB_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_aux{lambda_aux}{_fs_tag}.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[B-train] persisted result to {out_path}")
@@ -2716,10 +2786,12 @@ def train_stage2_variantB(
     n_train: int = 1200, n_val: int = 250, epochs: int = 2, lr: float = 2e-5,
     batch_size: int = 1, seed: int = 42, aitw_split: str = "train",
     coord_scale: int = 1000, data_mix: str = "all_with_coords", lambda_aux: float = 1.0,
+    frozen_split: str = "", eval_test: bool = False, n_test: int = 0,
 ) -> None:
     """Variant B (auxiliary action-type loss). Use --detach."""
     _stage2_variantB_train_remote.remote(
-        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, lambda_aux)
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, lambda_aux,
+        frozen_split, eval_test, n_test)
 
 
 # ---- Phase 6 variant C: hard routing ----------------------------------------
@@ -2747,6 +2819,7 @@ def train_stage2_variantB(
 def _stage2_variantC_train_remote(
     n_train: int, n_val: int, epochs: int, lr: float, batch_size: int,
     seed: int, aitw_split: str, coord_scale: int, data_mix: str,
+    frozen_split: str = "", eval_test: bool = False, n_test: int = 0,
 ) -> dict:
     import os, sys, random, json as _json
     from collections import Counter
@@ -2769,20 +2842,25 @@ def _stage2_variantC_train_remote(
         "all_with_coords": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"},
     }
     allowed = _DATA_MIX_LABELS.get(data_mix, {"tap"})
-    print(f"[C-train] streaming AITW {aitw_split} (data_mix={data_mix})...")
-    examples_all = []
-    need = n_train + n_val
-    for step in iter_aitw_steps(split=aitw_split, n_max=max(need * 4, 1000), include_images=True):
-        if step.string_label not in allowed:
-            continue
-        examples_all.append(Stage2Example(
-            image=step.open_image(), goal_info=step.goal_info,
-            action_type_id=step.canonical_action_id,
-            target_xy=(step.touch_yx[1], step.touch_yx[0])))
-        if len(examples_all) >= need:
-            break
-    train_examples = examples_all[:n_train]
-    val_examples = examples_all[n_train:n_train + n_val]
+    train_keys = val_keys = None
+    if frozen_split:
+        train_examples, train_keys = _load_frozen_examples(frozen_split, "train", allowed, n_train)
+        val_examples, val_keys = _load_frozen_examples(frozen_split, "val", allowed, n_val)
+    else:
+        print(f"[C-train] streaming AITW {aitw_split} (data_mix={data_mix})...")
+        examples_all = []
+        need = n_train + n_val
+        for step in iter_aitw_steps(split=aitw_split, n_max=max(need * 4, 1000), include_images=True):
+            if step.string_label not in allowed:
+                continue
+            examples_all.append(Stage2Example(
+                image=step.open_image(), goal_info=step.goal_info,
+                action_type_id=step.canonical_action_id,
+                target_xy=(step.touch_yx[1], step.touch_yx[0])))
+            if len(examples_all) >= need:
+                break
+        train_examples = examples_all[:n_train]
+        val_examples = examples_all[n_train:n_train + n_val]
     print(f"[C-train] train n={len(train_examples)} val n={len(val_examples)}")
     print(f"[C-train] train action dist: {Counter(e.action_type_id for e in train_examples)}")
 
@@ -2880,16 +2958,28 @@ def _stage2_variantC_train_remote(
         print(f"[C-train] epoch {epoch} loss={ep_loss/max(nstep,1):.4f} hit@0.10={em['hit_at_010']:.3f} hit@0.25={em['hit_at_025']:.3f}")
         print(f"[C-train] val sample: {em.get('raw_outputs', [])[:5]}")
 
+    test_metrics = test_keys = None
+    if frozen_split and eval_test:
+        test_examples, test_keys = _load_frozen_examples(frozen_split, "test", allowed, n_test)
+        print(f"[C-train] UNTOUCHED-TEST eval: n={len(test_examples)}")
+        tm = evaluate(test_examples)
+        test_metrics = {k: v for k, v in tm.items() if k != "raw_outputs"}
+        print(f"[C-train] test: hit@0.10={tm['hit_at_010']:.3f}  hit@0.25={tm['hit_at_025']:.3f}")
+
     summary = {
         "variant": "C_hard_routing", "n_train": len(train_examples), "n_val": len(val_examples),
         "epochs": epochs, "lr": lr, "batch_size": batch_size, "coord_scale": coord_scale,
         "seed": seed, "aitw_split": aitw_split, "data_mix": data_mix,
         "routing": "gold_action_word_forced_at_decode",
+        "frozen_split": frozen_split or None,
         "history": history, "final_val_metrics": history[-1] if history else None,
+        "final_test_metrics": test_metrics,
+        "val_step_keys": val_keys, "test_step_keys": test_keys,
     }
     cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    out_path = cache_dir / f"variantC_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}.json"
+    _fs_tag = f"_fs-{frozen_split}" if frozen_split else ""
+    out_path = cache_dir / f"variantC_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}{_fs_tag}.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[C-train] persisted result to {out_path}")
@@ -2901,10 +2991,12 @@ def train_stage2_variantC(
     n_train: int = 1200, n_val: int = 250, epochs: int = 2, lr: float = 2e-5,
     batch_size: int = 1, seed: int = 42, aitw_split: str = "train",
     coord_scale: int = 1000, data_mix: str = "all_with_coords",
+    frozen_split: str = "", eval_test: bool = False, n_test: int = 0,
 ) -> None:
     """Variant C (hard routing: forced action word at decode). Use --detach."""
     _stage2_variantC_train_remote.remote(
-        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix)
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix,
+        frozen_split, eval_test, n_test)
 
 
 # ---- Phase 6 end-to-end: Stage 1 predicted types -> Stage 2 conditioning ----
@@ -2931,6 +3023,7 @@ def train_stage2_variantC(
 def _stage2_e2e_remote(
     n_train: int, n_val: int, epochs: int, lr: float, batch_size: int,
     seed: int, aitw_split: str, coord_scale: int, data_mix: str,
+    frozen_split: str = "", eval_test: bool = False, n_test: int = 0,
 ) -> dict:
     import os, sys, random, json as _json
     from collections import Counter
@@ -2956,20 +3049,25 @@ def _stage2_e2e_remote(
         "all_with_coords": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"},
     }
     allowed = _DATA_MIX_LABELS.get(data_mix, {"tap"})
-    print(f"[e2e] streaming AITW {aitw_split} (data_mix={data_mix})...")
-    examples_all = []
-    need = n_train + n_val
-    for step in iter_aitw_steps(split=aitw_split, n_max=max(need * 4, 1000), include_images=True):
-        if step.string_label not in allowed:
-            continue
-        examples_all.append(Stage2Example(
-            image=step.open_image(), goal_info=step.goal_info,
-            action_type_id=step.canonical_action_id,
-            target_xy=(step.touch_yx[1], step.touch_yx[0])))
-        if len(examples_all) >= need:
-            break
-    train_examples = examples_all[:n_train]
-    val_examples = examples_all[n_train:n_train + n_val]
+    train_keys = val_keys = None
+    if frozen_split:
+        train_examples, train_keys = _load_frozen_examples(frozen_split, "train", allowed, n_train)
+        val_examples, val_keys = _load_frozen_examples(frozen_split, "val", allowed, n_val)
+    else:
+        print(f"[e2e] streaming AITW {aitw_split} (data_mix={data_mix})...")
+        examples_all = []
+        need = n_train + n_val
+        for step in iter_aitw_steps(split=aitw_split, n_max=max(need * 4, 1000), include_images=True):
+            if step.string_label not in allowed:
+                continue
+            examples_all.append(Stage2Example(
+                image=step.open_image(), goal_info=step.goal_info,
+                action_type_id=step.canonical_action_id,
+                target_xy=(step.touch_yx[1], step.touch_yx[0])))
+            if len(examples_all) >= need:
+                break
+        train_examples = examples_all[:n_train]
+        val_examples = examples_all[n_train:n_train + n_val]
     print(f"[e2e] train n={len(train_examples)} val n={len(val_examples)}")
 
     base = Qwen2VLForConditionalGeneration.from_pretrained(
@@ -3084,11 +3182,11 @@ def _stage2_e2e_remote(
     print(f"[e2e] Stage1 pred dist: {Counter(pred_val.tolist())}  gold dist: {Counter(yva.tolist())}")
 
     # --- eval D-hook with gold (oracle) vs predicted types ---
-    def eval_with(types_tensor):
+    def eval_with(examples, types_tensor):
         model.eval()
         preds, targets, aids, raws = [], [], [], []
-        for s in range(0, len(val_examples), batch_size):
-            chunk = val_examples[s:s + batch_size]
+        for s in range(0, len(examples), batch_size):
+            chunk = examples[s:s + batch_size]
             type_chunk = types_tensor[s:s + batch_size].to(device)
             inputs, _ = build(chunk, include_labels=False)
             _holder["action_id"] = type_chunk
@@ -3105,16 +3203,42 @@ def _stage2_e2e_remote(
         return m
 
     print("[e2e] eval with GOLD types (oracle)...")
-    oracle = eval_with(yva)
+    oracle = eval_with(val_examples, yva)
     print(f"[e2e]   oracle hit@0.10={oracle['hit_at_010']:.3f} hit@0.25={oracle['hit_at_025']:.3f} L2={oracle['mean_normalized_l2']:.3f}")
     print("[e2e] eval with PREDICTED types...")
-    predicted = eval_with(pred_val)
+    predicted = eval_with(val_examples, pred_val)
     print(f"[e2e]   pred   hit@0.10={predicted['hit_at_010']:.3f} hit@0.25={predicted['hit_at_025']:.3f} L2={predicted['mean_normalized_l2']:.3f}")
+
+    # --- untouched-test eval (frozen splits only): oracle + predicted types ---
+    test_block = None
+    test_keys = None
+    if frozen_split and eval_test:
+        test_examples, test_keys = _load_frozen_examples(frozen_split, "test", allowed, n_test)
+        print(f"[e2e] UNTOUCHED-TEST eval: n={len(test_examples)}")
+        fte = extract_feats(test_examples)
+        yte = torch.tensor([e.action_type_id for e in test_examples])
+        with torch.inference_mode():
+            pred_test = s1(fte.to(device)).argmax(-1).cpu()
+        s1_test_acc = float(accuracy_score(yte.numpy(), pred_test.numpy()))
+        s1_test_macro = float(f1_score(yte.numpy(), pred_test.numpy(), average="macro", zero_division=0))
+        oracle_t = eval_with(test_examples, yte)
+        predicted_t = eval_with(test_examples, pred_test)
+        _strip_t = lambda m: {k: v for k, v in m.items() if k != "raw_outputs"}
+        test_block = {
+            "stage1_test_acc": s1_test_acc, "stage1_test_macro_f1": s1_test_macro,
+            "oracle_metrics": _strip_t(oracle_t),
+            "predicted_metrics": _strip_t(predicted_t),
+            "gap_hit_at_010": oracle_t["hit_at_010"] - predicted_t["hit_at_010"],
+        }
+        print(f"[e2e] test oracle hit@0.10={oracle_t['hit_at_010']:.3f}  "
+              f"predicted hit@0.10={predicted_t['hit_at_010']:.3f}  s1_acc={s1_test_acc:.3f}")
+
     hook.remove()
 
     summary = {
         "variant": "D_hook_e2e", "n_train": len(train_examples), "n_val": len(val_examples),
         "epochs": epochs, "lr": lr, "seed": seed, "data_mix": data_mix, "coord_scale": coord_scale,
+        "frozen_split": frozen_split or None,
         "stage1_val_acc": s1_acc, "stage1_val_macro_f1": s1_macro,
         "oracle_metrics": {k: v for k, v in oracle.items() if k not in ("raw_outputs", "per_example_dist")},
         "predicted_metrics": {k: v for k, v in predicted.items() if k not in ("raw_outputs", "per_example_dist")},
@@ -3122,10 +3246,13 @@ def _stage2_e2e_remote(
         "predicted_per_example_dist": predicted.get("per_example_dist"),
         "gap_hit_at_010": oracle["hit_at_010"] - predicted["hit_at_010"],
         "gap_mean_l2": predicted["mean_normalized_l2"] - oracle["mean_normalized_l2"],
+        "val_step_keys": val_keys, "test_step_keys": test_keys,
+        "final_test_metrics": test_block,
     }
     cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    out_path = cache_dir / f"e2e_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}.json"
+    _fs_tag = f"_fs-{frozen_split}" if frozen_split else ""
+    out_path = cache_dir / f"e2e_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}{_fs_tag}.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[e2e] persisted to {out_path}")
@@ -3137,10 +3264,12 @@ def train_stage2_e2e(
     n_train: int = 1200, n_val: int = 250, epochs: int = 2, lr: float = 2e-5,
     batch_size: int = 1, seed: int = 42, aitw_split: str = "train",
     coord_scale: int = 1000, data_mix: str = "all_with_coords",
+    frozen_split: str = "", eval_test: bool = False, n_test: int = 0,
 ) -> None:
     """End-to-end: Stage 1 predicted types -> D-hook conditioning. oracle vs predicted gap. --detach."""
     _stage2_e2e_remote.remote(
-        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix)
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix,
+        frozen_split, eval_test, n_test)
 
 
 # ---- Phase 6 attention visualization ----------------------------------------
@@ -3412,6 +3541,7 @@ def _stage2_variantDtoken_train_remote(
     n_train: int, n_val: int, epochs: int, lr: float, batch_size: int,
     seed: int, aitw_split: str, coord_scale: int, data_mix: str, init_std: float,
     causal_eval: bool = False,
+    frozen_split: str = "", eval_test: bool = False, n_test: int = 0,
 ) -> dict:
     import os, sys, random, json as _json
     from collections import Counter
@@ -3435,20 +3565,25 @@ def _stage2_variantDtoken_train_remote(
         "all_with_coords": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"},
     }
     allowed = _DATA_MIX_LABELS.get(data_mix, {"tap"})
-    print(f"[Dtoken] streaming AITW {aitw_split} (data_mix={data_mix}, init_std={init_std})...")
-    examples_all = []
-    need = n_train + n_val
-    for step in iter_aitw_steps(split=aitw_split, n_max=max(need * 4, 1000), include_images=True):
-        if step.string_label not in allowed:
-            continue
-        examples_all.append(Stage2Example(
-            image=step.open_image(), goal_info=step.goal_info,
-            action_type_id=step.canonical_action_id,
-            target_xy=(step.touch_yx[1], step.touch_yx[0])))
-        if len(examples_all) >= need:
-            break
-    train_examples = examples_all[:n_train]
-    val_examples = examples_all[n_train:n_train + n_val]
+    train_keys = val_keys = None
+    if frozen_split:
+        train_examples, train_keys = _load_frozen_examples(frozen_split, "train", allowed, n_train)
+        val_examples, val_keys = _load_frozen_examples(frozen_split, "val", allowed, n_val)
+    else:
+        print(f"[Dtoken] streaming AITW {aitw_split} (data_mix={data_mix}, init_std={init_std})...")
+        examples_all = []
+        need = n_train + n_val
+        for step in iter_aitw_steps(split=aitw_split, n_max=max(need * 4, 1000), include_images=True):
+            if step.string_label not in allowed:
+                continue
+            examples_all.append(Stage2Example(
+                image=step.open_image(), goal_info=step.goal_info,
+                action_type_id=step.canonical_action_id,
+                target_xy=(step.touch_yx[1], step.touch_yx[0])))
+            if len(examples_all) >= need:
+                break
+        train_examples = examples_all[:n_train]
+        val_examples = examples_all[n_train:n_train + n_val]
     print(f"[Dtoken] train n={len(train_examples)} val n={len(val_examples)}")
     print(f"[Dtoken] train action dist: {Counter(e.action_type_id for e in train_examples)}")
 
@@ -3607,18 +3742,30 @@ def _stage2_variantDtoken_train_remote(
         print(f"[Dtoken-causal] gold-wrong={gg-ww:+.3f}  gold-zero={gg-zz:+.3f}  "
               f"(positive => embedding causally used at inference)")
 
+    test_metrics = test_keys = None
+    if frozen_split and eval_test:
+        test_examples, test_keys = _load_frozen_examples(frozen_split, "test", allowed, n_test)
+        print(f"[Dtoken] UNTOUCHED-TEST eval (gold action ids): n={len(test_examples)}")
+        tm = evaluate(test_examples)
+        test_metrics = {k: v for k, v in tm.items() if k != "raw_outputs"}
+        print(f"[Dtoken] test: hit@0.10={tm['hit_at_010']:.3f}  hit@0.25={tm['hit_at_025']:.3f}")
+
     hook.remove()
     summary = {
         "variant": "D_token_prepended", "n_train": len(train_examples), "n_val": len(val_examples),
         "epochs": epochs, "lr": lr, "batch_size": batch_size, "coord_scale": coord_scale,
         "seed": seed, "aitw_split": aitw_split, "data_mix": data_mix, "init_std": init_std,
+        "frozen_split": frozen_split or None,
         "history": history, "final_val_metrics": history[-1] if history else None,
+        "final_test_metrics": test_metrics,
+        "val_step_keys": val_keys, "test_step_keys": test_keys,
         "causal_eval": causal,
     }
     cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
     cache_dir.mkdir(parents=True, exist_ok=True)
     _ctag = "_causal" if causal_eval else ""
-    out_path = cache_dir / f"Dtoken_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_init{init_std}{_ctag}.json"
+    _fs_tag = f"_fs-{frozen_split}" if frozen_split else ""
+    out_path = cache_dir / f"Dtoken_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_init{init_std}{_ctag}{_fs_tag}.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[Dtoken] persisted to {out_path}")
@@ -3631,6 +3778,7 @@ def train_stage2_Dtoken(
     batch_size: int = 1, seed: int = 42, aitw_split: str = "train",
     coord_scale: int = 1000, data_mix: str = "all_with_coords", init_std: float = 0.02,
     causal_eval: bool = False,
+    frozen_split: str = "", eval_test: bool = False, n_test: int = 0,
 ) -> None:
     """Variant D-token (M-RoPE-correct prepended action token). Use --detach.
 
@@ -3639,7 +3787,7 @@ def train_stage2_Dtoken(
     """
     _stage2_variantDtoken_train_remote.remote(
         n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix,
-        init_std, causal_eval)
+        init_std, causal_eval, frozen_split, eval_test, n_test)
 
 
 # ---- Phase 6 Mind2Web grounding benchmark (proposal-named dataset) ----------
@@ -4271,3 +4419,297 @@ def stage2_qualitative(
         modal volume get stage1-cache qualitative/qualitative_grounding.png results/phase4/
     """
     _stage2_qualitative_remote.remote(n_train, n_val, epochs, lr, seed)
+
+
+# ---- AITW stream scan (metadata only; for split reconstruction + manifests) --
+
+
+# The cjfcsjt/AITW_General revision every historical run streamed from
+# (dataset last modified 2024-05-04; verified unchanged). Pin it so the
+# filtered-step order below is byte-for-byte the order the training runs saw.
+AITW_MIRROR_REPO = "cjfcsjt/AITW_General"
+AITW_MIRROR_REVISION = "5c0dc7139aaf714e69f8d8e4bd2ea2bc5a41700e"
+
+
+AITW_POOL_DIR = "aitw_pool_v1"       # Volume dir holding the cached step pool
+AWC_LABEL_SET = {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"}
+
+
+@app.function(
+    image=image,
+    volumes={STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret],
+    cpu=8,
+    timeout=7200,
+)
+def _scan_and_cache_aitw_pool_remote(n_awc: int = 12000, split: str = "train") -> dict:
+    """One pass over the AITW mirror IN ORDER (pinned revision) that produces:
+
+    1. `aitw_scan/stream_index_<split>.json` — metadata for every row that maps
+       to an AITWStep (the same filter every Stage 2 training path applies),
+       up to the point where `n_awc` all_with_coords steps have been seen.
+       This reconstructs exactly which episodes/steps each HISTORICAL
+       train/val slice contained (for the Phase 8 dependence reanalysis).
+    2. `aitw_pool_v1/pool_shard_*.pt` — the first `n_awc` all_with_coords
+       steps with losslessly PNG-encoded screenshots, so the frozen-split
+       build (and every rerun) never has to re-stream the dataset.
+    """
+    import hashlib as _hashlib
+    import io as _io
+    import json as _json
+    import sys
+    from concurrent.futures import ThreadPoolExecutor
+    from pathlib import Path as _Path
+
+    sys.path.insert(0, "/root/repo")
+    import torch as _torch
+    from datasets import load_dataset
+
+    from src.data.aitw import _decode_aitw_image_bytes, row_to_string_label
+    from src.data.taxonomy import unify_action
+
+    ds = load_dataset(
+        AITW_MIRROR_REPO, name="standard", split=split,
+        streaming=True, revision=AITW_MIRROR_REVISION,
+    )
+
+    pool_dir = _Path(STAGE1_CACHE_PATH) / AITW_POOL_DIR
+    pool_dir.mkdir(parents=True, exist_ok=True)
+    scan_dir = _Path(STAGE1_CACHE_PATH) / "aitw_scan"
+    scan_dir.mkdir(parents=True, exist_ok=True)
+
+    def encode_png(img_bytes: bytes) -> bytes:
+        img = _decode_aitw_image_bytes(img_bytes)
+        buf = _io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+
+    pool = ThreadPoolExecutor(max_workers=8)
+    index: list[dict] = []
+    shard: list[dict] = []
+    shard_files: list[dict] = []
+    n_raw = n_awc_seen = 0
+    SHARD_SIZE = 400
+
+    def flush_shard():
+        nonlocal shard
+        if not shard:
+            return
+        # resolve pending png futures
+        for rec in shard:
+            rec["png"] = rec["png"].result()
+        k = len(shard_files)
+        fp = pool_dir / f"pool_shard_{k:03d}.pt"
+        _torch.save(shard, fp)
+        sha = _hashlib.sha256(fp.read_bytes()).hexdigest()
+        shard_files.append({"file": fp.name, "n": len(shard), "sha256": sha})
+        print(f"[scan] flushed {fp.name} ({len(shard)} steps)", flush=True)
+        shard = []
+
+    for row in ds:
+        n_raw += 1
+        label = row_to_string_label(row)
+        if label is None:
+            continue
+        try:
+            cid = unify_action(label, "aitw")
+        except KeyError:
+            continue
+        meta = {
+            "i": len(index),  # index in the FILTERED (mappable) step sequence
+            "ep_id": str(row["ep_id"]),
+            "step_id": int(row["step_id"]),
+            "goal": row.get("goal_info", "") or "",
+            "label": label,
+            "cid": cid,
+            "touch_yx": [float(v) for v in row["results_yx_touch"]],
+            "lift_yx": [float(v) for v in row["results_yx_lift"]],
+        }
+        index.append(meta)
+        if label in AWC_LABEL_SET and n_awc_seen < n_awc:
+            rec = dict(meta)
+            rec["awc_index"] = n_awc_seen
+            rec["png"] = pool.submit(encode_png, row["image"])
+            shard.append(rec)
+            n_awc_seen += 1
+            if len(shard) >= SHARD_SIZE:
+                flush_shard()
+        if n_awc_seen >= n_awc:
+            break
+        if n_raw % 1000 == 0:
+            print(f"[scan] raw={n_raw} mappable={len(index)} awc_cached={n_awc_seen}", flush=True)
+
+    flush_shard()
+    pool.shutdown(wait=True)
+
+    out = {
+        "repo": AITW_MIRROR_REPO,
+        "revision": AITW_MIRROR_REVISION,
+        "split": split,
+        "n_raw_rows": n_raw,
+        "n_filtered": len(index),
+        "n_awc_cached": n_awc_seen,
+        "records": index,
+    }
+    idx_path = scan_dir / f"stream_index_{split}_n{len(index)}.json"
+    idx_path.write_text(_json.dumps(out))
+    (pool_dir / "POOL.json").write_text(_json.dumps({
+        "repo": AITW_MIRROR_REPO, "revision": AITW_MIRROR_REVISION, "split": split,
+        "n_awc": n_awc_seen, "shards": shard_files,
+    }, indent=2))
+    stage1_cache.commit()
+    print(f"[scan] wrote {idx_path} (raw={n_raw}, mappable={len(index)}, awc cached={n_awc_seen})")
+    return {"index_file": idx_path.name, "n_raw": n_raw,
+            "n_filtered": len(index), "n_awc_cached": n_awc_seen}
+
+
+@app.local_entrypoint()
+def scan_aitw_stream(n_awc: int = 12000, split: str = "train") -> None:
+    """Build the ordered AITW step index + cached PNG pool on the Volume.
+
+    Pull the index afterwards with:
+        modal volume get stage1-cache aitw_scan/<file> results/phase8_reanalysis/
+    """
+    info = _scan_and_cache_aitw_pool_remote.remote(n_awc, split)
+    print(f"[scan] done: {info}")
+
+
+# ---- Frozen episode/goal-disjoint splits (Phase 9 rerun) ---------------------
+#
+# The manifest (data/manifests/<version>.json, committed to the repo and
+# shipped into the container via add_local_dir) assigns every pooled AITW step
+# to train/val/test with goal-level disjointness and an untouched test region.
+# `build_frozen_splits` materializes per-split shards on the Volume from the
+# cached pool (no re-streaming); `_load_frozen_examples` is the loader every
+# variant uses when `frozen_split` is set.
+
+
+def _load_frozen_examples(frozen_split: str, split: str, allowed_labels, n_limit: int):
+    """Load (examples, step_keys) for one split of a frozen manifest, in
+    manifest (stream) order, filtered to `allowed_labels`, truncated to the
+    first `n_limit` (0 = all). Runs inside the container."""
+    import io as _io
+    import json as _json
+    from pathlib import Path as _Path
+
+    import torch as _torch
+    from PIL import Image as _Image
+
+    from src.train.stage2 import Stage2Example
+
+    base = _Path(STAGE1_CACHE_PATH) / "frozen" / frozen_split
+    build = _json.loads((base / "BUILD.json").read_text())
+    examples, keys = [], []
+    for shard_info in build["shards"][split]:
+        if n_limit and len(examples) >= n_limit:
+            break
+        shard = _torch.load(base / shard_info["file"], weights_only=False)
+        for rec in shard:
+            if rec["label"] not in allowed_labels:
+                continue
+            examples.append(Stage2Example(
+                image=_Image.open(_io.BytesIO(rec["png"])).convert("RGB"),
+                goal_info=rec["goal"],
+                action_type_id=rec["cid"],
+                target_xy=(rec["touch_yx"][1], rec["touch_yx"][0]),
+            ))
+            keys.append({"ep_id": rec["ep_id"], "step_id": rec["step_id"],
+                         "label": rec["label"], "awc_index": rec.get("awc_index")})
+            if n_limit and len(examples) >= n_limit:
+                break
+    print(f"[frozen] {frozen_split}/{split}: loaded {len(examples)} examples "
+          f"(n_limit={n_limit}, labels={sorted(allowed_labels)})")
+    return examples, keys
+
+
+@app.function(
+    image=image,
+    volumes={STAGE1_CACHE_PATH: stage1_cache},
+    cpu=4,
+    timeout=3600,
+)
+def _build_frozen_splits_remote(version: str = "aitw_frozen_v1") -> dict:
+    """Materialize per-split shards on the Volume from the cached pool + the
+    committed manifest. Verifies metadata consistency step-by-step; records
+    shard checksums in frozen/<version>/BUILD.json."""
+    import hashlib as _hashlib
+    import json as _json
+    import sys
+    from collections import Counter
+    from pathlib import Path as _Path
+
+    sys.path.insert(0, "/root/repo")
+    import torch as _torch
+
+    manifest_path = _Path("/root/repo/data/manifests") / f"{version}.json"
+    manifest = _json.loads(manifest_path.read_text())
+    assert manifest["revision"] == AITW_MIRROR_REVISION, "manifest revision mismatch"
+
+    pool_dir = _Path(STAGE1_CACHE_PATH) / AITW_POOL_DIR
+    pool_info = _json.loads((pool_dir / "POOL.json").read_text())
+    assert pool_info["revision"] == manifest["revision"], "pool revision mismatch"
+
+    by_key = {}
+    for e in manifest["entries"]:
+        by_key[(e["ep_id"], e["step_id"])] = e
+
+    out_dir = _Path(STAGE1_CACHE_PATH) / "frozen" / version
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    buckets = {"train": [], "val": [], "test": []}
+    n_seen = 0
+    for shard_info in pool_info["shards"]:
+        shard = _torch.load(pool_dir / shard_info["file"], weights_only=False)
+        for rec in shard:
+            ent = by_key.get((rec["ep_id"], rec["step_id"]))
+            if ent is None:
+                continue
+            # metadata must agree exactly between pool cache and manifest
+            assert ent["label"] == rec["label"], (rec["ep_id"], rec["step_id"])
+            assert ent["cid"] == rec["cid"]
+            assert abs(ent["touch_yx"][0] - rec["touch_yx"][0]) < 1e-9
+            assert ent["awc_index"] == rec["awc_index"]
+            rec["goal_key"] = ent["goal_key"]
+            buckets[ent["split"]].append(rec)
+            n_seen += 1
+    assert n_seen == len(manifest["entries"]), (
+        f"pool covered {n_seen} of {len(manifest['entries'])} manifest steps")
+
+    SHARD_SIZE = 400
+    shards_out = {"train": [], "val": [], "test": []}
+    counts = {}
+    for split, recs in buckets.items():
+        recs.sort(key=lambda r: r["awc_index"])  # manifest/stream order
+        for k in range(0, len(recs), SHARD_SIZE):
+            chunk = recs[k:k + SHARD_SIZE]
+            fp = out_dir / f"{split}_{k // SHARD_SIZE:03d}.pt"
+            _torch.save(chunk, fp)
+            shards_out[split].append({
+                "file": fp.name, "n": len(chunk),
+                "sha256": _hashlib.sha256(fp.read_bytes()).hexdigest(),
+            })
+        counts[split] = {"steps": len(recs),
+                         "labels": dict(Counter(r["label"] for r in recs)),
+                         "episodes": len({r["ep_id"] for r in recs}),
+                         "goals": len({r["goal_key"] for r in recs})}
+        print(f"[freeze] {split}: {counts[split]}")
+
+    build = {
+        "version": version,
+        "repo": manifest["repo"],
+        "revision": manifest["revision"],
+        "entries_sha256": manifest["entries_sha256"],
+        "counts": counts,
+        "shards": shards_out,
+    }
+    (out_dir / "BUILD.json").write_text(_json.dumps(build, indent=2))
+    stage1_cache.commit()
+    print(f"[freeze] wrote {out_dir / 'BUILD.json'}")
+    return {"version": version, "counts": counts}
+
+
+@app.local_entrypoint()
+def build_frozen_splits(version: str = "aitw_frozen_v1") -> None:
+    """Build frozen split shards on the Volume from pool + committed manifest."""
+    info = _build_frozen_splits_remote.remote(version)
+    print(f"[freeze] done: {info}")

@@ -253,6 +253,9 @@ def _metrics_from_predictions(
         "hit_at_025": float(hit(0.25)),
         "per_class": per_class,
         "per_example_dist": per_example_dist,
+        # Predicted (x, y) per example in INPUT ORDER (None = parse failure),
+        # so audits can recompute every distance from raw predictions.
+        "per_example_pred": [list(p) if p is not None else None for p in preds],
     }
 
 
