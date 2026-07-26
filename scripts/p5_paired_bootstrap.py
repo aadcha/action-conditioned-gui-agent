@@ -1,27 +1,32 @@
-"""Phase 5 — paired bootstrap A vs D-hook from per-example distances.
+"""Phase 5 — DEPRECATED pooled paired bootstrap (kept for the historical record).
 
-Reads Stage 2 run JSONs that contain `final_val_metrics.per_example_dist`
-(added to the eval pipeline in src/train/stage2.py), pools the per-example
-normalized-L2 distances across seeds for each variant, and runs a paired
-bootstrap + permutation test for each grounding metric.
-
-The val set is identical across seeds and across variants for a given
-(data_mix, n_train, n_val) — the AITW stream is deterministic — so example i
-refers to the same screenshot in every run. Pooling across seeds therefore
-gives (seed, example) units that are paired between A and D-hook.
-
-Usage:
-    uv run python scripts/p5_paired_bootstrap.py --mix all_with_coords
-
-Requires runs produced AFTER per_example_dist logging was added. Run JSONs
-without it are skipped with a warning.
+DO NOT USE FOR INFERENCE. This script pools (seed, example) rows as
+independent units. Repeated predictions of the same example by different
+seeds are correlated, so the pooled CI/p-value is anti-conservative: on
+synthetic clustered nulls the pooled test rejected ~21% of the time at
+nominal 5% (see results/phase8_reanalysis/). Every p-value this script ever
+produced (including the retracted p=0.0002 headline) is superseded by
+scripts/p8_dependence_reanalysis.py, which clusters by episode and reports
+per-seed effects. This file remains only so the historical analysis is
+reproducible for the audit trail.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
+
+print(
+    "WARNING: p5_paired_bootstrap.py is DEPRECATED and statistically invalid "
+    "(pools correlated (seed,example) rows). Use scripts/p8_dependence_reanalysis.py. "
+    "Pass --i-know-this-is-deprecated to run anyway for audit purposes.",
+    file=sys.stderr,
+)
+if "--i-know-this-is-deprecated" not in sys.argv:
+    sys.exit(2)
+sys.argv.remove("--i-know-this-is-deprecated")
 
 import numpy as np
 

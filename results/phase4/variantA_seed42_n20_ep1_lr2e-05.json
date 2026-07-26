@@ -1,0 +1,311 @@
+{
+  "variant": "A_flat_baseline",
+  "n_train": 20,
+  "n_val": 10,
+  "epochs": 1,
+  "lr": 2e-05,
+  "batch_size": 1,
+  "coord_scale": 1000,
+  "seed": 42,
+  "aitw_split": "train",
+  "only_taps": false,
+  "data_mix": "all_with_coords",
+  "frozen_split": "aitw_frozen_v1",
+  "train_action_distribution": {
+    "0": 15,
+    "3": 3,
+    "2": 2
+  },
+  "val_action_distribution": {
+    "0": 5,
+    "2": 2,
+    "3": 3
+  },
+  "trainable_params": 4358144,
+  "all_params": 2213343744,
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.479257297515869,
+      "n_total": 10,
+      "n_parsed": 2,
+      "parse_rate": 0.2,
+      "mean_normalized_l2": 1.279675287786805,
+      "hit_at_005": 0.0,
+      "hit_at_010": 0.0,
+      "hit_at_025": 0.0,
+      "per_class": {
+        "click": {
+          "n": 1,
+          "mean_normalized_l2": 1.0037156569632053,
+          "hit_at_005": 0.0,
+          "hit_at_010": 0.0,
+          "hit_at_025": 0.0
+        },
+        "type": {
+          "n": 1,
+          "mean_normalized_l2": 1.5556349186104046,
+          "hit_at_005": 0.0,
+          "hit_at_010": 0.0,
+          "hit_at_025": 0.0
+        }
+      },
+      "per_example_dist": [
+        1.0037156569632053,
+        1.5556349186104046,
+        1.4142135623730951,
+        1.4142135623730951,
+        1.4142135623730951,
+        1.4142135623730951,
+        1.4142135623730951,
+        1.4142135623730951,
+        1.4142135623730951,
+        1.4142135623730951
+      ],
+      "per_example_pred": [
+        [
+          0.01,
+          0.01
+        ],
+        [
+          0.1,
+          0.1
+        ],
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    }
+  ],
+  "final_val_metrics": {
+    "epoch": 1,
+    "train_loss": 1.479257297515869,
+    "n_total": 10,
+    "n_parsed": 2,
+    "parse_rate": 0.2,
+    "mean_normalized_l2": 1.279675287786805,
+    "hit_at_005": 0.0,
+    "hit_at_010": 0.0,
+    "hit_at_025": 0.0,
+    "per_class": {
+      "click": {
+        "n": 1,
+        "mean_normalized_l2": 1.0037156569632053,
+        "hit_at_005": 0.0,
+        "hit_at_010": 0.0,
+        "hit_at_025": 0.0
+      },
+      "type": {
+        "n": 1,
+        "mean_normalized_l2": 1.5556349186104046,
+        "hit_at_005": 0.0,
+        "hit_at_010": 0.0,
+        "hit_at_025": 0.0
+      }
+    },
+    "per_example_dist": [
+      1.0037156569632053,
+      1.5556349186104046,
+      1.4142135623730951,
+      1.4142135623730951,
+      1.4142135623730951,
+      1.4142135623730951,
+      1.4142135623730951,
+      1.4142135623730951,
+      1.4142135623730951,
+      1.4142135623730951
+    ],
+    "per_example_pred": [
+      [
+        0.01,
+        0.01
+      ],
+      [
+        0.1,
+        0.1
+      ],
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "final_test_metrics": {
+    "n_total": 10,
+    "n_parsed": 1,
+    "parse_rate": 0.1,
+    "mean_normalized_l2": 0.23506638402627478,
+    "hit_at_005": 0.0,
+    "hit_at_010": 0.0,
+    "hit_at_025": 1.0,
+    "per_class": {
+      "click": {
+        "n": 1,
+        "mean_normalized_l2": 0.23506638402627478,
+        "hit_at_005": 0.0,
+        "hit_at_010": 0.0,
+        "hit_at_025": 1.0
+      }
+    },
+    "per_example_dist": [
+      1.4142135623730951,
+      1.4142135623730951,
+      0.23506638402627478,
+      1.4142135623730951,
+      1.4142135623730951,
+      1.4142135623730951,
+      1.4142135623730951,
+      1.4142135623730951,
+      1.4142135623730951,
+      1.4142135623730951
+    ],
+    "per_example_pred": [
+      null,
+      null,
+      [
+        0.0,
+        0.0
+      ],
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "val_step_keys": [
+    {
+      "ep_id": "10270443145766995391",
+      "step_id": 0,
+      "label": "tap",
+      "awc_index": 23
+    },
+    {
+      "ep_id": "10270443145766995391",
+      "step_id": 1,
+      "label": "type",
+      "awc_index": 24
+    },
+    {
+      "ep_id": "10270443145766995391",
+      "step_id": 2,
+      "label": "type",
+      "awc_index": 25
+    },
+    {
+      "ep_id": "10270443145766995391",
+      "step_id": 3,
+      "label": "tap",
+      "awc_index": 26
+    },
+    {
+      "ep_id": "10270443145766995391",
+      "step_id": 4,
+      "label": "swipe_up",
+      "awc_index": 27
+    },
+    {
+      "ep_id": "10270443145766995391",
+      "step_id": 5,
+      "label": "swipe_up",
+      "awc_index": 28
+    },
+    {
+      "ep_id": "10270443145766995391",
+      "step_id": 6,
+      "label": "swipe_up",
+      "awc_index": 29
+    },
+    {
+      "ep_id": "10270443145766995391",
+      "step_id": 7,
+      "label": "tap",
+      "awc_index": 30
+    },
+    {
+      "ep_id": "10270443145766995391",
+      "step_id": 8,
+      "label": "tap",
+      "awc_index": 31
+    },
+    {
+      "ep_id": "10270443145766995391",
+      "step_id": 9,
+      "label": "tap",
+      "awc_index": 32
+    }
+  ],
+  "test_step_keys": [
+    {
+      "ep_id": "14723879484368473545",
+      "step_id": 0,
+      "label": "tap",
+      "awc_index": 5589
+    },
+    {
+      "ep_id": "14723879484368473545",
+      "step_id": 2,
+      "label": "tap",
+      "awc_index": 5590
+    },
+    {
+      "ep_id": "14723879484368473545",
+      "step_id": 3,
+      "label": "tap",
+      "awc_index": 5591
+    },
+    {
+      "ep_id": "14723879484368473545",
+      "step_id": 4,
+      "label": "type",
+      "awc_index": 5592
+    },
+    {
+      "ep_id": "14723879484368473545",
+      "step_id": 5,
+      "label": "tap",
+      "awc_index": 5593
+    },
+    {
+      "ep_id": "14723879484368473545",
+      "step_id": 6,
+      "label": "tap",
+      "awc_index": 5594
+    },
+    {
+      "ep_id": "1201032325535277333",
+      "step_id": 0,
+      "label": "tap",
+      "awc_index": 5602
+    },
+    {
+      "ep_id": "1201032325535277333",
+      "step_id": 1,
+      "label": "tap",
+      "awc_index": 5603
+    },
+    {
+      "ep_id": "1201032325535277333",
+      "step_id": 2,
+      "label": "type",
+      "awc_index": 5604
+    },
+    {
+      "ep_id": "1201032325535277333",
+      "step_id": 3,
+      "label": "type",
+      "awc_index": 5605
+    }
+  ]
+}

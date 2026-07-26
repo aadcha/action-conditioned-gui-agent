@@ -223,6 +223,7 @@ def _metrics_from_predictions(
             "hit_at_005": 0.0, "hit_at_010": 0.0, "hit_at_025": 0.0,
             "per_class": {},
             "per_example_dist": per_example_dist,
+            "per_example_pred": [None] * n_total,
         }
 
     dists = [math.hypot(p[0] - t[0], p[1] - t[1]) for p, t, _ in parsed_pairs]
