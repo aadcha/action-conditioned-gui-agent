@@ -39,8 +39,22 @@ def macro(name: str, value: str) -> None:
 
 
 def fmt_p(r: dict) -> str:
+    """Table cell: math-mode p-value, floored at Monte Carlo resolution."""
     p, res = r["p_value"], r["p_resolution"]
-    return f"$\\leq {res:.4g}$" if p <= res else f"${p:.3g}$"
+    return f"$<10^{{{_mag(res)}}}$" if p <= res else f"${p:.3g}$"
+
+
+def _mag(x: float) -> int:
+    """Ceiling power of ten, e.g. 9.999e-05 -> -4."""
+    import math
+    return int(math.ceil(math.log10(x)))
+
+
+def p_inline(r: dict) -> str:
+    """Inline macro body for use inside an existing `$p=...$`: no delimiters,
+    and never claims more precision than the permutation budget supports."""
+    p, res = r["p_value"], r["p_resolution"]
+    return f"{p:.3g}" if p > res else f"{{<}}10^{{{_mag(res)}}}"
 
 
 def ci(r: dict, digits: int = 3) -> str:
@@ -138,15 +152,15 @@ def exploratory(p8: dict) -> None:
 
     rB = cell["B_vs_A"]["metrics"]["hit_at_010"]["episode_clustered"]
     macro("ExpBvsA", ci(rB))
-    macro("ExpBvsAp", fmt_p(rB).strip("$"))
+    macro("ExpBvsAp", p_inline(rB))
     macro("ExpBvsAHolm", f"{cell['B_vs_A']['metrics']['hit_at_010']['holm_adjusted_p_vsA_family']:.3f}")
     rD = cell["Dhook_vs_A"]["metrics"]["hit_at_010"]["episode_clustered"]
     macro("ExpDhvsA", ci(rD))
-    macro("ExpDhvsAp", fmt_p(rD).strip("$"))
+    macro("ExpDhvsAp", p_inline(rD))
     macro("ExpDhvsAHolm", f"{cell['Dhook_vs_A']['metrics']['hit_at_010']['holm_adjusted_p_vsA_family']:.3f}")
     rDtB = cell["Dtoken_vs_B"]["metrics"]["hit_at_010"]["episode_clustered"]
     macro("ExpDtvsB", ci(rDtB))
-    macro("ExpDtvsBp", fmt_p(rDtB).strip("$"))
+    macro("ExpDtvsBp", p_inline(rDtB))
     legacy = cell["B_vs_A"]["metrics"]["hit_at_010"]["legacy_pooled"]
     macro("ExpBvsApooled", f"{legacy['p_value']:.4g}")
 
@@ -176,7 +190,7 @@ def exploratory(p8: dict) -> None:
         rp = ee["predicted_vs_flatA"]["metrics"]["hit_at_010"]["episode_clustered"]
         ro = ee["oracle_vs_flatA"]["metrics"]["hit_at_010"]["episode_clustered"]
         rg = ee["predicted_vs_oracle"]["metrics"]["hit_at_010"]["episode_clustered"]
-        macro("ExpEtoEPredvsA", ci(rp)); macro("ExpEtoEPredvsAp", fmt_p(rp).strip("$"))
+        macro("ExpEtoEPredvsA", ci(rp)); macro("ExpEtoEPredvsAp", p_inline(rp))
         macro("ExpEtoEOraclevsA", ci(ro))
         macro("ExpEtoEGap", ci(rg))
 
@@ -230,11 +244,11 @@ def confirmatory(p9: dict) -> None:
                     ("ConfDtvsB", "P3_Dtoken_vs_B"), ("ConfEtoEvsA", "P4_e2e_pred_vs_A")]:
         r = pri[key]["metrics"]["hit_at_010"]["episode_clustered"]
         macro(mk, ci(r))
-        macro(mk + "p", fmt_p(r).strip("$"))
+        macro(mk + "p", p_inline(r))
         macro(mk + "Holm", f"{pri[key]['holm_adjusted_p_hit010']:.3g}")
         rl = pri[key]["metrics"]["mean_normalized_l2"]["episode_clustered"]
         macro(mk + "Ltwo", ci(rl))
-        macro(mk + "Ltwop", fmt_p(rl).strip("$"))
+        macro(mk + "Ltwop", p_inline(rl))
 
     if "A (flat)" in stats:
         m10, s10, seeds = stats["A (flat)"]["hit010"]
@@ -291,6 +305,43 @@ def confirmatory(p9: dict) -> None:
              r"\midrule"] + rows + [r"\bottomrule", r"\end{tabular}"]
         write("tab_lowdata.tex", L)
 
+    # ---- confirmatory per-class decomposition (seed-averaged, test) ----
+    def per_class_means(pat: str) -> dict:
+        acc: dict[str, list[float]] = {}
+        ns: dict[str, int] = {}
+        for f in sorted(glob.glob(str(P4 / pat))):
+            pc = json.loads(Path(f).read_text())["final_test_metrics"].get("per_class") or {}
+            for cls, v in pc.items():
+                acc.setdefault(cls, []).append(v["hit_at_010"])
+                ns[cls] = v["n"]
+        return {c: (float(np.mean(vs)), ns[c]) for c, vs in acc.items()}
+
+    pc_rows = {nm: per_class_means(pat) for nm, pat in pats.items()}
+    if pc_rows.get("A (flat)"):
+        classes = [c for c in ("click", "scroll", "type") if c in pc_rows["A (flat)"]]
+        head = " & ".join(f"{c} ($n{{=}}{pc_rows['A (flat)'][c][1]}$)" for c in classes)
+        L = [r"\begin{tabular}{l" + "c" * len(classes) + "}", r"\toprule",
+             f"variant & {head} \\\\", r"\midrule"]
+        for nm in pats:
+            if nm not in pc_rows or not pc_rows[nm]:
+                continue
+            cells = []
+            for c in classes:
+                v = pc_rows[nm].get(c)
+                cells.append(f"${v[0]:.3f}$" if v else "---")
+            L.append(f"{nm} & " + " & ".join(cells) + r" \\")
+        L += [r"\bottomrule", r"\end{tabular}"]
+        write("tab_confirmatory_perclass.tex", L)
+        a_pc, dh_pc = pc_rows["A (flat)"], pc_rows.get("D-hook (additive)", {})
+        if "scroll" in a_pc and "scroll" in dh_pc:
+            macro("ConfAscroll", f"{a_pc['scroll'][0]:.3f}")
+            macro("ConfDhscroll", f"{dh_pc['scroll'][0]:.3f}")
+            macro("ConfScrollDelta", f"{dh_pc['scroll'][0] - a_pc['scroll'][0]:+.3f}")
+        if "click" in a_pc and "click" in dh_pc:
+            macro("ConfAclick", f"{a_pc['click'][0]:.3f}")
+            macro("ConfDhclick", f"{dh_pc['click'][0]:.3f}")
+            macro("ConfClickDelta", f"{dh_pc['click'][0] - a_pc['click'][0]:+.3f}")
+
     # ---- e2e on test ----
     e2f = sorted(glob.glob(str(P4 / f"e2e_seed4[234]_n1200_*mix-all_with_coords{fs}.json")))
     if e2f:
@@ -306,6 +357,21 @@ def confirmatory(p9: dict) -> None:
         macro("ConfStageOneAcc", f"{np.mean(s1a):.3f}")
         rg = p9["secondary"]["e2e_pred_vs_oracle"]["metrics"]["hit_at_010"]["episode_clustered"]
         macro("ConfEtoEGap", ci(rg))
+        macro("ConfEtoEGapp", p_inline(rg))
+        # Stage-1 accuracy on the frozen val split vs the untouched test split:
+        # the generalization drop that explains why the oracle gain does not
+        # survive the real classifier.
+        s1v = [json.loads(Path(f).read_text())["stage1_val_acc"] for f in e2f]
+        macro("ConfStageOneValAcc", f"{np.mean(s1v):.3f}")
+    for nm, key in [("ConfCvsA", "C_vs_A"), ("ConfDtvsA", "Dtoken_vs_A"),
+                    ("ConfDhvsB", "Dhook_vs_B"),
+                    ("ConfCtrlDhvsA", "control_Dhook_vs_A"),
+                    ("ConfCtrlBvsA", "control_B_vs_A"),
+                    ("ConfCtrlCvsA", "control_C_vs_A")]:
+        if key in p9["secondary"]:
+            rr = p9["secondary"][key]["metrics"]["hit_at_010"]["episode_clustered"]
+            macro(nm, ci(rr))
+            macro(nm + "p", p_inline(rr))
 
 
 def main() -> None:
