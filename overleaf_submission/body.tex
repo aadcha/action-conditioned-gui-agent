@@ -358,7 +358,7 @@ The confirmatory protocol removes both channels by construction
 
 \begin{table}[tb]
 \begin{center}\small
-\input{tables/tab_leakage}
+\fittab{\input{tables/tab_leakage}}
 \end{center}
 \caption{Leakage in the historical (exploratory) splits: fraction of
 validation steps sharing an episode or a normalized task goal with that
@@ -467,7 +467,7 @@ Appendix~\ref{app:exploratory}.
 \newcommand{\tabexploratoryfloat}{%
 \begin{table}[tb]
 \begin{center}\small
-\input{tables/tab_exploratory_main}
+\fittab{\input{tables/tab_exploratory_main}}
 \end{center}
 \caption{Exploratory main ablation (AITW \texttt{all\_with\_coords},
 $n_{\text{train}}{=}1200$, 3 seeds, historical leaky splits).
@@ -632,7 +632,7 @@ Appendix~\ref{app:exploratory}).
 
 \begin{table}[tb]
 \begin{center}\small
-\input{tables/tab_causal}
+\fittab{\input{tables/tab_causal}}
 \end{center}
 \caption{Exploratory D-token sensitivity (episode-clustered, 3 seeds):
 evaluating the same trained model with wrong or zeroed action embeddings
@@ -685,7 +685,7 @@ before any test evaluation ran (Section~\ref{sec:protocols}).
 
 \begin{table}[tb]
 \begin{center}\small
-\input{tables/tab_confirmatory_main}
+\fittab{\input{tables/tab_confirmatory_main}}
 \end{center}
 \caption{\textbf{Confirmatory} main ablation on the untouched,
 goal-disjoint AITW test set ($n{=}600$ steps;
@@ -698,7 +698,7 @@ $\Delta$ vs.\ A: episode-clustered 95\% CI and permutation $p$
 \newcommand{\tabcontrolfloat}{%
 \begin{table}[tb]
 \begin{center}\small
-\input{tables/tab_control}
+\fittab{\input{tables/tab_control}}
 \end{center}
 \caption{Confirmatory control mix (\texttt{taps\_and\_swipes}) on its
 frozen 400-step test set. The control was designed as the falsifiable half
@@ -712,7 +712,7 @@ too (Section~\ref{sec:controlfail}).}
 \newcommand{\tablowdatafloat}{%
 \begin{table}[tb]
 \begin{center}\small
-\input{tables/tab_lowdata}
+\fittab{\input{tables/tab_lowdata}}
 \end{center}
 \caption{Confirmatory low-data grid on the \emph{same} frozen test set for
 every training size (nested training prefixes), removing the
@@ -785,7 +785,7 @@ absolutely still click}
 
 \begin{table}[tb]
 \begin{center}\small
-\input{tables/tab_confirmatory_perclass}
+\fittab{\input{tables/tab_confirmatory_perclass}}
 \end{center}
 \caption{Confirmatory per-class hit@0.10 on the untouched test set
 (seed-averaged; parse failures counted as misses, so denominators are the

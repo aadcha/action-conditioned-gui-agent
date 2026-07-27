@@ -140,7 +140,7 @@ def exploratory(p8: dict) -> None:
     ckey = {"B (aux loss)": "B_vs_A", "C (hard routing)": "C_vs_A",
             "D-hook (additive)": "Dhook_vs_A", "D-token (prepended)": "Dtoken_vs_A"}
     L = [r"\begin{tabular}{lcccc}", r"\toprule",
-         r"variant & hit@0.10 & mean L2 $\downarrow$ & $\Delta$ hit@0.10 vs.\ A [95\% CI] & perm.\ $p$ \\",
+         r"variant & hit@0.10 & L2 $\downarrow$ & $\Delta$ vs.\ A [95\% CI] & $p$ \\",
          r"\midrule"]
     for nm, pat in pats.items():
         m10, s10 = hist_stats(pat, "hit_at_010")
@@ -217,7 +217,7 @@ def exploratory(p8: dict) -> None:
     if "dtoken_causal_n1200" in p8["cells"]:
         cc = p8["cells"]["dtoken_causal_n1200"]
         L = [r"\begin{tabular}{lccc}", r"\toprule",
-             r"contrast & $\Delta$ hit@0.10 [95\% CI] & $\Delta$ hit@0.25 [95\% CI] & perm.\ $p$ (hit@0.10) \\",
+             r"contrast & $\Delta$ hit@0.10 [95\% CI] & $\Delta$ hit@0.25 [95\% CI] & $p$ \\",
              r"\midrule"]
         for key, label in [("wrong_vs_gold", "wrong $-$ gold"), ("zero_vs_gold", "zero $-$ gold")]:
             r10 = cc[key]["metrics"]["hit_at_010"]["episode_clustered"]
@@ -264,7 +264,7 @@ def confirmatory(p9: dict) -> None:
     cmap = {"B (aux loss)": ("P1_B_vs_A", False), "D-hook (additive)": ("P2_Dhook_vs_A", False),
             "C (hard routing)": ("C_vs_A", True), "D-token (prepended)": ("Dtoken_vs_A", True)}
     L = [r"\begin{tabular}{lccccc}", r"\toprule",
-         r"variant & hit@0.10 & mean L2 $\downarrow$ & parse & $\Delta$ hit@0.10 vs.\ A [95\% CI] & perm.\ $p$ (Holm) \\",
+         r"variant & hit@0.10 & L2 $\downarrow$ & parse & $\Delta$ vs.\ A [95\% CI] & $p$ (Holm) \\",
          r"\midrule"]
     for nm in pats:
         if nm not in stats:
@@ -330,7 +330,7 @@ def confirmatory(p9: dict) -> None:
             rows.append(f"{nm} & ${m10:.3f} \\pm {s10:.3f}$ & ${l2:.3f}$ & {prs} & --- & --- \\\\")
     if rows:
         L = [r"\begin{tabular}{lccccc}", r"\toprule",
-             r"variant & hit@0.10 & mean L2 $\downarrow$ & parse & $\Delta$ hit@0.10 vs.\ A [95\% CI] & perm.\ $p$ \\",
+             r"variant & hit@0.10 & L2 $\downarrow$ & parse & $\Delta$ vs.\ A [95\% CI] & $p$ \\",
              r"\midrule"] + rows + [r"\bottomrule", r"\end{tabular}"]
         write("tab_control.tex", L)
 
@@ -352,7 +352,7 @@ def confirmatory(p9: dict) -> None:
         rows.append(" & ".join(cols) + r" \\")
     if rows:
         L = [r"\begin{tabular}{lccc}", r"\toprule",
-             r"train size & A hit@0.10 & $\Delta$ B$-$A [95\% CI] & $\Delta$ D-hook$-$A [95\% CI] \\",
+             r"$n_{\text{train}}$ & A & $\Delta$ B$-$A [95\% CI] & $\Delta$ D-hook$-$A [95\% CI] \\",
              r"\midrule"] + rows + [r"\bottomrule", r"\end{tabular}"]
         write("tab_lowdata.tex", L)
 

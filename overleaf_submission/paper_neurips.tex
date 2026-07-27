@@ -35,6 +35,11 @@
 
 % Every results number comes from committed artifacts via generated tables;
 % see scripts/p10_render_paper_tables.py. Do not hand-type result numbers.
+% Shrink over-wide tables to the column (never enlarge). Two-column CVPR
+% columns are narrow; the confirmatory tables carry six columns.
+\newcommand{\fittab}[1]{%
+  \resizebox{\ifdim\width>\linewidth \linewidth\else \width\fi}{!}{#1}}
+
 \input{tables/macros}
 \providecommand{\ConfBvsA}{\textbf{[PENDING]}}
 \providecommand{\ConfBvsAp}{\textbf{[PENDING]}}
