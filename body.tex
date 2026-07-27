@@ -433,7 +433,20 @@ vision adds $+0.009$ macro-F1 over text; on AITW, instructions state goals
 (``open a new Chrome private window''), text-only collapses toward the
 majority class, and vision adds $+0.414$. A TF-IDF ceiling of $0.168$ on
 AITW confirms text is uninformative there regardless of classifier
-strength. This asymmetry decides where Stage-2 conditioning could matter
+strength.
+
+Unlike the Stage-2 experiments, these Stage-1 runs are \emph{not} affected
+by the stream-slicing defect of Section~\ref{sec:leakage}: they train on
+each dataset's own \texttt{train} split and evaluate on its held-out
+\texttt{test} split (AITW) or \texttt{test\_task} split (Mind2Web). We did
+not, however, audit goal overlap \emph{between} those official splits, so
+we treat these numbers as descriptive context rather than as a
+contamination-checked result. The Stage-1 accuracy that matters for the
+deployable claim is measured on our own frozen splits in
+Section~\ref{sec:confirmatory}, where it is substantially lower on unseen
+goals.
+
+This asymmetry decides where Stage-2 conditioning could matter
 at all.
 
 }
@@ -464,8 +477,10 @@ Table~\ref{tab:exploratory} re-scores the historical headline with the
 repaired statistics (per-seed values in Figure~\ref{fig:ablation}). Three
 observations. First, the auxiliary-loss effect
 survives: B$-$A on hit@0.10 is \ExpBvsA{} ($p=\ExpBvsAp$), where the
-invalid pooled analysis had claimed $p=\ExpBvsApooled$ -- the conclusion
-stands but the evidence was overstated by an order of magnitude. Second,
+invalid pooled analysis had claimed $p=\ExpBvsApooled$ -- on \emph{this}
+data the conclusion stands, with the evidence overstated by an order of
+magnitude. (Section~\ref{sec:confirmatory} shows it does not survive a
+clean split at all: fixing the statistics was not sufficient.) Second,
 D-hook weakens to marginal after multiplicity correction. Third, the
 comparison our proposal cared about most -- D-token vs.\ B -- is
 \emph{no longer significant} (\ExpDtvsB{}, $p=\ExpDtvsBp$): on the
