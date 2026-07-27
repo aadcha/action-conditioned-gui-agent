@@ -163,6 +163,9 @@ def exploratory(p8: dict) -> None:
     macro("ExpDtvsBp", p_inline(rDtB))
     legacy = cell["B_vs_A"]["metrics"]["hit_at_010"]["legacy_pooled"]
     macro("ExpBvsApooled", f"{legacy['p_value']:.4g}")
+    # The pooled p that produced the course-era "D-token is refuted" verdict.
+    macro("ExpDtvsBpooled",
+          f"{cell['Dtoken_vs_B']['metrics']['hit_at_010']['legacy_pooled']['p_value']:.3g}")
 
     # ---- validation numbers ----
     v = p8["validation"]
@@ -341,6 +344,11 @@ def confirmatory(p9: dict) -> None:
             macro("ConfAclick", f"{a_pc['click'][0]:.3f}")
             macro("ConfDhclick", f"{dh_pc['click'][0]:.3f}")
             macro("ConfClickDelta", f"{dh_pc['click'][0] - a_pc['click'][0]:+.3f}")
+        # Relative (fold) improvements, so the text never hand-types a ratio.
+        if a_pc.get("scroll", (0,))[0]:
+            macro("ConfScrollFold", f"{dh_pc['scroll'][0] / a_pc['scroll'][0]:.1f}")
+        if a_pc.get("click", (0,))[0]:
+            macro("ConfClickFold", f"{dh_pc['click'][0] / a_pc['click'][0]:.1f}")
 
     # ---- e2e on test ----
     e2f = sorted(glob.glob(str(P4 / f"e2e_seed4[234]_n1200_*mix-all_with_coords{fs}.json")))

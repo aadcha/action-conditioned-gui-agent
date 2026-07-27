@@ -1,0 +1,132 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand*\HyPL@Entry[1]{}
+\HyPL@Entry{0<</S/D>>}
+\citation{uitars}
+\citation{osatlas}
+\citation{seeclick}
+\citation{showui}
+\citation{qwen2vl}
+\citation{aitw}
+\citation{mind2web}
+\citation{uitars}
+\citation{osatlas}
+\citation{showui}
+\citation{seeclick}
+\citation{uground}
+\citation{guiactor}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{2}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{2}{section.2}\protected@file@percent }
+\citation{uir1}
+\citation{regionfocus}
+\citation{saycan}
+\citation{react}
+\citation{rt2}
+\citation{mind2web}
+\citation{aitw}
+\citation{mind2web}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Stage 1 action-type classifier macro-F1 on Mind2Web (2 active classes) and AITW (5 active classes). Vision is essential on AITW ($+0.414$ over text-only) but redundant on Mind2Web ($+0.009$), because AITW instructions describe \emph  {goals} rather than physically specifying the action.}}{3}{figure.1}\protected@file@percent }
+\newlabel{fig:stage1_comparison}{{1}{3}{Stage 1 action-type classifier macro-F1 on Mind2Web (2 active classes) and AITW (5 active classes). Vision is essential on AITW ($+0.414$ over text-only) but redundant on Mind2Web ($+0.009$), because AITW instructions describe \emph {goals} rather than physically specifying the action}{figure.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3}Data and Splits}{3}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Two evaluation protocols}{4}{subsection.3.1}\protected@file@percent }
+\newlabel{sec:protocols}{{3.1}{4}{Two evaluation protocols}{subsection.3.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Methods}{4}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Stage 2: five conditioning mechanisms}{4}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Evaluation metrics}{4}{subsection.4.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Leakage in the historical (exploratory) splits: fraction of validation steps sharing an episode or a normalized task goal with that cell's training slice. Goal sharing, not episode straddling, is the dominant channel.}}{5}{table.1}\protected@file@percent }
+\newlabel{tab:leakage}{{1}{5}{Leakage in the historical (exploratory) splits: fraction of validation steps sharing an episode or a normalized task goal with that cell's training slice. Goal sharing, not episode straddling, is the dominant channel}{table.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Three Evaluation Pitfalls, Quantified}{5}{section.5}\protected@file@percent }
+\newlabel{sec:pitfalls}{{5}{5}{Three Evaluation Pitfalls, Quantified}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Pitfall 1: M-RoPE vs.\ \texttt  {inputs\_embeds}}{5}{subsection.5.1}\protected@file@percent }
+\newlabel{sec:mrope}{{5.1}{5}{Pitfall 1: M-RoPE vs.\ \texttt {inputs\_embeds}}{subsection.5.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Pitfall 2: stream-slice splits leak task goals}{5}{subsection.5.2}\protected@file@percent }
+\newlabel{sec:leakage}{{5.2}{5}{Pitfall 2: stream-slice splits leak task goals}{subsection.5.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Pitfall 3: pseudo-replicated significance}{5}{subsection.5.3}\protected@file@percent }
+\newlabel{sec:stats}{{5.3}{5}{Pitfall 3: pseudo-replicated significance}{subsection.5.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces \textbf  {Confirmatory} main ablation on the untouched, goal-disjoint AITW test set ($n{=}600$ steps; $n_{\text  {train}}{=}1200$; 3 seeds; mean$\pm $std across seeds). $\Delta $ vs.\ A: episode-clustered 95\% CI and permutation $p$ (Holm-adjusted across the four primary contrasts where applicable).}}{6}{table.2}\protected@file@percent }
+\newlabel{tab:confirmatory}{{2}{6}{\textbf {Confirmatory} main ablation on the untouched, goal-disjoint AITW test set ($n{=}600$ steps; $n_{\text {train}}{=}1200$; 3 seeds; mean$\pm $std across seeds). $\Delta $ vs.\ A: episode-clustered 95\% CI and permutation $p$ (Holm-adjusted across the four primary contrasts where applicable)}{table.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Exploratory Results (historical splits, repaired statistics)}{6}{section.6}\protected@file@percent }
+\newlabel{sec:exploratory}{{6}{6}{Exploratory Results (historical splits, repaired statistics)}{section.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Main ablation under clustered statistics}{6}{subsection.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Confirmatory Results (untouched test, prespecified)}{6}{section.7}\protected@file@percent }
+\newlabel{sec:confirmatory}{{7}{6}{Confirmatory Results (untouched test, prespecified)}{section.7}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Confirmatory per-class hit@0.10 on the untouched test set (seed-averaged). The oracle conditioning gain is proportionally largest on \emph  {scroll} (A 0.064{} $\to $ D-hook 0.162{}, a $2.5\times $ relative improvement) and modest on \emph  {click} (0.312{} $\to $ 0.366{}). The auxiliary loss (B) improves click slightly while \emph  {harming} scroll. \emph  {type} remains exactly $0.000$ for every variant: AITW type coordinates are degenerate.}}{7}{table.3}\protected@file@percent }
+\newlabel{tab:confperclass}{{3}{7}{Confirmatory per-class hit@0.10 on the untouched test set (seed-averaged). The oracle conditioning gain is proportionally largest on \emph {scroll} (A \ConfAscroll {} $\to $ D-hook \ConfDhscroll {}, a $\ConfScrollFold \times $ relative improvement) and modest on \emph {click} (\ConfAclick {} $\to $ \ConfDhclick {}). The auxiliary loss (B) improves click slightly while \emph {harming} scroll. \emph {type} remains exactly $0.000$ for every variant: AITW type coordinates are degenerate}{table.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}Where the confirmatory gain lives: scroll, not click}{7}{subsection.7.1}\protected@file@percent }
+\newlabel{sec:confperclass}{{7.1}{7}{Where the confirmatory gain lives: scroll, not click}{subsection.7.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}The control condition does not behave as designed}{7}{subsection.7.2}\protected@file@percent }
+\newlabel{sec:controlfail}{{7.2}{7}{The control condition does not behave as designed}{subsection.7.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.3}Low data}{8}{subsection.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.4}What the broken evaluation actually cost}{8}{subsection.7.4}\protected@file@percent }
+\newlabel{sec:cost}{{7.4}{8}{What the broken evaluation actually cost}{subsection.7.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Limitations}{8}{section.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {9}Conclusion}{9}{section.9}\protected@file@percent }
+\newlabel{endofmaintext}{{9}{9}{Conclusion}{section.9}{}}
+\bibstyle{ieee}
+\bibdata{paper}
+\bibcite{saycan}{1}
+\bibcite{regionfocus}{2}
+\bibcite{rt2}{3}
+\bibcite{seeclick}{4}
+\bibcite{mind2web}{5}
+\bibcite{uground}{6}
+\bibcite{showui}{7}
+\bibcite{uir1}{8}
+\bibcite{aitw}{9}
+\bibcite{qwen2vl}{10}
+\bibcite{osatlas}{11}
+\bibcite{react}{12}
+\bibcite{uitars}{13}
+\bibcite{guiactor}{14}
+\citation{aitw}
+\citation{mind2web}
+\@writefile{toc}{\contentsline {section}{\numberline {A}Method details}{10}{appendix.A}\protected@file@percent }
+\newlabel{app:methods}{{A}{10}{Method details}{appendix.A}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.1}Sources and preprocessing}{10}{subsection.A.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Exploratory main ablation (AITW \texttt  {all\_with\_coords}, $n_{\text  {train}}{=}1200$, 3 seeds, historical leaky splits). Episode-clustered $\Delta $ vs.\ A with 95\% cluster-bootstrap CIs and sign-flip permutation $p$. Under the repaired analysis, B survives (Holm-adjusted $p=0.017$ across the four vs.-A contrasts); D-hook is marginal after correction (Holm $p=0.068$); C and D-token are not significant.}}{11}{table.4}\protected@file@percent }
+\newlabel{tab:exploratory}{{4}{11}{Exploratory main ablation (AITW \texttt {all\_with\_coords}, $n_{\text {train}}{=}1200$, 3 seeds, historical leaky splits). Episode-clustered $\Delta $ vs.\ A with 95\% cluster-bootstrap CIs and sign-flip permutation $p$. Under the repaired analysis, B survives (Holm-adjusted $p=\ExpBvsAHolm $ across the four vs.-A contrasts); D-hook is marginal after correction (Holm $p=\ExpDhvsAHolm $); C and D-token are not significant}{table.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Confirmatory control mix (\texttt  {taps\_and\_swipes}) on its frozen 400-step test set. The control was designed as the falsifiable half of the thesis --- conditioning should not help where action type is uninformative --- and it \emph  {fails}: D-hook shows a significant gain here too (Section\nobreakspace  {}\ref  {sec:controlfail}).}}{11}{table.5}\protected@file@percent }
+\newlabel{tab:control}{{5}{11}{Confirmatory control mix (\texttt {taps\_and\_swipes}) on its frozen 400-step test set. The control was designed as the falsifiable half of the thesis --- conditioning should not help where action type is uninformative --- and it \emph {fails}: D-hook shows a significant gain here too (Section~\ref {sec:controlfail})}{table.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.2}Stage 1: action-type classifier}{11}{subsection.A.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Objective.}{11}{section*.4}\protected@file@percent }
+\newlabel{eq:coord}{{1}{11}{Objective}{equation.A.1}{}}
+\@writefile{toc}{\contentsline {paragraph}{End-to-end pipeline.}{11}{section*.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {B}Exploratory material (historical splits)}{11}{appendix.B}\protected@file@percent }
+\newlabel{app:exploratory}{{B}{11}{Exploratory material (historical splits)}{appendix.B}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.1}Stage 1: vision is essential exactly where instructions under-specify the action}{11}{subsection.B.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Confirmatory low-data grid on the \emph  {same} frozen test set for every training size (nested training prefixes), removing the per-size-val-set confound of Figure\nobreakspace  {}\ref  {fig:scaling}.}}{12}{table.6}\protected@file@percent }
+\newlabel{tab:lowdata}{{6}{12}{Confirmatory low-data grid on the \emph {same} frozen test set for every training size (nested training prefixes), removing the per-size-val-set confound of Figure~\ref {fig:scaling}}{table.6}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces Stage\nobreakspace  {}1 action-type classification (3 seeds, mean$\pm $std; exploratory splits). On Mind2Web the instruction text alone contains the action type; on AITW it does not, and vision contributes $+0.414$ macro-F1. \texttt  {vision\_zeroed} collapsing to the majority floor is the sanity check that features, not priors, drive the result.}}{12}{table.7}\protected@file@percent }
+\newlabel{tab:stage1}{{7}{12}{Stage~1 action-type classification (3 seeds, mean$\pm $std; exploratory splits). On Mind2Web the instruction text alone contains the action type; on AITW it does not, and vision contributes $+0.414$ macro-F1. \texttt {vision\_zeroed} collapsing to the majority floor is the sanity check that features, not priors, drive the result}{table.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.2}Per-class decomposition: the gain is click disambiguation}{12}{subsection.B.2}\protected@file@percent }
+\newlabel{sec:perclass}{{B.2}{12}{Per-class decomposition: the gain is click disambiguation}{subsection.B.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.3}Control conditions}{12}{subsection.B.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.4}Low-data behavior: no clean curve}{12}{subsection.B.4}\protected@file@percent }
+\newlabel{sec:lowdata}{{B.4}{12}{Low-data behavior: no clean curve}{subsection.B.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Exploratory hit@0.10 by action class (\texttt  {all\_with\_coords}). The conditioning advantage concentrates in \emph  {click}; \emph  {type} is degenerate on AITW (all variants score exactly 0.000, mean L2 at the $\approx \sqrt  {2}$ corner-to-corner distance).}}{13}{figure.2}\protected@file@percent }
+\newlabel{fig:perclass}{{2}{13}{Exploratory hit@0.10 by action class (\texttt {all\_with\_coords}). The conditioning advantage concentrates in \emph {click}; \emph {type} is degenerate on AITW (all variants score exactly 0.000, mean L2 at the $\approx \sqrt {2}$ corner-to-corner distance)}{figure.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Exploratory D-token sensitivity (episode-clustered, 3 seeds): evaluating the same trained model with wrong or zeroed action embeddings severely degrades grounding. This establishes the embedding is \emph  {used} at inference -- a sensitivity/oracle analysis, not evidence that conditioning caused any gain over A.}}{13}{table.8}\protected@file@percent }
+\newlabel{tab:causal}{{8}{13}{Exploratory D-token sensitivity (episode-clustered, 3 seeds): evaluating the same trained model with wrong or zeroed action embeddings severely degrades grounding. This establishes the embedding is \emph {used} at inference -- a sensitivity/oracle analysis, not evidence that conditioning caused any gain over A}{table.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.5}The e2e pipeline claim also weakens}{13}{subsection.B.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.6}D-token causal-use sensitivity}{13}{subsection.B.6}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Exploratory ablation on \texttt  {all\_with\_coords} (historical splits; per-seed values). Shown for continuity with the historical record; Table\nobreakspace  {}\ref  {tab:exploratory} carries the calibrated statistics and Table\nobreakspace  {}\ref  {tab:confirmatory} the confirmatory test-set versions.}}{14}{figure.3}\protected@file@percent }
+\newlabel{fig:ablation}{{3}{14}{Exploratory ablation on \texttt {all\_with\_coords} (historical splits; per-seed values). Shown for continuity with the historical record; Table~\ref {tab:exploratory} carries the calibrated statistics and Table~\ref {tab:confirmatory} the confirmatory test-set versions}{figure.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Exploratory conditioning advantage ($\Delta $ hit@0.10 vs.\ A) across $n_{\text  {train}}$. Caveat from Section\nobreakspace  {}\ref  {sec:leakage}: each historical size used a \emph  {different} val slice with different goal leakage (up to 85\%), so this curve is directional at best; the confirmatory grid (Table\nobreakspace  {}\ref  {tab:lowdata}) fixes one frozen test set for all sizes.}}{14}{figure.4}\protected@file@percent }
+\newlabel{fig:scaling}{{4}{14}{Exploratory conditioning advantage ($\Delta $ hit@0.10 vs.\ A) across $n_{\text {train}}$. Caveat from Section~\ref {sec:leakage}: each historical size used a \emph {different} val slice with different goal leakage (up to \LeakGoalMax ), so this curve is directional at best; the confirmatory grid (Table~\ref {tab:lowdata}) fixes one frozen test set for all sizes}{figure.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Image-region attention for a held-out \emph  {click} example under three action-type conditionings (qualitative illustration; screenshot attention mass 0.204 under \emph  {click} vs.\ 0.132/0.110 under \emph  {type}/\emph  {scroll}).}}{15}{figure.5}\protected@file@percent }
+\newlabel{fig:attention}{{5}{15}{Image-region attention for a held-out \emph {click} example under three action-type conditionings (qualitative illustration; screenshot attention mass 0.204 under \emph {click} vs.\ 0.132/0.110 under \emph {type}/\emph {scroll})}{figure.5}{}}
+\gdef \@abspage@last{15}

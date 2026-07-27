@@ -21,14 +21,15 @@ time at nominal 5\% (an episode-clustered replacement achieves
 \TypeIClustered{}). We then rebuilt the data pipeline around frozen
 goal-disjoint splits with a test region no phase of the project had ever
 touched, prespecified four contrasts, and evaluated once. \textbf{Every
-mechanistic conclusion reversed.} The auxiliary loss that the repaired
+mechanistic conclusion of the original study reversed}, and the statistical
+repair alone would not have caught most of them. The auxiliary loss that the repaired
 statistics still endorsed on historical data (B$-$A \ExpBvsA{},
 $p=\ExpBvsAp$, versus the invalid pooled $p=\ExpBvsApooled$) is null on the
 untouched test set (\ConfBvsA{}, Holm $p=\ConfBvsAHolm$); the prepended
 action embedding our proposal advocated and the course-era version reported
 as \emph{refuted} in fact beats it (D-token$-$B \ConfDtvsB{}, Holm
 $p=\ConfDtvsBHolm$); the gain is proportionally largest on \emph{scroll}
-($2.5\times$) rather than click; the control condition designed to show no
+($\ConfScrollFold\times$) rather than click; the control condition designed to show no
 effect shows one, and is therefore invalid; and the deployable
 predicted-type pipeline is null (\ConfEtoEvsA{}, Holm
 $p=\ConfEtoEvsAHolm$) because Stage~1 accuracy falls from
@@ -159,6 +160,7 @@ reflects the type/location decomposition we study.
 
 \section{Data and Splits}
 
+\newcommand{\datasources}{%
 \subsection{Sources and preprocessing}
 
 We use two datasets under a canonical 8-class action taxonomy
@@ -185,6 +187,22 @@ is click/type-dominated with only two active classes at scale.
 \textbf{Coordinates.} Targets are normalized to $[0,1]^2$ and rendered as
 the string \texttt{"(x, y)"} on a $[0,999]$ grid; training loss is masked
 to the coordinate tokens.
+
+}
+\ifworkshopbuild
+\textbf{Sources.} \textbf{AITW}~\cite{aitw} (HuggingFace mirror
+\texttt{cjfcsjt/AITW\_General}, revision pinned to \texttt{5c0dc713}) is the
+primary Stage-2 benchmark; \textbf{Mind2Web}~\cite{mind2web} provides the
+Stage-1 comparison and a cross-dataset control. Two AITW data mixes matter:
+\texttt{all\_with\_coords} (tap, swipe, type) and \texttt{taps\_and\_swipes},
+intended as a control in which action type carries little information about
+\emph{where} --- an assumption Section~\ref{sec:controlfail} shows to be
+false. Targets are normalized to $[0,1]^2$ and emitted as \texttt{"(x, y)"}
+on a $[0,999]$ grid, with loss masked to coordinate tokens. Mirror decoding,
+the tap/swipe split rule, and class statistics are in
+Appendix~\ref{app:methods}.
+
+\else\datasources\fi
 
 \subsection{Two evaluation protocols}
 \label{sec:protocols}
@@ -218,6 +236,7 @@ documented by commit history -- not third-party preregistration.
 
 \section{Methods}
 
+\newcommand{\methstageone}{%
 \subsection{Stage 1: action-type classifier}
 
 A \emph{frozen} Qwen2-VL-2B encodes screenshot+instruction; mean-pooled
@@ -225,6 +244,13 @@ final hidden states (1536-d) feed a 3-layer MLP trained with
 class-weighted cross-entropy (AdamW, lr $10^{-4}$, batch 128, 8 epochs,
 best epoch by validation macro-F1). Modes: \texttt{text\_only} vs.\
 \texttt{vision\_text}.
+
+}
+\ifworkshopbuild \textbf{Stage 1.} A frozen Qwen2-VL-2B encodes screenshot and
+instruction; mean-pooled final hidden states feed a 3-layer MLP trained
+with class-weighted cross-entropy (full details in
+Appendix~\ref{app:methods}).
+\else\methstageone\fi
 
 \subsection{Stage 2: five conditioning mechanisms}
 
@@ -254,6 +280,7 @@ embedding replaced in place by $E[a]$, M-RoPE-correctly (the token is in
 \texttt{input\_ids}); norm at convergence $\approx2.2$, a strong routable
 signal.
 
+\newcommand{\methobjective}{%
 \paragraph{Objective.} With screenshot $s$, instruction $g$, action type
 $a$, coordinate tokens $y_{1:T}$ and variant-specific conditioning $c$:
 \begin{equation}
@@ -269,6 +296,15 @@ forced word for C; B adds $\lambda\,\mathrm{CE}(h_\phi(\bar z), a)$
 D-hook, then a small MLP head on frozen-backbone features (Stage 1
 in-job), and evaluates grounding under \emph{predicted} types; gold-type
 results are oracle ceilings, never deployable claims.
+
+}
+\ifworkshopbuild All variants minimize the autoregressive loss over coordinate tokens,
+with variant-specific conditioning; B adds a weighted action-type
+cross-entropy term. The deployable end-to-end configuration trains
+D-hook, then a Stage~1 head on frozen-backbone features, and grounds
+under \emph{predicted} types; gold-type results are oracle ceilings
+throughout (Appendix~\ref{app:methods}).
+\else\methobjective\fi
 
 \subsection{Evaluation metrics}
 
@@ -361,6 +397,7 @@ therefore \emph{exploratory}; they are shown with episode-clustered
 statistics, and Section~\ref{sec:confirmatory} gives the prespecified
 untouched-test versions of every primary claim.
 
+\newcommand{\expstageone}{%
 \subsection{Stage 1: vision is essential exactly where instructions
 under-specify the action}
 
@@ -399,8 +436,15 @@ AITW confirms text is uninformative there regardless of classifier
 strength. This asymmetry decides where Stage-2 conditioning could matter
 at all.
 
+}
+\ifworkshopbuild The Stage~1 action-type classifier study (Table~\ref{tab:stage1}) is
+summarized by Figure~\ref{fig:stage1_comparison} and given in full in
+Appendix~\ref{app:exploratory}.
+\else\expstageone\fi
+
 \subsection{Main ablation under clustered statistics}
 
+\newcommand{\tabexploratoryfloat}{%
 \begin{table}[tb]
 \begin{center}\small
 \input{tables/tab_exploratory_main}
@@ -413,7 +457,8 @@ sign-flip permutation $p$. Under the repaired analysis, B survives
 is marginal after correction (Holm $p=\ExpDhvsAHolm$); C and D-token are
 not significant.}
 \label{tab:exploratory}
-\end{table}
+\end{table}}
+\ifworkshopbuild\else\tabexploratoryfloat\fi
 
 Table~\ref{tab:exploratory} re-scores the historical headline with the
 repaired statistics (per-seed values in Figure~\ref{fig:ablation}). Three
@@ -443,6 +488,7 @@ Table~\ref{tab:confirmatory} the confirmatory test-set versions.}
 \end{figure}}
 \ifworkshopbuild\else\figexpablation\fi
 
+\newcommand{\expperclass}{%
 \subsection{Per-class decomposition: the gain is click disambiguation}
 \label{sec:perclass}
 
@@ -484,6 +530,13 @@ hit@0.25 over 2 seeds -- a null, retained here deliberately: conditioning
 does not help where action type carries no spatial information, on either
 dataset.
 
+}
+\ifworkshopbuild The exploratory per-class decomposition (Appendix~\ref{app:exploratory},
+Section~\ref{sec:perclass}) attributed the advantage to \emph{click};
+Section~\ref{sec:confperclass} shows the confirmatory data do not.
+\else\expperclass\fi
+
+\newcommand{\explowdata}{%
 \subsection{Low-data behavior: no clean curve}
 \label{sec:lowdata}
 
@@ -520,6 +573,12 @@ on the frozen test set in Section~\ref{sec:confirmatory}. An earlier draft
 of this work called the low-data prediction ``confirmed''; that claim did
 not survive this audit.
 
+}
+\ifworkshopbuild The exploratory low-data grid (Appendix~\ref{app:exploratory}) shows no
+clean monotone trend and is confounded by per-size validation sets.
+\else\explowdata\fi
+
+\newcommand{\expetoe}{%
 \subsection{The e2e pipeline claim also weakens}
 
 The historical end-to-end result (predicted-type pipeline $0.271$ vs.\ A
@@ -530,6 +589,7 @@ marginal (\ExpEtoEOraclevsA). The deployable-pipeline question is
 therefore decided by the confirmatory run (P4, below), not the historical
 data.
 
+\newcommand{\expcausal}{%
 \subsection{D-token causal-use sensitivity}
 
 \begin{table}[tb]
@@ -566,6 +626,20 @@ attention mass 0.204 under \emph{click} vs.\ 0.132/0.110 under
 \end{figure}}
 \ifworkshopbuild\else\figexpattention\fi
 
+}
+\ifworkshopbuild A sensitivity analysis feeding the trained D-token model wrong or zeroed
+action embeddings (Appendix~\ref{app:exploratory},
+Table~\ref{tab:causal}) confirms the embedding is causally used at
+inference rather than ignored; it is a sensitivity test, not evidence
+that conditioning caused any gain over the baseline.
+\else\expcausal\fi
+
+}
+\ifworkshopbuild Under clustered statistics the historical end-to-end ``win'' is already
+not significant (\ExpEtoEPredvsA{}, $p=\ExpEtoEPredvsAp$;
+Appendix~\ref{app:exploratory}).
+\else\expetoe\fi
+
 \section{Confirmatory Results (untouched test, prespecified)}
 \label{sec:confirmatory}
 
@@ -587,6 +661,7 @@ $\Delta$ vs.\ A: episode-clustered 95\% CI and permutation $p$
 \label{tab:confirmatory}
 \end{table}
 
+\newcommand{\tabcontrolfloat}{%
 \begin{table}[tb]
 \begin{center}\small
 \input{tables/tab_control}
@@ -597,8 +672,10 @@ of the thesis --- conditioning should not help where action type is
 uninformative --- and it \emph{fails}: D-hook shows a significant gain here
 too (Section~\ref{sec:controlfail}).}
 \label{tab:control}
-\end{table}
+\end{table}}
+\ifworkshopbuild\else\tabcontrolfloat\fi
 
+\newcommand{\tablowdatafloat}{%
 \begin{table}[tb]
 \begin{center}\small
 \input{tables/tab_lowdata}
@@ -607,7 +684,8 @@ too (Section~\ref{sec:controlfail}).}
 every training size (nested training prefixes), removing the
 per-size-val-set confound of Figure~\ref{fig:scaling}.}
 \label{tab:lowdata}
-\end{table}
+\end{table}}
+\ifworkshopbuild\else\tablowdatafloat\fi
 
 \textbf{P1 (auxiliary supervision) --- null.} B vs.\ A on hit@0.10:
 \ConfBvsA{}, permutation $p=\ConfBvsAp$, Holm $p=\ConfBvsAHolm$; mean L2
@@ -656,7 +734,7 @@ the whole benefit}, directly contradicting the historical claim that
 \end{center}
 \caption{Confirmatory per-class hit@0.10 on the untouched test set
 (seed-averaged). The oracle conditioning gain is proportionally largest on
-\emph{scroll} (A \ConfAscroll{} $\to$ D-hook \ConfDhscroll{}, a $2.5\times$
+\emph{scroll} (A \ConfAscroll{} $\to$ D-hook \ConfDhscroll{}, a $\ConfScrollFold\times$
 relative improvement) and modest on \emph{click}
 (\ConfAclick{} $\to$ \ConfDhclick{}). The auxiliary loss (B) improves click
 slightly while \emph{harming} scroll. \emph{type} remains exactly $0.000$
@@ -668,7 +746,7 @@ Table~\ref{tab:confperclass} overturns the exploratory mechanism story of
 Section~\ref{sec:perclass}. On leaky data the conditioning advantage looked
 like \emph{click} disambiguation. On the untouched test set the dominant
 relative effect is on \emph{scroll} (\ConfScrollDelta{} absolute,
-$2.5\times$ relative), with a smaller click gain (\ConfClickDelta{}). The
+$\ConfScrollFold\times$ relative), with a smaller click gain (\ConfClickDelta{}). The
 mechanism this supports is different and simpler: swipe targets occupy a
 narrow, largely goal-independent region of the screen, so being told
 ``this step is a scroll'' relocates the prediction in a way the flat
@@ -713,32 +791,49 @@ per-seed means accompany every contrast.
 \subsection{What the broken evaluation actually cost}
 \label{sec:cost}
 
-Comparing Section~\ref{sec:exploratory} with this section, the leaky split
-and the pooled bootstrap did not merely inflate significance. Every
-mechanistic conclusion we would have published flips:
+Because the same five-variant ablation was run under both protocols, we can
+separate the two defects and ask what each one cost. Three states are
+distinguishable: \textbf{(i)} the original analysis (leaky split, pooled
+bootstrap) --- what a course-era version of this paper reported;
+\textbf{(ii)} the statistically repaired analysis on the \emph{same} leaky
+data (Section~\ref{sec:exploratory}); and \textbf{(iii)} the confirmatory
+analysis on the untouched split.
 
 \begin{itemize}
-\item \textbf{Which variant wins.} Exploratory: auxiliary loss (B) beats
-the flat baseline and is the best mechanism. Confirmatory: B is
-indistinguishable from the baseline, and the two embedding mechanisms are
-the only ones that help.
-\item \textbf{Whether our own hypothesis was refuted.} Exploratory:
-D-token loses to B, so the proposal's prepended embedding is refuted.
-Confirmatory: D-token significantly beats B.
-\item \textbf{Where the gain lives.} Exploratory: click disambiguation.
-Confirmatory: proportionally, scroll.
-\item \textbf{Whether the pipeline is deployable.} Exploratory: the
-predicted-type pipeline beats the baseline and classifier error is not the
-bottleneck. Confirmatory: the pipeline is null and classifier error
-consumes the entire oracle gain.
-\item \textbf{Whether the control holds.} Exploratory: conditioning is
-neutral where action type is uninformative. Confirmatory: the control
-shows a significant effect, so the control is invalid.
+\item \textbf{Which variant wins.} (i) B beats A, $p{=}\ExpBvsApooled$.
+(ii) B still beats A, \ExpBvsA{}, $p{=}\ExpBvsAp$. (iii) \emph{B is null}
+(\ConfBvsA{}); the embedding mechanisms are the only ones that help.
+\item \textbf{Whether our own hypothesis was refuted.} (i) D-token is
+significantly worse than B (pooled $p{=}\ExpDtvsBpooled$), so the proposal's
+prepended embedding is refuted. (ii) the gap is no longer significant
+(\ExpDtvsB{}, $p{=}\ExpDtvsBp$) --- the refutation was already an artifact
+of the pooled test. (iii) \emph{D-token significantly beats B}
+(\ConfDtvsB{}).
+\item \textbf{Where the gain lives.} (i)--(ii) click disambiguation.
+(iii) proportionally, \emph{scroll} ($\ConfScrollFold\times$ versus
+$\ConfClickFold\times$ for click).
+\item \textbf{Whether the pipeline is deployable.} (i) the predicted-type
+pipeline beats A and ``classifier error is not the bottleneck.'' (ii) the
+pipeline gain is no longer significant (\ExpEtoEPredvsA{}). (iii) the
+pipeline is \emph{null} and classifier error consumes the entire oracle
+gain.
+\item \textbf{Whether the control holds.} (i)--(ii) conditioning looks
+neutral where action type was assumed uninformative. (iii) the control
+shows a significant effect, so it is \emph{not a valid control}.
 \end{itemize}
 
-A study can be internally consistent, multi-seed, ablated, controlled, and
-significant at $p<0.002$, and still have every one of its mechanistic
-claims reverse under a clean split and a calibrated test.
+Two lessons separate cleanly. First, the statistical repair alone was
+\emph{not} sufficient: it corrected two claims (the D-token refutation and
+the deployable pipeline) but left the headline ``auxiliary supervision
+works'' and the click-mechanism story intact and wrong --- those required
+the clean split. Fixing inference without fixing the data would have
+produced a paper that was better calibrated and still substantively
+mistaken. Second, the direction of error is not systematic: the flawed
+protocol inflated some effects, suppressed our own hypothesis, and
+mis-located the mechanism. A study can be internally consistent,
+multi-seed, ablated, controlled, and significant at $p<0.002$, and still
+have every one of its mechanistic claims move under a clean split and a
+calibrated test.
 
 \section{Limitations}
 
@@ -808,6 +903,7 @@ clustered-inference code, and prespecification are released so that both
 the object-level result and the audit can be checked and rerun.
 
 %%%%%%%%% CONTRIBUTIONS + GENAI (not counted toward the page limit)
+\label{endofmaintext}
 \section*{Contributions}
 \textbf{A.~Chauhan}: training and evaluation infrastructure, Stage-2
 conditioning variants, cloud experiment orchestration, statistical

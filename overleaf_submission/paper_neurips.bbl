@@ -1,0 +1,81 @@
+\begin{thebibliography}{10}\itemsep=-1pt
+
+\bibitem{saycan}
+M.~Ahn et~al.
+\newblock Do as {I} can, not as {I} say: Grounding language in robotic
+  affordances.
+\newblock In {\em CoRL}, 2022.
+
+\bibitem{regionfocus}
+Anonymous.
+\newblock {RegionFocus}: Training-free visual test-time scaling for {GUI}
+  grounding.
+\newblock {\em arXiv preprint}, 2025.
+
+\bibitem{rt2}
+A.~Brohan et~al.
+\newblock {RT-2}: Vision-language-action models transfer web knowledge to
+  robotic control.
+\newblock {\em arXiv preprint arXiv:2307.15818}, 2023.
+
+\bibitem{seeclick}
+K.~Cheng et~al.
+\newblock {SeeClick}: Harnessing {GUI} grounding for advanced visual {GUI}
+  agents.
+\newblock {\em arXiv preprint arXiv:2401.10935}, 2024.
+
+\bibitem{mind2web}
+X.~Deng et~al.
+\newblock {Mind2Web}: Towards a generalist agent for the web.
+\newblock In {\em NeurIPS}, 2023.
+
+\bibitem{uground}
+B.~Gou et~al.
+\newblock Navigating the digital world as humans do: Universal visual grounding
+  for {GUI} agents.
+\newblock {\em arXiv preprint arXiv:2406.01729}, 2024.
+
+\bibitem{showui}
+K.~Q. Lin et~al.
+\newblock {ShowUI}: One vision-language-action model for {GUI} visual agent.
+\newblock {\em arXiv preprint arXiv:2411.17465}, 2024.
+
+\bibitem{uir1}
+Z.~Lu et~al.
+\newblock {UI-R1}: Enhancing action prediction of {GUI} agents by reinforcement
+  learning.
+\newblock {\em arXiv preprint arXiv:2503.21620}, 2025.
+
+\bibitem{aitw}
+C.~Rawles et~al.
+\newblock Android in the wild: A large-scale dataset for android device
+  control.
+\newblock In {\em NeurIPS}, 2023.
+
+\bibitem{qwen2vl}
+P.~Wang et~al.
+\newblock {Qwen2-VL}: Enhancing vision-language model's perception of the world
+  at any resolution.
+\newblock {\em arXiv preprint arXiv:2409.12191}, 2024.
+
+\bibitem{osatlas}
+Z.~Wu et~al.
+\newblock {OS-Atlas}: A foundation action model for generalist {GUI} agents.
+\newblock {\em arXiv preprint arXiv:2410.23218}, 2024.
+
+\bibitem{react}
+S.~Yao et~al.
+\newblock {ReAct}: Synergizing reasoning and acting in language models.
+\newblock {\em arXiv preprint arXiv:2210.03629}, 2022.
+
+\bibitem{uitars}
+Y.~Yao et~al.
+\newblock {UI-TARS}: Pioneering automated {GUI} interaction with native agents.
+\newblock {\em arXiv preprint arXiv:2501.12326}, 2025.
+
+\bibitem{guiactor}
+Q.~Zheng et~al.
+\newblock {GUI-Actor}: Coordinate-free visual grounding for {GUI} agents.
+\newblock {\em arXiv preprint arXiv:2503.15197}, 2025.
+
+\end{thebibliography}
