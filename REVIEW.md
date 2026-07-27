@@ -1,165 +1,179 @@
 # REVIEW — repaired CS231N paper: what changed, what the numbers are now, what remains for a human
 
-_Prepared 2026-07-26. Status: FILL-PENDING sections are completed after the
-confirmatory rerun lands; nothing here is final until they are._
+_Prepared 2026-07-26. The repair is complete: reanalysis, leakage-free rerun,
+paper rewrite, and both builds are done. What remains is human-only._
 
 ## TL;DR
 
-The paper was repaired end-to-end per `publication-gate.md` and the
-integrity memo: (1) the pooled p-values are retracted and replaced with a
-validated episode-clustered analysis; (2) the leaky stream-slice split was
-replaced by frozen goal-disjoint train/val/untouched-test manifests and
-every variant was retrained and evaluated once on the untouched test under
-a prespecified analysis; (3) the paper was reframed as an
-evaluation-integrity study ("when does action-type supervision help GUI
-grounding, and which implementation/evaluation choices create a false
-appearance of benefit"), placeholders removed, authors = Aadi Chauhan +
-Arthur Ilyasov; (4) two builds compile: arXiv (CVPR style) and NeurIPS 2026
-workshop style. Deliverable ends at the submit button; human-only steps
-below.
+The paper was repaired end-to-end per `publication-gate.md` and the integrity
+memo. The headline outcome is that **the repair changed the science, not just
+the error bars**: on an untouched, goal-disjoint test set, every mechanistic
+conclusion of the course-era paper reversed. The paper now reports that
+honestly and is framed around it.
+
+**What the untouched test set says (prespecified, Holm-corrected):**
+
+| contrast | Δ hit@0.10 [95% CI] | Holm p | verdict |
+|---|---|---|---|
+| P1 · B (aux loss) vs A | +0.011 [−0.005, +0.029] | 0.309 | **null** — the exploratory winner does not replicate |
+| P2 · D-hook vs A | +0.057 [+0.035, +0.079] | 0.0004 | **significant, but oracle** (gold action type at test) |
+| P3 · D-token vs B | +0.035 [+0.017, +0.054] | 0.0027 | **reverses in our favour** — the proposal's embedding beats the aux loss |
+| P4 · e2e predicted-type vs A | +0.015 [−0.004, +0.034] | 0.309 | **null** — the deployable claim fails |
+
+Supporting facts: Stage-1 action-type accuracy falls 0.795 (val) → 0.708
+(unseen goals); the predicted-vs-oracle gap (−0.048) exceeds the entire
+oracle gain, so classifier error consumes it. Per-class, the gain is
+proportionally largest on **scroll** (0.064 → 0.162, 2.5×), not click
+(0.312 → 0.366) — overturning the exploratory "click disambiguation" story.
+The **control condition failed**: D-hook gains +0.047 (p=0.033) on the mix
+where action type was assumed uninformative, so we no longer have a valid
+matched control and say so.
+
+Five distinct reversals versus the exploratory analysis are enumerated in
+the paper (§"What the broken evaluation actually cost"): which variant wins,
+whether our own hypothesis was refuted, where the gain lives, whether the
+pipeline is deployable, and whether the control holds.
 
 ## What changed (map to the release gate)
 
-### Statistics (gate: "dependence-aware analysis, never quote p=0.0002")
-- New module `src/eval/clustered.py`: seed-averaged per-example deltas,
+### Statistics (gate: dependence-aware analysis, never quote p=0.0002)
+- New `src/eval/clustered.py`: seed-averaged per-example deltas,
   episode-cluster bootstrap CIs (10k), episode-level sign-flip permutation
-  p (10k, never below Monte Carlo resolution, never p=0), per-seed means,
+  p (10k; never below Monte Carlo resolution, never p=0), per-seed means,
   Welch seed-level sensitivity.
-- Validated on synthetic clustered nulls
-  (`results/phase8_reanalysis/reanalysis.json → validation`): the legacy
-  pooled test rejects a true null 21.2% of the time at nominal 5% (1000
-  sims); the clustered test 5.1%. A procedure-level null with run offsets
-  drives ANY fixed-checkpoint test to ~55% rejection → estimand fixed as
-  "these checkpoints", per-seed effects always reported, no
-  procedure-level significance claims from 3 seeds.
-- `scripts/p5_paired_bootstrap.py` hard-deprecated (exits with a warning).
-- Reanalysis of ALL historical results:
-  `results/phase8_reanalysis/REANALYSIS.md`. Headline: B−A survives
-  (+0.051 hit@0.10, CI [+0.020,+0.081], p=0.0043, Holm 0.017 across the
-  vs-A family) vs the retracted pooled p=0.0002. D-hook−A weakens to
-  p=0.023 (Holm 0.068). "D-token significantly worse than B" no longer
-  holds (p=0.114). The historical e2e "predicted beats A" is NOT
-  significant clustered (+0.016, p=0.42).
+- Calibration measured on synthetic clustered nulls
+  (`results/phase8_reanalysis/reanalysis.json → validation`): legacy pooled
+  test rejects a true null **21.2%** of the time at nominal 5% (1000 sims);
+  clustered test **5.1%**. A procedure-level null with run offsets drives
+  any fixed-checkpoint test to ~55% → estimand fixed as "these checkpoints",
+  per-seed effects always reported, no procedure-level significance claims.
+- `scripts/p5_paired_bootstrap.py` hard-deprecated (exits unless explicitly
+  overridden), so the invalid pooled p-values cannot be regenerated.
+- Full reanalysis of the historical results:
+  `results/phase8_reanalysis/REANALYSIS.md`.
 
-### Data split (gate: "group-disjoint splits, untouched test, duplicate checks")
+### Data split (gate: group-disjoint splits, untouched test, duplicate checks)
 - Leakage quantified from a pinned-revision stream reconstruction
-  (alignment PROVEN: re-derived val slices match every run's recorded
-  class distribution exactly): episode overlap ~2% of val steps, but
-  shared task goals 24% (headline cell) → 85% (n=5000). Dominant channel
-  = repeated goal strings, not episode straddling.
-- `data/manifests/aitw_frozen_v1.json` (committed, sha-checked): first
-  12,000 all_with_coords steps of mirror revision 5c0dc713, grouped by
-  normalized goal, split goal-disjointly: train 9,511 / val 1,660 / test
-  829 steps. Test groups live entirely beyond stream index 5,500 — past
-  the furthest index ANY historical run loaded (5,250) — so test steps
-  were never touched by any phase of the project. 17 near-duplicate
-  train↔test goal pairs (Jaccard ≥ 0.8) disclosed in the manifest and the
-  paper's limitations. Disjointness enforced by tests
-  (`tests/test_manifest.py`).
-- Frozen image shards + checksums on the Modal volume
-  (`frozen/aitw_frozen_v1/BUILD.json`); frozen eval sets identical across
-  all variants and training sizes.
+  (alignment **proven**: re-derived val slices match every run's recorded
+  class distribution exactly): episode overlap ~2% of val steps, but shared
+  task goals 24% (headline) → 85% (n=5000). The dominant channel was
+  repeated goal strings, invisible to an episode-level check.
+- `data/manifests/aitw_frozen_v1.json` (committed, sha-checked): 12,000
+  all_with_coords steps of mirror revision 5c0dc713, grouped by normalized
+  goal, split goal-disjointly: train 9,511 / val 1,660 / test 829. Test
+  groups lie entirely beyond stream index 5,500 — past the furthest index
+  any historical run loaded (5,250). 17 near-duplicate train↔test goal pairs
+  (Jaccard ≥ 0.8) disclosed in the manifest and the paper's limitations.
+  Disjointness enforced by `tests/test_manifest.py`.
 
 ### Rerun (decision + protocol)
-- Decision: FULL rerun (main 5 variants + e2e × 3 seeds; control mix
-  A/B/C/D-hook × 3 seeds; low-data grid A/B/D-hook × {300,500,800} × 3
-  seeds = 57 runs), since (a) the effect survived reanalysis, (b) budget
-  allowed (~$148 remaining vs ~$40–60 est. for the batch), (c) the paper's
-  confirmatory section needs every table's clean-test version.
-- `results/phase9_rerun/PRESPEC.md` committed BEFORE any test evaluation:
-  estimand, frozen eval sets (awc val 250 / test 600; control 200/400),
-  primary contrasts P1 B−A, P2 D-hook−A, P3 B vs D-token, P4 e2e
-  predicted−A on hit@0.10 with Holm, failed-run rules, reporting
-  commitments. Analysis code (`scripts/p9_analyze_rerun.py`) also written
-  before test data existed.
-- Frozen data path validated end-to-end by 6 tiny smoke runs before the
-  batch (eval-set identity across variants confirmed).
+- **Decision: full rerun** (57 runs = main ablation 5 variants + e2e × 3
+  seeds; control mix A/B/C/D-hook × 3 seeds; low-data A/B/D-hook ×
+  {300,500,800} × 3 seeds), justified because the effect survived
+  reanalysis and the budget allowed. Nothing was scaled down.
+- `results/phase9_rerun/PRESPEC.md` committed **before** any test
+  evaluation; `scripts/p9_analyze_rerun.py` written before test data
+  existed and run once, unchanged (git history shows both).
+- Frozen data path validated by 6 tiny smoke runs before the batch
+  (eval-set identity across variants confirmed).
+- **Failed-run log:** the batch was disrupted twice by Modal
+  `--detach` clients being killed with the harness's shell timeouts, which
+  cancelled queued/running calls (the documented June kill-cascade gotcha).
+  No completed run was ever discarded or rerun; the 25 and then 16
+  cancelled configs were relaunched with identical seeds/config per the
+  prespec failed-run rule, finally via `.spawn()` against the deployed app
+  so no local process could cancel them (`scripts/p9_spawn_missing.py`).
+  All 57 cells completed exactly once.
+- **Spend:** Phase 8 reanalysis was free (CPU only, ~$0.50 for the dataset
+  scan). Phase 9's 57 L4 runs ≈ 96,000 train-example-epochs ≈ **$30–40**.
+  Cumulative project spend ≈ **$90 of $200**. (Estimated from run configs
+  and the documented L4 rate; the live dashboard could not be read in
+  session — the browser extension was disconnected. Human: confirm at
+  modal.com/settings → usage.)
 
-### Confirmatory results (FILL-PENDING)
-- P1 (B vs A, hit@0.10): __
-- P2 (D-hook vs A): __
-- P3 (D-token vs B): __
-- P4 (e2e predicted vs A): __
-- Control mix: __
-- Low-data grid: __
-- Failed-run log: __ (any infra relaunches recorded here)
-- Actual Modal spend for the rerun: __ (budget note: live dashboard could
-  not be checked in-session — browser extension disconnected; figures
-  above from documented ballparks. Human: glance at
-  modal.com/settings → usage for the true number.)
-
-### Paper (gate: "no placeholders, claims match evidence, Mind2Web null visible")
-- Reframed; three pitfalls (M-RoPE inputs_embeds bug, goal leakage,
-  pseudo-replication) are quantified contributions. Exploratory vs
-  confirmatory sections explicitly separated; gold/wrong/zero framed as
-  sensitivity/oracle; hit@radius never called task success; low-data
-  "confirmed" retracted and reported as noisy/directional; Mind2Web null
-  kept; SOTA claims absent; limitations section covers scope, estimand,
-  degenerate `type` coords, near-dup goals, mirror provenance.
-- EVERY results table/number generated from committed JSONs
-  (`scripts/p10_render_paper_tables.py` → `tables/`); no hand-typed
-  results. Contributions + Generative-AI statements are real text.
-- Author list: Aadi Chauhan + Arthur Ilyasov. NOTE: the course version had
-  equal-contribution asterisks; the rewrite currently has none — Arthur
-  must approve list, order, markers, and the contribution wording
-  (see `COAUTHOR_NOTE.md`).
-- Poster (`poster.tex`) NOT updated with corrected numbers — do not
-  distribute it until it is.
+### Paper (gate: no placeholders, claims match evidence, Mind2Web null visible)
+- Reframed as an evaluation-integrity study; the three pitfalls (M-RoPE
+  `inputs_embeds` bug, goal leakage, pseudo-replication) are quantified
+  contributions, and the five reversals are the paper's central result.
+- Exploratory and confirmatory sections explicitly separated; gold/wrong/zero
+  framed as sensitivity/oracle; hit@radius never called task success; the
+  low-data "confirmed" claim retracted; the Mind2Web null retained; no SOTA
+  claims; limitations cover oracle-gating, the failed control, post-hoc
+  per-class reading, degenerate `type` coordinates, near-dup goals, single
+  2B backbone, and mirror provenance.
+- **Every results number is generated from committed JSONs**
+  (`scripts/p10_render_paper_tables.py` → `tables/`); no hand-typed results.
+  Both PDFs verified free of the `PENDING` sentinel.
+- Contributions and Generative-AI statements are real text (no templates).
+- Author list: **Aadi Chauhan + Arthur Ilyasov**. The course version had
+  equal-contribution asterisks; the rewrite has none — Arthur must approve
+  list, order, markers, and contribution wording (`COAUTHOR_NOTE.md`).
+- ⚠️ **Poster (`poster.tex`) still carries the old, now-refuted numbers.**
+  Do not distribute it until it is regenerated.
 
 ### Builds (gate: arXiv + workshop)
-- `scripts/build_paper.sh` → `overleaf_submission/paper.pdf` (CVPR-style,
-  arXiv) and `overleaf_submission/paper_neurips.pdf` (NeurIPS 2026 style,
-  submission mode: anonymized + line numbers). Both compile with tectonic.
-- Venue verification (primary sources, 2026-07-26):
-  - **Evaluation of Interactive Agents @ NeurIPS 2026** (target): deadline
-    Aug 29, 2026 AoE; official NeurIPS 2026 style; up to 9 pages full
-    papers excl. refs/appendix; non-archival; OpenReview venue
-    `NeurIPS.cc/2026/Workshop/IAEval` exists but the submission portal is
-    NOT yet live and the CFP page says "under construction" —
-    anonymization policy UNCONFIRMED; re-check
+- `scripts/build_paper.sh` → `overleaf_submission/paper.pdf` (CVPR style,
+  arXiv, 8 pp), `overleaf_submission/paper_neurips.pdf` (NeurIPS 2026 style,
+  submission mode: anonymized + line numbers, 12 pp with 3 exploratory
+  figures relocated to a post-references appendix, so the main body is
+  within the 9-page limit), and `dist/arxiv_src.tar.gz` (sources + .bbl +
+  used figures, ready to upload).
+- **Venue verification (primary sources, 2026-07-26):**
+  - **Evaluation of Interactive Agents @ NeurIPS 2026** (target): Aug 29,
+    2026 AoE; official NeurIPS 2026 style; ≤9 pages excl. refs/appendix;
+    non-archival. OpenReview venue `NeurIPS.cc/2026/Workshop/IAEval` exists
+    but **the submission portal is not live yet and the CFP page says "under
+    construction" — the anonymization policy is UNCONFIRMED.** Re-check
     https://eval-interactive-agents-workshop.github.io/ before submitting.
-  - **VLM4RWD @ NeurIPS 2026** (fallback): OpenReview portal live, BUT its
-    configured hard close is 2026-08-31 04:00 UTC ≈ Aug 30 EOD US — NOT
-    Aug 31 AoE as the site implies. Double-blind, 8 pages, NeurIPS format.
-  - **Who Verifies the Agents?** (2nd fallback): Aug 29 AoE, 4–9 pages,
-    portal live; weaker topical fit.
-  - NeurIPS 2026 official workshop list not yet published; all three have
-    provisioned OpenReview venues (de facto accepted).
-  - neurips_2026.sty vendored from a mirror of the official file —
-    re-download from the finalized CFP before submission.
+  - **VLM4RWD @ NeurIPS 2026** (fallback): portal live, double-blind, 8 pp.
+    ⚠️ Its configured hard close is **2026-08-31 04:00 UTC ≈ Aug 30 end-of-day
+    US**, not Aug 31 AoE as the site implies.
+  - **Who Verifies the Agents?** (2nd fallback): Aug 29 AoE, 4–9 pp, portal
+    live; weaker topical fit.
+  - The official NeurIPS 2026 workshop list is not yet published; all three
+    have provisioned OpenReview venues (de facto accepted).
+  - `neurips_2026.sty` is vendored from a mirror — re-download from the
+    finalized CFP before submitting.
 
 ### Reproducibility (gate)
-- Tests: __ passing (was 29; now includes clustered-stats + manifest
-  disjointness tests).
-- Clean-env smoke: __ (FILL after run)
-- Independent-reader reproduction of the principal table from saved
-  predictions: __ (FILL: fresh-agent run + diff)
+- **43/43 tests pass** (29 original + clustered-statistics + manifest
+  disjointness tests), in a clean `git clone` + `uv sync` environment.
+- **Independent-reader reproduction verified**: a fresh agent, given only
+  the README, moved the committed outputs aside, reran
+  `p8_dependence_reanalysis.py` + `p10_render_paper_tables.py`, and
+  reproduced `reanalysis.json`, `REANALYSIS.md`, and all `tables/*.tex`
+  **byte-identically** (12.1 s + 0.1 s).
+- Reproduction path documented in the README:
+  ```
+  uv run python scripts/p8_dependence_reanalysis.py   # historical, clustered
+  uv run python scripts/p9_analyze_rerun.py           # untouched test
+  uv run python scripts/p10_render_paper_tables.py    # paper tables/macros
+  ```
 
 ## Open items / flags
-- **Third author**: the original proposal lists a third collaborator; the
-  manuscript is two-author. Unresolved by design — `COAUTHOR_NOTE.md`
-  asks Arthur; if any doubt remains, contact the third person before
-  posting. DO NOT post to arXiv until authorship is closed.
-- **Arthur's approvals**: author list/order/markers, contribution
-  statement, AI-disclosure wording, consent to arXiv + workshop.
-- IAEval CFP finalization (anonymization + portal).
+
+- **Third author**: the original proposal listed a third collaborator; the
+  manuscript is two-author. Deliberately unresolved — `COAUTHOR_NOTE.md`
+  asks Arthur; if any doubt remains, contact that person before posting.
+  **Do not post to arXiv until authorship is closed.**
+- **Arthur's approvals**: author list/order/markers, contribution statement,
+  AI-disclosure wording, and consent to arXiv + the workshop.
+- **IAEval CFP finalization**: anonymization policy and portal.
+- **Poster is stale** (old numbers) — regenerate or withhold.
 
 ## Human-only submission checklist (in order)
 
-1. Send `COAUTHOR_NOTE.md` (edited to taste) to Arthur; obtain explicit
-   approval on authorship, contributions, disclosure, and venues; resolve
-   the third-collaborator question.
-2. Glance at Modal usage dashboard; confirm spend matches this file.
-3. arXiv: log in (account with cs.CV submission rights; first-time
-   submitters may need endorsement for cs.CV), `Developer → new
-   submission`: upload `overleaf_submission/` contents (paper.tex,
-   body.tex, tables/, figures/, cvpr.sty deps, paper.bib) or the arXiv
-   tarball produced by `scripts/build_paper.sh`; primary cs.CV, cross-list
-   cs.AI; license: arXiv non-exclusive. Click submit ~2 business days
-   before you want it announced.
-4. Workshop (after CFP finalizes): create OpenReview submission at the
-   IAEval venue; upload `paper_neurips.pdf` source (flip to [final]
-   option only if the CFP says single-blind); fill authors/conflicts;
-   click submit before Aug 29, 2026 AoE. If IAEval slips, VLM4RWD closes
-   ~Aug 30 EOD US (not Aug 31 AoE) — plan accordingly.
-5. After arXiv announcement: update README badge/link, tell Arthur.
+1. Send `COAUTHOR_NOTE.md` (edited to taste) to Arthur; get explicit approval
+   on authorship, contributions, disclosure, and venues; resolve the
+   third-collaborator question.
+2. Confirm Modal spend on the usage dashboard matches the ≈$90 figure above.
+3. **arXiv**: log in (cs.CV submission rights; first-time submitters may need
+   endorsement for cs.CV) → new submission → upload `dist/arxiv_src.tar.gz`
+   → primary **cs.CV**, cross-list **cs.AI** → arXiv non-exclusive license →
+   submit (announcement takes ~1–2 business days).
+4. **Workshop** (after the CFP finalizes): create the OpenReview submission
+   at the IAEval venue, upload `overleaf_submission/paper_neurips.pdf`
+   (switch the style option to `[final]` only if the finalized CFP says
+   single-blind), fill authors/conflicts, submit before **Aug 29, 2026 AoE**.
+   If IAEval slips, VLM4RWD closes ~**Aug 30 end-of-day US**.
+5. After arXiv announcement: update the README link and tell Arthur.
