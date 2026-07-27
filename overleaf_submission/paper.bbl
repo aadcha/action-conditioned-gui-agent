@@ -6,12 +6,6 @@ M.~Ahn et~al.
   affordances.
 \newblock In {\em CoRL}, 2022.
 
-\bibitem{regionfocus}
-Anonymous.
-\newblock {RegionFocus}: Training-free visual test-time scaling for {GUI}
-  grounding.
-\newblock {\em arXiv preprint}, 2025.
-
 \bibitem{rt2}
 A.~Brohan et~al.
 \newblock {RT-2}: Vision-language-action models transfer web knowledge to
@@ -45,6 +39,13 @@ Z.~Lu et~al.
 \newblock {UI-R1}: Enhancing action prediction of {GUI} agents by reinforcement
   learning.
 \newblock {\em arXiv preprint arXiv:2503.21620}, 2025.
+
+\bibitem{regionfocus}
+T.~Luo, L.~Logeswaran, J.~Johnson, and H.~Lee.
+\newblock Visual test-time scaling for {GUI} agent grounding.
+\newblock In {\em Proceedings of the IEEE/CVF International Conference on
+  Computer Vision (ICCV)}, 2025.
+\newblock arXiv:2505.00684.
 
 \bibitem{aitw}
 C.~Rawles et~al.

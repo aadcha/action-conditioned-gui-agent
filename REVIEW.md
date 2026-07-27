@@ -129,12 +129,17 @@ pipeline is deployable, and whether the control holds.
     style), **11 pp**, everything inline including the Contributions and
     Generative-AI statements.
   - `overleaf_submission/paper_neurips.pdf` — **workshop build** (official
-    NeurIPS 2026 style, submission mode), **16 pp total** with **main text
-    ending on p. 9** (references p. 10, appendices after), satisfying
-    IAEval's "9 pages excluding references and appendices." Verified
-    **fully anonymized**: the style prints "Anonymous Author(s)", and the
-    author-identifying Contributions / Generative-AI back matter is gated
-    out of this build (a `pypdf` scan finds no author name on any page).
+    NeurIPS 2026 style, submission mode), **16 pp total**. Main text
+    (through the Conclusion) ends at the bottom of **p. 9**; the excluded
+    back-matter note and References begin on p. 10 and the appendices
+    follow — satisfying IAEval's "9 pages excluding references and
+    appendices." **This boundary is re-checked by extracting the built PDF,
+    not assumed**: an earlier round of audit corrections silently pushed the
+    Conclusion onto p. 10, which is why more material was relocated to the
+    appendix. Verified **fully anonymized**: the style prints "Anonymous
+    Author(s)", and the author-identifying Contributions / Generative-AI
+    back matter is gated out of this build (a `pypdf` scan finds no author
+    name on any page).
     A `\ifworkshopbuild` toggle relocates dataset-preprocessing detail,
     Stage-1 method, the training objective, the exploratory
     Stage-1/per-class/low-data/e2e/causal subsections, three exploratory
@@ -204,7 +209,12 @@ the more serious set, all since fixed:
   submission build.
 - Stale exploratory claims still asserted as current (the D-token
   refutation, the control-scope conclusion), an inconsistent 5-seed-vs-3-seed
-  baseline behind the exploratory per-class deltas, a placeholder citation,
+  baseline behind the exploratory per-class deltas, a placeholder citation
+  (which needed fixing **twice** — the first fix landed only in the root
+  `paper.bib`, but the build directory keeps its own copy that
+  `build_paper.sh` was not syncing, so both PDFs and the arXiv tarball
+  still printed "Anonymous"; the script now copies the bib, drops the
+  stale `.bbl`, and fails the build if a placeholder survives),
   a `\pm` convention mismatch between tables, an uncensored Holm p-value,
   and a self-contradiction in this file — all corrected.
 

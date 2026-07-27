@@ -356,6 +356,7 @@ a different val slice), quietly confounding the historical scaling curve.
 The confirmatory protocol removes both channels by construction
 (goal-disjoint splits; Section~\ref{sec:protocols}).
 
+\newcommand{\tableakagefloat}{%
 \begin{table}[tb]
 \begin{center}\small
 \fittab{\input{tables/tab_leakage}}
@@ -365,7 +366,8 @@ validation steps sharing an episode or a normalized task goal with that
 cell's training slice. Goal sharing, not episode straddling, is the
 dominant channel.}
 \label{tab:leakage}
-\end{table}
+\end{table}}
+\ifworkshopbuild\else\tableakagefloat\fi
 
 \subsection{Pitfall 3: pseudo-replicated significance}
 \label{sec:stats}
@@ -462,6 +464,7 @@ summarized by Figure~\ref{fig:stage1_comparison} and given in full in
 Appendix~\ref{app:exploratory}.
 \else\expstageone\fi
 
+\newcommand{\expmain}{%
 \subsection{Main ablation under clustered statistics}
 
 \newcommand{\tabexploratoryfloat}{%
@@ -509,6 +512,16 @@ Table~\ref{tab:confirmatory} the confirmatory test-set versions.}
 \label{fig:ablation}
 \end{figure}}
 \ifworkshopbuild\else\figexpablation\fi
+
+}
+\ifworkshopbuild Re-scoring the historical headline with the repaired statistics
+(Appendix~\ref{app:exploratory}) leaves B$-$A significant
+(\ExpBvsA{}, $p=\ExpBvsAp$, versus the invalid pooled
+$p=\ExpBvsApooled$), weakens D-hook to marginal after correction, and
+renders D-token vs.\ B non-significant (\ExpDtvsB{},
+$p=\ExpDtvsBp$) --- i.e.\ the pooled test alone had manufactured the
+course-era refutation of our own mechanism.
+\else\expmain\fi
 
 \newcommand{\expperclass}{%
 \subsection{Per-class decomposition: the gain is click disambiguation}
@@ -783,6 +796,7 @@ deployable pipeline.
 absolutely still click}
 \label{sec:confperclass}
 
+\newcommand{\tabconfperclassfloat}{%
 \begin{table}[tb]
 \begin{center}\small
 \fittab{\input{tables/tab_confirmatory_perclass}}
@@ -798,7 +812,8 @@ relative improvement) and modest on \emph{click}
 slightly while \emph{harming} scroll. \emph{type} remains exactly $0.000$
 for every variant: AITW type coordinates are degenerate.}
 \label{tab:confperclass}
-\end{table}
+\end{table}}
+\ifworkshopbuild\else\tabconfperclassfloat\fi
 
 Table~\ref{tab:confperclass} revises the exploratory mechanism story of
 Section~\ref{sec:perclass}. On leaky data the conditioning advantage looked
