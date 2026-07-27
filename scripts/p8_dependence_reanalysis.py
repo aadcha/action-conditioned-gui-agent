@@ -316,7 +316,7 @@ def main() -> None:
                  "effects are reported alongside and procedure-level claims are avoided."),
     }
 
-    (OUT / "reanalysis.json").write_text(json.dumps(results, indent=2))
+    (OUT / "reanalysis.json").write_text(json.dumps(results, indent=2, sort_keys=True))
     print(f"[p8] wrote {OUT / 'reanalysis.json'}")
     render_md(results)
 

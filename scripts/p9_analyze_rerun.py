@@ -217,7 +217,7 @@ def main() -> None:
                            "zero_hit010": ce["zero"]["hit_at_010"]})
     results["descriptive"]["dtoken_causal_val"] = causal
 
-    (OUT / "rerun_analysis.json").write_text(json.dumps(results, indent=2))
+    (OUT / "rerun_analysis.json").write_text(json.dumps(results, indent=2, sort_keys=True))
     print(f"[p9] wrote {OUT / 'rerun_analysis.json'}")
 
     # ---- render ----
