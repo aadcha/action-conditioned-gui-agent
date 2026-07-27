@@ -138,11 +138,23 @@ pipeline is deployable, and whether the control holds.
 ### Reproducibility (gate)
 - **43/43 tests pass** (29 original + clustered-statistics + manifest
   disjointness tests), in a clean `git clone` + `uv sync` environment.
-- **Independent-reader reproduction verified**: a fresh agent, given only
-  the README, moved the committed outputs aside, reran
-  `p8_dependence_reanalysis.py` + `p10_render_paper_tables.py`, and
-  reproduced `reanalysis.json`, `REANALYSIS.md`, and all `tables/*.tex`
-  **byte-identically** (12.1 s + 0.1 s).
+- **Independent-reader reproduction verified, twice**:
+  (1) a fresh agent, given only the README, moved the committed outputs
+  aside, reran `p8_dependence_reanalysis.py` + `p10_render_paper_tables.py`
+  and reproduced `reanalysis.json`, `REANALYSIS.md`, and all `tables/*.tex`
+  **byte-identically** (12.1 s + 0.1 s);
+  (2) after the rerun landed, a second clean `git clone` + `uv sync`
+  reproduced the **confirmatory** chain — `p9_analyze_rerun.py` +
+  `p10_render_paper_tables.py` regenerate `rerun_analysis.json`,
+  `RERUN_RESULTS.md`, and every `tables/*.tex` **byte-identically** from
+  the committed run JSONs.
+- **Prespecification audit trail** (git log order): PRESPEC.md and
+  `p9_analyze_rerun.py` were both committed **before** the first frozen-split
+  result artifact entered the repo. One post-results edit to the analysis
+  script is disclosed in its docstring: the Markdown p-value formatter now
+  prints `<1e-4` instead of `<=9.999e-05`. No estimator, contrast, metric,
+  cluster definition, resampling budget, or correction changed; no computed
+  value changed.
 - Reproduction path documented in the README:
   ```
   uv run python scripts/p8_dependence_reanalysis.py   # historical, clustered
