@@ -366,6 +366,15 @@ def confirmatory(p9: dict) -> None:
         rg = p9["secondary"]["e2e_pred_vs_oracle"]["metrics"]["hit_at_010"]["episode_clustered"]
         macro("ConfEtoEGap", ci(rg))
         macro("ConfEtoEGapp", p_inline(rg))
+        # Share of the e2e oracle arm's advantage over A that Stage-1 error
+        # absorbs. Reported descriptively (no new significance test) so the
+        # text never overstates the gap relative to the oracle advantage.
+        a_hit, _, _ = seed_stats(
+            sorted(glob.glob(str(P4 / f"variantA_seed4[234]_n1200_*mix-all_with_coords{fs}.json"))),
+            "test", "hit_at_010")
+        oracle_adv = float(np.mean(po)) - a_hit
+        macro("ConfEtoEOracleAdv", f"{oracle_adv:+.3f}")
+        macro("ConfEtoEGapShare", f"{100 * abs(rg['delta']) / oracle_adv:.0f}\\%")
         # Stage-1 accuracy on the frozen val split vs the untouched test split:
         # the generalization drop that explains why the oracle gain does not
         # survive the real classifier.

@@ -33,8 +33,9 @@ $p=\ConfDtvsBHolm$); the gain is proportionally largest on \emph{scroll}
 effect shows one, and is therefore invalid; and the deployable
 predicted-type pipeline is null (\ConfEtoEvsA{}, Holm
 $p=\ConfEtoEvsAHolm$) because Stage~1 accuracy falls from
-\ConfStageOneValAcc{} on validation to \ConfStageOneAcc{} on unseen goals,
-consuming the entire oracle gain. What survives is narrow and honest:
+\ConfStageOneValAcc{} on the frozen validation split to \ConfStageOneAcc{}
+on the untouched test region, absorbing \ConfEtoEGapShare{} of the oracle
+gain and leaving no detectable benefit. What survives is narrow and honest:
 \emph{oracle} action-type conditioning improves grounding
 (D-hook$-$A \ConfDhvsA{}, Holm $p=\ConfDhvsAHolm$), and nothing we can
 actually deploy does. We release the frozen splits, per-example
@@ -81,8 +82,9 @@ action-type classifier study. Our contributions:
 untouched, goal-disjoint test set: auxiliary action-type supervision does
 not measurably help; \emph{oracle} inference-time conditioning does
 (\ConfDhvsA{}); the deployable predicted-type pipeline does not, because
-the action-type classifier loses \ConfStageOneValAcc{}$\to$\ConfStageOneAcc{}
-accuracy on unseen task goals; and the proportionally largest effect is on
+the action-type classifier drops from \ConfStageOneValAcc{} to
+\ConfStageOneAcc{} accuracy between the two held-out regions; and the
+proportionally largest effect is on
 \emph{scroll}, not the click disambiguation our exploratory analysis
 reported.
 \item \textbf{Three quantified evaluation pitfalls.} (1) A silent M-RoPE /
@@ -734,11 +736,21 @@ precisely why it needed a prespecified test on data we had never touched.
 pipeline vs.\ A: \ConfEtoEvsA{} (Holm $p=\ConfEtoEvsAHolm$). The reason is
 Stage~1 generalization, not Stage~2: the action-type classifier scores
 \ConfStageOneValAcc{} accuracy on the frozen validation split but only
-\ConfStageOneAcc{} on the untouched test split, and the paired
-predicted-vs-oracle gap is \ConfEtoEGap{} ($p=\ConfEtoEGapp$) --- larger
-than the entire oracle advantage over A. \textbf{Classifier error consumes
-the whole benefit}, directly contradicting the historical claim that
-``classifier error is not the bottleneck.''
+\ConfStageOneAcc{} on the untouched test region, and the paired
+predicted-vs-oracle gap is \ConfEtoEGap{} ($p=\ConfEtoEGapp$). That gap
+absorbs \ConfEtoEGapShare{} of the oracle arm's advantage over A
+($\ConfEtoEOracle$ versus $\ConfAhit$, i.e.\ \ConfEtoEOracleAdv{}), leaving
+a residual that is statistically indistinguishable from zero.
+\textbf{Stage-1 error leaves no detectable benefit}, directly contradicting
+the historical claim that ``classifier error is not the bottleneck.''
+We note what this drop is \emph{not}: both the frozen validation split and
+the untouched test region are goal-disjoint from training, so novel task
+goals alone cannot explain the difference between them. The two held-out
+sets differ in where they sit in the episode stream (the test region lies
+entirely beyond index 5{,}500), and we did not run the ablations needed to
+isolate that cause, so we report the drop as an observed generalization gap
+rather than a diagnosed one. Either way it is the binding constraint on the
+deployable pipeline.
 
 \subsection{Where the confirmatory gain lives: scroll, not click}
 \label{sec:confperclass}
@@ -830,8 +842,8 @@ $\ConfClickFold\times$ for click).
 \item \textbf{Whether the pipeline is deployable.} (i) the predicted-type
 pipeline beats A and ``classifier error is not the bottleneck.'' (ii) the
 pipeline gain is no longer significant (\ExpEtoEPredvsA{}). (iii) the
-pipeline is \emph{null} and classifier error consumes the entire oracle
-gain.
+pipeline is \emph{null}, with Stage-1 error absorbing \ConfEtoEGapShare{}
+of the oracle gain.
 \item \textbf{Whether the control holds.} (i)--(ii) conditioning looks
 neutral where action type was assumed uninformative. (iii) the control
 shows a significant effect, so it is \emph{not a valid control}.
@@ -898,8 +910,8 @@ click disambiguation we previously reported, our control condition turns
 out not to be a control, and the only configuration one could actually
 deploy --- predicting the action type and conditioning on the prediction ---
 is statistically indistinguishable from doing nothing, because the
-classifier loses \ConfStageOneValAcc{}$\to$\ConfStageOneAcc{} accuracy on
-unseen goals. The honest summary is that we measured a real but
+classifier drops from \ConfStageOneValAcc{} to \ConfStageOneAcc{} accuracy
+between the frozen validation split and the untouched test region. The honest summary is that we measured a real but
 oracle-gated effect and no deployable one.
 
 The methodological result is the durable one. We ran the same five-variant
