@@ -3,10 +3,16 @@
 % official NeurIPS 2026 LaTeX style, up to 9 pages for full papers excluding
 % references and appendices; non-archival).
 %
-% Compiled by default in SUBMISSION mode (anonymized authors + line numbers),
-% which is what gets uploaded to OpenReview if the finalized CFP confirms
-% double-blind review. If the workshop turns out to be single-blind, switch
-% the package options to [final] before submitting.
+% Compiled in SUBMISSION mode. Without the [final] package option,
+% neurips_2026.sty adds line numbers AND replaces the author block with
+% "Anonymous Author(s)" itself — verified in the built PDF, so this build is
+% already double-blind-safe. The \author block below is therefore only used
+% by the camera-ready build.
+%
+% BEFORE SUBMITTING: as of 2026-07-26 the IAEval CFP has not published its
+% anonymization policy. If it turns out to be single-blind, or for a
+% camera-ready version, add [final] to the neurips_2026 options — that
+% reveals the authors and drops the line numbers.
 \documentclass{article}
 
 \usepackage[nonatbib]{neurips_2026}
@@ -55,6 +61,8 @@
 \title{When Does Action-Type Supervision Help GUI Grounding?\\
 Separating Real Effects from Evaluation Artifacts}
 
+% Used only by the [final] (camera-ready / single-blind) build; in
+% submission mode the style prints "Anonymous Author(s)" instead.
 \author{%
   Aadi Chauhan\\
   Stanford University\\

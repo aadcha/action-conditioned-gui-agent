@@ -112,12 +112,30 @@ pipeline is deployable, and whether the control holds.
   Do not distribute it until it is regenerated.
 
 ### Builds (gate: arXiv + workshop)
-- `scripts/build_paper.sh` → `overleaf_submission/paper.pdf` (CVPR style,
-  arXiv, 8 pp), `overleaf_submission/paper_neurips.pdf` (NeurIPS 2026 style,
-  submission mode: anonymized + line numbers, 12 pp with 3 exploratory
-  figures relocated to a post-references appendix, so the main body is
-  within the 9-page limit), and `dist/arxiv_src.tar.gz` (sources + .bbl +
-  used figures, ready to upload).
+- `scripts/build_paper.sh` produces all three artifacts from one shared
+  `body.tex`:
+  - `overleaf_submission/paper.pdf` — **arXiv build** (CVPR two-column
+    style), **10 pp**, everything inline, references start p. 10.
+  - `overleaf_submission/paper_neurips.pdf` — **workshop build** (official
+    NeurIPS 2026 style, submission mode: line numbers on), **15 pp total**
+    with **main text ending on p. 9** (references p. 10, appendices p. 10+),
+    satisfying IAEval's "9 pages excluding references and appendices."
+    A `\ifworkshopbuild` toggle relocates dataset-preprocessing detail,
+    Stage-1 method, the training objective, the exploratory
+    Stage-1/per-class/low-data/e2e/causal subsections, three exploratory
+    table floats and three figures into appendices, and compacts Related
+    Work. **No result is dropped** — each relocated block keeps a
+    macro-backed summary plus a pointer in the main text.
+  - `dist/arxiv_src.tar.gz` — sources + `.bbl` + only the referenced
+    figures, ready to upload.
+  - Verified with `pypdf` text extraction: both PDFs contain **zero**
+    `PENDING` sentinels and **zero** unresolved `??` references.
+  - The workshop build **is anonymized**: without `[final]`,
+    `neurips_2026.sty` both adds line numbers and prints "Anonymous
+    Author(s)" in place of the author block (verified in the built PDF), so
+    it is double-blind-safe as it stands. If IAEval's finalized CFP turns
+    out to be single-blind, add `[final]` to the package options to reveal
+    authors and drop line numbers.
 - **Venue verification (primary sources, 2026-07-26):**
   - **Evaluation of Interactive Agents @ NeurIPS 2026** (target): Aug 29,
     2026 AoE; official NeurIPS 2026 style; ≤9 pages excl. refs/appendix;
