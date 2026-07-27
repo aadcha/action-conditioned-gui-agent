@@ -216,11 +216,14 @@ the more serious set, all since fixed:
   aside, reran `p8_dependence_reanalysis.py` + `p10_render_paper_tables.py`
   and reproduced `reanalysis.json`, `REANALYSIS.md`, and all `tables/*.tex`
   **byte-identically** (12.1 s + 0.1 s);
-  (2) after the rerun landed, a second clean `git clone` + `uv sync`
-  reproduced the **confirmatory** chain — `p9_analyze_rerun.py` +
-  `p10_render_paper_tables.py` regenerate `rerun_analysis.json`,
-  `RERUN_RESULTS.md`, and every `tables/*.tex` **byte-identically** from
-  the committed run JSONs.
+  (2) after the rerun landed and all audit corrections were applied, a fresh
+  `git clone` + `uv sync` reproduced the **entire** chain byte-identically:
+  `p8_dependence_reanalysis.py` + `p9_analyze_rerun.py` +
+  `p10_render_paper_tables.py` regenerate `reanalysis.json`,
+  `REANALYSIS.md`, `rerun_analysis.json`, `RERUN_RESULTS.md`, and every
+  `tables/*.tex` with zero byte differences, and the 43 tests pass in that
+  clone. (Analysis JSON is written with `sort_keys=True` so the artifacts
+  are order-stable and this check is exact rather than semantic.)
 - **Prespecification audit trail** (git log order): PRESPEC.md and
   `p9_analyze_rerun.py` were both committed **before** the first frozen-split
   result artifact entered the repo. One post-results edit to the analysis
