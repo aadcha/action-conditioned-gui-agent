@@ -261,6 +261,22 @@ the more serious set, all since fixed:
 
 ## Human-only submission checklist (in order)
 
+0. **Publish the repository — the paper's release claims depend on it.**
+   The manuscript states in three places that the frozen splits, per-example
+   predictions, clustered-inference code, and prespecification *are*
+   released. Right now `origin/main`
+   (`github.com/aadcha/action-conditioned-gui-agent`) is **28 commits
+   behind** local and contains none of it, and the repo's visibility has not
+   been verified. Nothing was pushed automatically: a push is an
+   outward-facing action and, until authorship is settled (step 1), it would
+   also publish Arthur's name on work he has not yet approved. Before
+   either submission: settle authorship, then `git push origin main`,
+   confirm the repository is public, and check that
+   `results/phase8_reanalysis/`, `results/phase9_rerun/`,
+   `data/manifests/aitw_frozen_v1.json`, and `src/eval/clustered.py` are
+   all visible. If the repo must stay private at submission time, change the
+   three "we release" sentences to "we will release" first.
+
 1. Send `COAUTHOR_NOTE.md` (edited to taste) to Arthur; get explicit approval
    on authorship, contributions, disclosure, and venues; resolve the
    third-collaborator question.

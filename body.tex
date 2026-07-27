@@ -452,8 +452,8 @@ not, however, audit goal overlap \emph{between} those official splits, so
 we treat these numbers as descriptive context rather than as a
 contamination-checked result. The Stage-1 accuracy that matters for the
 deployable claim is measured on our own frozen splits in
-Section~\ref{sec:confirmatory}, where it is substantially lower on unseen
-goals.
+Section~\ref{sec:confirmatory} (\ConfStageOneValAcc{} on the frozen
+validation split, \ConfStageOneAcc{} on the untouched test region).
 
 This asymmetry decides where Stage-2 conditioning could matter
 at all.
@@ -824,7 +824,11 @@ $\ConfScrollFold\times$ relative) versus a smaller proportional click gain
 times as frequent in the test set, click nevertheless still supplies
 \ConfClickAbsShare{} of the aggregate gain against scroll's
 \ConfScrollAbsShare{}: what moved is where the \emph{effect} is
-concentrated, not which class contributes the most additional hits. The
+concentrated, not which class contributes the most additional hits. These
+per-class figures are seed-averaged point estimates without interval
+estimates --- the prespecified analysis covers the aggregate contrasts only
+--- so we read them as a descriptive decomposition, not as a tested
+mechanism claim. The
 mechanism this supports is different and simpler: swipe targets occupy a
 narrow, largely goal-independent region of the screen, so being told
 ``this step is a scroll'' relocates the prediction in a way the flat
@@ -995,8 +999,9 @@ the control held. None of the three is exotic --- stream-sliced splits,
 embedding-injection shortcuts, and pooled per-seed bootstraps are ordinary
 practice --- so we expect the same reversals are latent in other offline
 GUI-grounding evaluations. The frozen splits, per-example predictions,
-clustered-inference code, and prespecification are released so that both
-the object-level result and the audit can be checked and rerun.
+clustered-inference code, and prespecification are released together with
+the paper so that both the object-level result and the audit can be checked
+and rerun.
 
 %%%%%%%%% CONTRIBUTIONS + GENAI (not counted toward the page limit)
 \label{endofmaintext}
@@ -1025,6 +1030,9 @@ the integrity audit that led to Sections~\ref{sec:pitfalls}
 and~\ref{sec:confirmatory}; and drafting and editing this manuscript. The
 authors specified the research questions and methodology, reviewed the
 analyses, verified reported numbers against the committed result
-artifacts (every table is generated programmatically from those
-artifacts), and take full responsibility for all content.
+artifacts (every confirmatory and reanalysis table in this paper is
+generated programmatically from those artifacts by
+\texttt{scripts/p10\_render\_paper\_tables.py}; the Stage-1 summary table
+is hand-entered from the Phase-2/3 result files), and take full
+responsibility for all content.
 \fi

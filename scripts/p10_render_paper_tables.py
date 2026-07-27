@@ -431,8 +431,8 @@ def confirmatory(p9: dict) -> None:
             po.append(_metric_from_ped(tb["oracle_metrics"]["per_example_dist"], "hit_at_010"))
             pp.append(_metric_from_ped(tb["predicted_metrics"]["per_example_dist"], "hit_at_010"))
             s1a.append(tb["stage1_test_acc"])
-        macro("ConfEtoEOracle", f"{np.mean(po):.3f} \\pm {np.std(po):.3f}")
-        macro("ConfEtoEPred", f"{np.mean(pp):.3f} \\pm {np.std(pp):.3f}")
+        macro("ConfEtoEOracle", f"{np.mean(po):.3f} \\pm {np.std(po, ddof=1):.3f}")
+        macro("ConfEtoEPred", f"{np.mean(pp):.3f} \\pm {np.std(pp, ddof=1):.3f}")
         macro("ConfStageOneAcc", f"{np.mean(s1a):.3f}")
         rg = p9["secondary"]["e2e_pred_vs_oracle"]["metrics"]["hit_at_010"]["episode_clustered"]
         macro("ConfEtoEGap", ci(rg))

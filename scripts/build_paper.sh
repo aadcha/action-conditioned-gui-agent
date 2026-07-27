@@ -7,6 +7,8 @@
 set -e
 cd "$(dirname "$0")/.."
 uv run python scripts/p10_render_paper_tables.py
+uv run python scripts/p10_perclass_figure.py
+cp results/phase4/compounding_error_per_class.png overleaf_submission/figures/
 # paper.bib MUST be copied too: the build dir has its own copy, and
 # tectonic regenerates the .bbl from it. Omitting it once let a fixed
 # citation silently stay stale in both PDFs and the arXiv tarball.

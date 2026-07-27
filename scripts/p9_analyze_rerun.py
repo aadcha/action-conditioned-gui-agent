@@ -188,6 +188,34 @@ def main() -> None:
             results["secondary"][f"lowdata{n}_Dhook_vs_A"] = contrast(An, Dn, "test", f"lowdata{n}_Dhook_vs_A")
 
     # ---- descriptive: means, per-class, parse rates, stage1, causal ----
+    # AITW step label -> canonical class, for miss-scored per-class metrics.
+    _CLS = {"tap": "click", "type": "type", "swipe_up": "scroll",
+            "swipe_down": "scroll", "swipe_left": "scroll", "swipe_right": "scroll"}
+
+    def _per_class_missscored(run: dict, m: dict, which: str) -> dict | None:
+        """Per-class metrics with parse failures scored at the sqrt(2) sentinel
+        and counted as misses, over FIXED class denominators. The run JSONs'
+        own `per_class` block divides by parsed-only counts, which disagrees
+        with every aggregate in this file whenever parse_rate < 1."""
+        keys = run.get("test_step_keys" if which == "test" else "val_step_keys")
+        dist = m.get("per_example_dist")
+        if not keys or not dist or len(keys) != len(dist):
+            return None
+        d = np.asarray(dist, dtype=np.float64)
+        labels = [_CLS[k["label"]] for k in keys]
+        out = {}
+        for cls in sorted(set(labels)):
+            mask = np.array([l == cls for l in labels])
+            sub = d[mask]
+            out[cls] = {
+                "n": int(mask.sum()),
+                "hit_at_005": float((sub <= 0.05).mean()),
+                "hit_at_010": float((sub <= 0.10).mean()),
+                "hit_at_025": float((sub <= 0.25).mean()),
+                "mean_normalized_l2": float(sub.mean()),
+            }
+        return out
+
     def desc(runs, which="test"):
         rows = []
         for r in runs:
@@ -200,7 +228,9 @@ def main() -> None:
                              "hit_at_010": m["hit_at_010"], "hit_at_025": m["hit_at_025"],
                              "hit_at_005": m["hit_at_005"],
                              "mean_normalized_l2": m["mean_normalized_l2"],
-                             "parse_rate": m["parse_rate"], "per_class": m.get("per_class")})
+                             "parse_rate": m["parse_rate"],
+                             "per_class_missscored": _per_class_missscored(r, m, which),
+                             "per_class_parsed_only_DEPRECATED": m.get("per_class")})
             except (KeyError, TypeError) as e:
                 rows.append({"file": Path(r["_path"]).name, "error": str(e)})
         return rows
