@@ -1,10 +1,17 @@
 """Phase 9 — confirmatory analysis of the leakage-free rerun.
 
 Written and committed BEFORE the untouched-test results existed, alongside
-results/phase9_rerun/PRESPEC.md, and executed unchanged once the runs landed
-(any later edit shows in git history). It consumes only the run JSONs the
-frozen-split jobs persist (pulled via `modal run modal_app.py::list_stage2_runs`)
-and computes exactly the prespecified contrasts.
+results/phase9_rerun/PRESPEC.md, and executed on the results as committed.
+It consumes only the run JSONs the frozen-split jobs persist (pulled via
+`modal run modal_app.py::list_stage2_runs`) and computes exactly the
+prespecified contrasts.
+
+Post-results edits, disclosed in full (git history is the record): after the
+results existed, the Markdown p-value FORMATTER was changed to print
+"<1e-4" instead of "<=9.999e-05". No estimator, contrast, metric, cluster
+definition, resampling budget, or correction was touched, and no number
+changed. Any future edit that would alter a computed value must be reported
+as a deviation in the paper.
 
 Primary (untouched test, all_with_coords n_train=1200, hit@0.10, Holm over 4):
   P1 B vs A         P2 D-hook vs A         P3 B vs D-token
@@ -219,9 +226,16 @@ def main() -> None:
          "hit@0.10, episode-clustered paired test, Holm over the four primary contrasts.\n",
          "| contrast | Δ hit@0.10 (95% CI) | perm p | Holm p | per-seed means (A) | per-seed means (B) |",
          "|---|---|---|---|---|---|"]
+    def pstr_of(r: dict) -> str:
+        """Never report below the permutation budget's Monte Carlo resolution."""
+        import math
+        if r["p_value"] <= r["p_resolution"]:
+            return f"<1e{int(math.ceil(math.log10(r['p_resolution'])))}"
+        return f"{r['p_value']:.4g}"
+
     for k, v in results["primary"].items():
         r = v["metrics"]["hit_at_010"]["episode_clustered"]
-        pstr = f"<={r['p_resolution']:.4g}" if r["p_value"] <= r["p_resolution"] else f"{r['p_value']:.4g}"
+        pstr = pstr_of(r)
         L.append(f"| {k} | {r['delta']:+.3f} [{r['ci_low']:+.3f}, {r['ci_high']:+.3f}] | {pstr} | "
                  f"{v['holm_adjusted_p_hit010']:.4g} | "
                  f"{', '.join(f'{x:.3f}' for x in r['seed_means_a'])} | "
@@ -234,7 +248,7 @@ def main() -> None:
             if m not in v["metrics"]:
                 continue
             r = v["metrics"][m]["episode_clustered"]
-            pstr = f"<={r['p_resolution']:.4g}" if r["p_value"] <= r["p_resolution"] else f"{r['p_value']:.4g}"
+            pstr = pstr_of(r)
             L.append(f"| {k} | {m} | {r['delta']:+.3f} [{r['ci_low']:+.3f}, {r['ci_high']:+.3f}] | {pstr} |")
     L.append("\nSee rerun_analysis.json for descriptive per-run values, per-class "
              "breakdowns, parse rates, and the D-token causal sensitivity (val).\n")
