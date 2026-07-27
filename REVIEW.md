@@ -16,18 +16,25 @@ honestly and is framed around it.
 | contrast | Δ hit@0.10 [95% CI] | Holm p | verdict |
 |---|---|---|---|
 | P1 · B (aux loss) vs A | +0.011 [−0.005, +0.029] | 0.309 | **null** — the exploratory winner does not replicate |
-| P2 · D-hook vs A | +0.057 [+0.035, +0.079] | 0.0004 | **significant, but oracle** (gold action type at test) |
-| P3 · D-token vs B | +0.035 [+0.017, +0.054] | 0.0027 | **reverses in our favour** — the proposal's embedding beats the aux loss |
+| P2 · D-hook vs A | +0.057 [+0.035, +0.079] | ≤0.0004 | **significant, but oracle** (gold action type at test) |
+| P3 · D-token vs B | +0.035 [+0.017, +0.054] | 0.0027 | **reverses in our favour** — the proposal's embedding beats the aux loss, but this is an oracle-vs-deployable contrast (D-token reads the gold type, B reads nothing) |
 | P4 · e2e predicted-type vs A | +0.015 [−0.004, +0.034] | 0.309 | **null** — the deployable claim fails |
 
-Supporting facts: Stage-1 action-type accuracy falls 0.795 (val) → 0.708
-(unseen goals); the predicted-vs-oracle gap (−0.048) exceeds the entire
-oracle gain, so classifier error consumes it. Per-class, the gain is
-proportionally largest on **scroll** (0.064 → 0.162, 2.5×), not click
-(0.312 → 0.366) — overturning the exploratory "click disambiguation" story.
-The **control condition failed**: D-hook gains +0.047 (p=0.033) on the mix
-where action type was assumed uninformative, so we no longer have a valid
-matched control and say so.
+Supporting facts: Stage-1 action-type accuracy falls from 0.795 on the
+frozen validation split to 0.708 on the untouched test region (both are
+goal-disjoint from training, so this is an observed generalization gap, not
+a diagnosed goal-novelty effect). The predicted-vs-oracle gap (−0.048)
+absorbs **76%** of the e2e oracle arm's +0.063 advantage over A, leaving a
+residual indistinguishable from zero. Per-class, the *relative* gain is
+largest on **scroll** (0.064 → 0.162, 2.5×) versus click (0.312 → 0.366,
+1.2×) — but because click is ~3× more frequent it still supplies **61%** of
+the absolute gain, so what moved is where the effect concentrates, not which
+class contributes most. The **control condition failed**: D-hook gains
++0.047 (p=0.033) on the mix where action type was assumed uninformative, so
+we no longer have a valid matched control and say so. Variant C's
+confirmatory numbers are partly a decode-format artifact — its parse rate is
+91.7% on the test set (reported in the tables); all metrics count parse
+failures as misses.
 
 Five distinct reversals versus the exploratory analysis are enumerated in
 the paper (§"What the broken evaluation actually cost"): which variant wins,
@@ -72,8 +79,12 @@ pipeline is deployable, and whether the control holds.
   {300,500,800} × 3 seeds), justified because the effect survived
   reanalysis and the budget allowed. Nothing was scaled down.
 - `results/phase9_rerun/PRESPEC.md` committed **before** any test
-  evaluation; `scripts/p9_analyze_rerun.py` written before test data
-  existed and run once, unchanged (git history shows both).
+  evaluation; `scripts/p9_analyze_rerun.py` written before test data existed
+  and run on the results as committed. One post-results edit is disclosed in
+  the script docstring and below: the Markdown p-value **formatter** only
+  (`<1e-4` instead of `<=9.999e-05`). No estimator, contrast, metric,
+  cluster definition, resampling budget, or correction changed; no computed
+  value changed.
 - Frozen data path validated by 6 tiny smoke runs before the batch
   (eval-set identity across variants confirmed).
 - **Failed-run log:** the batch was disrupted twice by Modal
@@ -115,11 +126,15 @@ pipeline is deployable, and whether the control holds.
 - `scripts/build_paper.sh` produces all three artifacts from one shared
   `body.tex`:
   - `overleaf_submission/paper.pdf` — **arXiv build** (CVPR two-column
-    style), **10 pp**, everything inline, references start p. 10.
+    style), **11 pp**, everything inline including the Contributions and
+    Generative-AI statements.
   - `overleaf_submission/paper_neurips.pdf` — **workshop build** (official
-    NeurIPS 2026 style, submission mode: line numbers on), **15 pp total**
-    with **main text ending on p. 9** (references p. 10, appendices p. 10+),
-    satisfying IAEval's "9 pages excluding references and appendices."
+    NeurIPS 2026 style, submission mode), **16 pp total** with **main text
+    ending on p. 9** (references p. 10, appendices after), satisfying
+    IAEval's "9 pages excluding references and appendices." Verified
+    **fully anonymized**: the style prints "Anonymous Author(s)", and the
+    author-identifying Contributions / Generative-AI back matter is gated
+    out of this build (a `pypdf` scan finds no author name on any page).
     A `\ifworkshopbuild` toggle relocates dataset-preprocessing detail,
     Stage-1 method, the training objective, the exploratory
     Stage-1/per-class/low-data/e2e/causal subsections, three exploratory
@@ -152,6 +167,46 @@ pipeline is deployable, and whether the control holds.
     have provisioned OpenReview venues (de facto accepted).
   - `neurips_2026.sty` is vendored from a mirror — re-download from the
     finalized CFP before submitting.
+
+### Adversarial audit (two multi-agent passes)
+
+Two adversarial audit passes were run over the paper against the committed
+artifacts and the gate rules. The first (23 agents) confirmed 17 findings,
+all fixed — including a defect in this repo's own table renderer, which was
+computing variant C's descriptive statistics on a parse-success-only
+denominator while the delta column used the miss-scored convention.
+
+The second pass (48 agents; some verifications were cut short by usage
+limits, so its findings were triaged manually against the artifacts) caught
+the more serious set, all since fixed:
+- **Arithmetic blocker.** The paper claimed the predicted-vs-oracle gap
+  (−0.048) was "larger than the entire oracle advantage over A." It is not:
+  the advantage is +0.063, so the gap absorbs 76%. Replaced with the
+  traceable arithmetic.
+- **Wrong causal attribution.** The Stage-1 accuracy drop was attributed to
+  "unseen goals," but the frozen validation split is equally goal-disjoint
+  from training. Reworded, with an explicit note that the cause was not
+  isolated.
+- **Unsupported superlative.** The conclusion called D-token "the better of
+  the two mechanisms"; D-hook is numerically higher and no D-hook vs
+  D-token contrast was prespecified or run. Now claims neither.
+- **Missing oracle marking.** "D-token beats B" appeared without noting
+  that D-token reads the gold action type and B reads nothing. Marked at
+  every occurrence.
+- **Overstated mechanism shift.** "The gain concentrates in scroll" ignored
+  that click still supplies 61% of the absolute gain. Now stated as a
+  relative-versus-absolute distinction.
+- **Same denominator bug in the per-class table** (C's scroll rate was
+  inflated 0.113 → corrected 0.074), plus parse rates never being reported
+  despite a Methods promise and a PRESPEC commitment — both fixed.
+- **Double-blind leak.** The anonymized workshop build named both authors in
+  its Contributions section; that back matter is now gated out of the
+  submission build.
+- Stale exploratory claims still asserted as current (the D-token
+  refutation, the control-scope conclusion), an inconsistent 5-seed-vs-3-seed
+  baseline behind the exploratory per-class deltas, a placeholder citation,
+  a `\pm` convention mismatch between tables, an uncensored Holm p-value,
+  and a self-contradiction in this file — all corrected.
 
 ### Reproducibility (gate)
 - **43/43 tests pass** (29 original + clustered-statistics + manifest

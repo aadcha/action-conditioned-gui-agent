@@ -28,8 +28,11 @@ $p=\ExpBvsAp$, versus the invalid pooled $p=\ExpBvsApooled$) is null on the
 untouched test set (\ConfBvsA{}, Holm $p=\ConfBvsAHolm$); the prepended
 action embedding our proposal advocated and the course-era version reported
 as \emph{refuted} in fact beats it (D-token$-$B \ConfDtvsB{}, Holm
-$p=\ConfDtvsBHolm$); the gain is proportionally largest on \emph{scroll}
-($\ConfScrollFold\times$) rather than click; the control condition designed to show no
+$p=\ConfDtvsBHolm$) --- though D-token reads the ground-truth action type at
+test time and B reads nothing, so that contrast is oracle-versus-deployable;
+the largest \emph{relative} gain moves to \emph{scroll}
+($\ConfScrollFold\times$), while click still supplies \ConfClickAbsShare{} of
+the absolute gain; the control condition designed to show no
 effect shows one, and is therefore invalid; and the deployable
 predicted-type pipeline is null (\ConfEtoEvsA{}, Holm
 $p=\ConfEtoEvsAHolm$) because Stage~1 accuracy falls from
@@ -40,8 +43,9 @@ gain and leaving no detectable benefit. What survives is narrow and honest:
 (D-hook$-$A \ConfDhvsA{}, Holm $p=\ConfDhvsAHolm$), and nothing we can
 actually deploy does. We release the frozen splits, per-example
 predictions, and the clustered-inference code. A study can be multi-seed,
-ablated, controlled, and significant at $p<0.002$ and still have all of its
-mechanistic claims invert under a clean split and a calibrated test.
+ablated, controlled, and apparently significant at the pooled
+$p{=}\ExpBvsApooled{}$ we now retract, and still have every one of its
+mechanistic claims move under a clean split and a calibrated test.
 \end{abstract}
 
 %%%%%%%%% BODY TEXT
@@ -84,9 +88,9 @@ not measurably help; \emph{oracle} inference-time conditioning does
 (\ConfDhvsA{}); the deployable predicted-type pipeline does not, because
 the action-type classifier drops from \ConfStageOneValAcc{} to
 \ConfStageOneAcc{} accuracy between the two held-out regions; and the
-proportionally largest effect is on
-\emph{scroll}, not the click disambiguation our exploratory analysis
-reported.
+proportionally largest effect moves to \emph{scroll} rather than the click
+disambiguation our exploratory analysis reported, though click's higher
+frequency still makes it \ConfClickAbsShare{} of the absolute gain.
 \item \textbf{Three quantified evaluation pitfalls.} (1) A silent M-RoPE /
 \texttt{inputs\_embeds} interaction that fabricated an $8\sigma$ false
 negative; (2) episode-stream train/validation leakage that is invisible at
@@ -387,8 +391,9 @@ calibrated for claims about the training procedure: adding run-level
 (seed) offsets to the synthetic null drives the episode-clustered test to
 \TypeIProc{} rejection (and the pooled test to 70\%). With only three
 seeds per variant we therefore
-report per-seed means everywhere and make no procedure-level significance
-claims. The retracted pooled $p$-values (including a headline
+release per-seed means for every contrast (in
+\texttt{rerun\_analysis.json} and \texttt{reanalysis.json}) and make no
+procedure-level significance claims. The retracted pooled $p$-values (including a headline
 $p{=}\ExpBvsApooled$) should not be cited.
 
 \section{Exploratory Results (historical splits, repaired statistics)}
@@ -520,11 +525,14 @@ $\approx\sqrt{2}$ corner-to-corner distance).}
 \label{fig:perclass}
 \end{figure}
 
-Breaking hit@0.10 down by class (Figure~\ref{fig:perclass}): B gains
-$+0.120$ on click (68\% of examples) with a small scroll cost; C has the
-largest click gain ($+0.122$) but destroys scroll ($-0.144$) by forcing a
-decode prefix that derails the gesture class; D-hook alone improves both
-(click $+0.058$, scroll $+0.039$). The \emph{type} class scores exactly
+Breaking hit@0.10 down by class (Figure~\ref{fig:perclass}; deltas below
+are recomputed on matched seeds 42--44 with parse failures counted as
+misses, which the original Phase-7 aggregation did neither of): B gains
+\ExpBClickDelta{} on click (68\% of examples) at a small scroll cost
+(\ExpBScrollDelta{}); C gains \ExpCClickDelta{} on click but destroys
+scroll (\ExpCScrollDelta{}) by forcing a decode prefix that derails the
+gesture class; D-hook alone improves both (click \ExpDhClickDelta{},
+scroll \ExpDhScrollDelta{}). The \emph{type} class scores exactly
 $0.000$ across all variants with mean normalized L2 at or slightly above
 $\sqrt{2}$, the corner-to-corner distance (a few predictions land outside
 the unit square): AITW \texttt{type} events carry degenerate touch
@@ -543,14 +551,21 @@ below A on hit@0.10); per-example logs were not retained for A on
 this mix, so the clustered version of this control appears only in the
 confirmatory rerun (Table~\ref{tab:control}). On Multimodal-Mind2Web
 (click/type-dominated), D-hook vs.\ A was $-0.006$ hit@0.10 / $+0.018$
-hit@0.25 over 2 seeds -- a null, retained here deliberately: conditioning
-does not help where action type carries no spatial information, on either
-dataset.
+hit@0.25 over 2 seeds -- a null we retain deliberately. On the historical
+data both of these looked like confirmations that conditioning does not
+help where action type was \emph{assumed} to carry no spatial information.
+Section~\ref{sec:controlfail} shows that assumption is wrong for the AITW
+control, which therefore never tested what we believed it tested; the
+Mind2Web null stands on its own as a cross-dataset result.
 
 }
 \ifworkshopbuild The exploratory per-class decomposition (Appendix~\ref{app:exploratory},
 Section~\ref{sec:perclass}) attributed the advantage to \emph{click};
-Section~\ref{sec:confperclass} shows the confirmatory data do not.
+Section~\ref{sec:confperclass} revises that. The historical controls are
+also in that appendix: the AITW \texttt{taps\_and\_swipes} mix (superseded
+by Section~\ref{sec:controlfail}) and a Stage-2 Multimodal-Mind2Web
+comparison in which D-hook versus A is null ($-0.006$ hit@0.10 over 2
+seeds), a cross-dataset null we retain.
 \else\expperclass\fi
 
 \newcommand{\explowdata}{%
@@ -603,10 +618,16 @@ $0.255$ hit@0.10) was previously reported as a win. Under clustered
 statistics the paired difference is \ExpEtoEPredvsA{}
 ($p=\ExpEtoEPredvsAp$) -- not significant; the oracle-type version is
 marginal (\ExpEtoEOraclevsA). The deployable-pipeline question is
-therefore decided by the confirmatory run (P4, below), not the historical
-data.
+therefore decided by the confirmatory run
+(Section~\ref{sec:confirmatory}, P4), not the historical data.
+}
+\ifworkshopbuild Under clustered statistics the historical end-to-end ``win'' is already
+not significant (\ExpEtoEPredvsA{}, $p=\ExpEtoEPredvsAp$;
+Appendix~\ref{app:exploratory}).
+\else\expetoe\fi
 
 \newcommand{\expcausal}{%
+
 \subsection{D-token causal-use sensitivity}
 
 \begin{table}[tb]
@@ -623,9 +644,12 @@ that conditioning caused any gain over A.}
 
 Feeding the trained D-token model a \emph{wrong} action id collapses
 grounding, and zeroing the embedding hurts substantially
-(Table~\ref{tab:causal}). The refutation of the proposal's mechanism is
-therefore precise: the prepended embedding is causally used, it is simply
-not the best way to exploit action-type supervision. Figure~\ref{fig:attention}
+(Table~\ref{tab:causal}). What this establishes is narrow: the prepended
+embedding is causally \emph{used} at inference rather than ignored, so any
+verdict against it cannot be explained away as an inert conditioning path.
+Whether it is in fact the worse way to exploit action-type supervision was
+the course-era conclusion, and Section~\ref{sec:confirmatory} (P3) reverses
+it on clean data. Figure~\ref{fig:attention}
 shows one example where correct conditioning concentrates more attention
 mass on the screenshot; across the three examples we probed the pattern is
 not uniform, so we present it strictly as illustration, not evidence.
@@ -642,20 +666,13 @@ attention mass 0.204 under \emph{click} vs.\ 0.132/0.110 under
 \label{fig:attention}
 \end{figure}}
 \ifworkshopbuild\else\figexpattention\fi
-
 }
 \ifworkshopbuild A sensitivity analysis feeding the trained D-token model wrong or zeroed
 action embeddings (Appendix~\ref{app:exploratory},
-Table~\ref{tab:causal}) confirms the embedding is causally used at
+Table~\ref{tab:causal}) shows the embedding is causally used at
 inference rather than ignored; it is a sensitivity test, not evidence
 that conditioning caused any gain over the baseline.
 \else\expcausal\fi
-
-}
-\ifworkshopbuild Under clustered statistics the historical end-to-end ``win'' is already
-not significant (\ExpEtoEPredvsA{}, $p=\ExpEtoEPredvsAp$;
-Appendix~\ref{app:exploratory}).
-\else\expetoe\fi
 
 \section{Confirmatory Results (untouched test, prespecified)}
 \label{sec:confirmatory}
@@ -714,7 +731,7 @@ training.
 
 \textbf{P2 (inference-time conditioning) --- positive, but oracle.} D-hook
 vs.\ A: \ConfDhvsA{} (Holm $p=\ConfDhvsAHolm$; mean L2 \ConfDhvsALtwo{}),
-consistent in sign and size across all three seeds. This is the one large
+positive in all three seeds (per-seed deltas $+0.035$ to $+0.085$). This is the one large
 effect that survives the clean split. It is an \emph{oracle} result:
 D-hook receives the ground-truth action type at test time, which A never
 sees. P4 is what happens when that oracle is replaced by a real classifier.
@@ -726,10 +743,20 @@ proposal advocated significantly \emph{outperforms} the auxiliary loss on
 the clean test set. The exploratory data pointed the other way
 (Section~\ref{sec:exploratory}), and the course-era version of this work
 reported the embedding as refuted. On the untouched test both embedding
-mechanisms beat B (D-token vs.\ A \ConfDtvsA{}, $p=\ConfDtvsAp$; D-hook
-vs.\ B \ConfDhvsB{}, $p=\ConfDhvsBp$), while hard routing is exactly null
-(C vs.\ A \ConfCvsA{}, $p=\ConfCvsAp$). We stress that this contrast
-reverses in the direction that flatters our own hypothesis, which is
+mechanisms beat B (D-token vs.\ B \ConfDtvsB{}; D-hook vs.\ B
+\ConfDhvsB{}, $p=\ConfDhvsBp$) and both beat A (D-token vs.\ A
+\ConfDtvsA{}, $p=\ConfDtvsAp$), while hard routing is exactly null
+(C vs.\ A \ConfCvsA{}, $p=\ConfCvsAp$).
+
+Two cautions on reading P3. First, it is an \emph{oracle-versus-deployable}
+comparison, not a like-for-like mechanism ranking: D-token and D-hook read
+the ground-truth action type at inference while B reads nothing, so the
+embedding variants are being credited with information B never receives.
+Second, we neither prespecified nor ran a D-hook versus D-token contrast,
+so we make no claim that either embedding route is better than the other.
+What P3 does establish is that the course-era verdict --- ``the prepended
+embedding is refuted'' --- does not survive a clean split. We stress that
+this reverses in the direction that flatters our own hypothesis, which is
 precisely why it needed a prespecified test on data we had never touched.
 
 \textbf{P4 (deployable pipeline) --- null.} End-to-end predicted-type
@@ -752,7 +779,8 @@ isolate that cause, so we report the drop as an observed generalization gap
 rather than a diagnosed one. Either way it is the binding constraint on the
 deployable pipeline.
 
-\subsection{Where the confirmatory gain lives: scroll, not click}
+\subsection{Where the confirmatory gain lives: proportionally scroll,
+absolutely still click}
 \label{sec:confperclass}
 
 \begin{table}[tb]
@@ -760,7 +788,10 @@ deployable pipeline.
 \input{tables/tab_confirmatory_perclass}
 \end{center}
 \caption{Confirmatory per-class hit@0.10 on the untouched test set
-(seed-averaged). The oracle conditioning gain is proportionally largest on
+(seed-averaged; parse failures counted as misses, so denominators are the
+fixed class counts in the header). C, D-hook and D-token receive the
+ground-truth action type at inference; A and B do not. The oracle
+conditioning gain is proportionally largest on
 \emph{scroll} (A \ConfAscroll{} $\to$ D-hook \ConfDhscroll{}, a $\ConfScrollFold\times$
 relative improvement) and modest on \emph{click}
 (\ConfAclick{} $\to$ \ConfDhclick{}). The auxiliary loss (B) improves click
@@ -769,11 +800,16 @@ for every variant: AITW type coordinates are degenerate.}
 \label{tab:confperclass}
 \end{table}
 
-Table~\ref{tab:confperclass} overturns the exploratory mechanism story of
+Table~\ref{tab:confperclass} revises the exploratory mechanism story of
 Section~\ref{sec:perclass}. On leaky data the conditioning advantage looked
-like \emph{click} disambiguation. On the untouched test set the dominant
-relative effect is on \emph{scroll} (\ConfScrollDelta{} absolute,
-$\ConfScrollFold\times$ relative), with a smaller click gain (\ConfClickDelta{}). The
+like \emph{click} disambiguation. On the untouched test set the largest
+\emph{relative} effect is on \emph{scroll} (\ConfScrollDelta{} absolute,
+$\ConfScrollFold\times$ relative) versus a smaller proportional click gain
+(\ConfClickDelta{}, $\ConfClickFold\times$). Because click is roughly three
+times as frequent in the test set, click nevertheless still supplies
+\ConfClickAbsShare{} of the aggregate gain against scroll's
+\ConfScrollAbsShare{}: what moved is where the \emph{effect} is
+concentrated, not which class contributes the most additional hits. The
 mechanism this supports is different and simpler: swipe targets occupy a
 narrow, largely goal-independent region of the screen, so being told
 ``this step is a scroll'' relocates the prediction in a way the flat
@@ -784,12 +820,16 @@ and slightly harms scroll.
 \subsection{The control condition does not behave as designed}
 \label{sec:controlfail}
 
-Our preregistered control assumed that on \texttt{taps\_and\_swipes}
+Our prespecified control assumed that on \texttt{taps\_and\_swipes}
 action type carries no spatial information, so conditioning should not
 help. It does help: D-hook vs.\ A on the control test set is
 \ConfCtrlDhvsA{} ($p=\ConfCtrlDhvsAp$), while B is null
 (\ConfCtrlBvsA{}, $p=\ConfCtrlBvsAp$) and C is significantly harmful
-(\ConfCtrlCvsA{}, $p=\ConfCtrlCvsAp$). We report this as a \textbf{failed
+(\ConfCtrlCvsA{}, $p=\ConfCtrlCvsAp$). These control contrasts were
+prespecified as \emph{secondary}, and their $p$-values are unadjusted; we
+use them to \emph{withdraw} a scope claim rather than to establish one,
+which is the direction in which an unadjusted secondary result can safely
+be read. We report this as a \textbf{failed
 control}, not a second confirmation. It is coherent with
 Section~\ref{sec:confperclass}: if the exploitable signal is ``swipes land
 in a predictable region,'' then a tap-versus-swipe mix is exactly a
@@ -811,9 +851,9 @@ monotone low-data trend in either variant, so we again decline the
 
 Secondary contrasts, per-class decompositions, parse rates, and per-seed
 values for every run are in the released
-\texttt{results/phase9\_rerun/rerun\_analysis.json}. No procedure-level
-significance claim is made from three seeds (Section~\ref{sec:stats});
-per-seed means accompany every contrast.
+\texttt{results/phase9\_rerun/rerun\_analysis.json}, which also carries the
+per-seed mean for each side of every contrast. No procedure-level
+significance claim is made from three seeds (Section~\ref{sec:stats}).
 
 \subsection{What the broken evaluation actually cost}
 \label{sec:cost}
@@ -837,11 +877,15 @@ prepended embedding is refuted. (ii) the gap is no longer significant
 of the pooled test. (iii) \emph{D-token significantly beats B}
 (\ConfDtvsB{}).
 \item \textbf{Where the gain lives.} (i)--(ii) click disambiguation.
-(iii) proportionally, \emph{scroll} ($\ConfScrollFold\times$ versus
-$\ConfClickFold\times$ for click).
+(iii) the \emph{relative} effect is largest on \emph{scroll}
+($\ConfScrollFold\times$ versus $\ConfClickFold\times$ for click), though
+click's higher frequency still makes it \ConfClickAbsShare{} of the
+absolute gain.
 \item \textbf{Whether the pipeline is deployable.} (i) the predicted-type
-pipeline beats A and ``classifier error is not the bottleneck.'' (ii) the
-pipeline gain is no longer significant (\ExpEtoEPredvsA{}). (iii) the
+pipeline was reported as beating A, with ``classifier error is not the
+bottleneck'' --- a descriptive comparison that no test ever supported.
+(ii) any calibrated test shows it was never significant
+(\ExpEtoEPredvsA{}, $p=\ExpEtoEPredvsAp$). (iii) the
 pipeline is \emph{null}, with Stage-1 error absorbing \ConfEtoEGapShare{}
 of the oracle gain.
 \item \textbf{Whether the control holds.} (i)--(ii) conditioning looks
@@ -850,10 +894,10 @@ shows a significant effect, so it is \emph{not a valid control}.
 \end{itemize}
 
 Two lessons separate cleanly. First, the statistical repair alone was
-\emph{not} sufficient: it corrected two claims (the D-token refutation and
-the deployable pipeline) but left the headline ``auxiliary supervision
-works'' and the click-mechanism story intact and wrong --- those required
-the clean split. Fixing inference without fixing the data would have
+\emph{not} sufficient: it withdrew two unsupported claims (the D-token
+refutation and the deployable pipeline) but left the headline ``auxiliary
+supervision works'' and the click-mechanism story intact and wrong ---
+those required the clean split. Fixing inference without fixing the data would have
 produced a paper that was better calibrated and still substantively
 mistaken. Second, the direction of error is not systematic: the flawed
 protocol inflated some effects, suppressed our own hypothesis, and
@@ -864,10 +908,15 @@ calibrated test.
 
 \section{Limitations}
 
-The single positive confirmatory effect is oracle-gated: D-hook and
-D-token receive ground-truth action types that a deployed agent would have
-to predict, and when we predict them the effect disappears (P4). No claim
-in this paper should be read as a deployable improvement. Our control
+Every positive effect among the four prespecified contrasts is
+oracle-gated: D-hook and D-token receive ground-truth action types that a
+deployed agent would have to predict, and when we predict them the effect
+disappears (P4). No headline claim in this paper should be read as a
+deployable improvement. One non-oracle positive does appear among the
+secondary results --- B over A at $n_{\text{train}}{=}300$
+(Table~\ref{tab:lowdata}) --- but it is a secondary, unadjusted contrast in
+a grid where the same comparison is null at both larger sizes, so we do not
+build a claim on it. Our control
 condition failed (Section~\ref{sec:controlfail}), so we have no valid
 matched setting in which action type is demonstrably uninformative; the
 scope condition on when conditioning helps is therefore untested, and
@@ -901,17 +950,22 @@ byte-level provenance against the original release.
 On a test set whose task goals were never seen in training, the
 factorization thesis survives only in oracle form. Telling a 2B GUI agent
 the ground-truth action type improves grounding
-(\ConfDhvsA{} hit@0.10), and the prepended action embedding our proposal
-advocated is the better of the two mechanisms that do this
-(D-token$-$B \ConfDtvsB{}) --- a reversal of the course-era conclusion that
-the embedding was refuted. But auxiliary supervision alone is null, hard
-routing is null, the effect concentrates in \emph{scroll} rather than the
-click disambiguation we previously reported, our control condition turns
-out not to be a control, and the only configuration one could actually
-deploy --- predicting the action type and conditioning on the prediction ---
-is statistically indistinguishable from doing nothing, because the
-classifier drops from \ConfStageOneValAcc{} to \ConfStageOneAcc{} accuracy
-between the frozen validation split and the untouched test region. The honest summary is that we measured a real but
+(\ConfDhvsA{} hit@0.10). Both mechanisms that consume that oracle signal
+beat the auxiliary loss, including the prepended action embedding our
+proposal advocated (D-token$-$B \ConfDtvsB{}) --- a reversal of the
+course-era verdict that the embedding was refuted, though the comparison is
+oracle-versus-deployable, and we neither prespecified nor ran a D-hook
+versus D-token contrast, so we do not claim either embedding mechanism is
+better than the other. But auxiliary supervision alone is null, hard
+routing is null, the largest \emph{relative} effect moves to \emph{scroll}
+rather than the click disambiguation we previously reported (click still
+supplies \ConfClickAbsShare{} of the absolute gain), our control condition
+turns out not to be a control, and the only configuration one could
+actually deploy --- predicting the action type and conditioning on the
+prediction --- is statistically indistinguishable from doing nothing,
+because the classifier drops from \ConfStageOneValAcc{} to
+\ConfStageOneAcc{} accuracy between the frozen validation split and the
+untouched test region. The honest summary is that we measured a real but
 oracle-gated effect and no deployable one.
 
 The methodological result is the durable one. We ran the same five-variant
@@ -931,6 +985,15 @@ the object-level result and the audit can be checked and rerun.
 
 %%%%%%%%% CONTRIBUTIONS + GENAI (not counted toward the page limit)
 \label{endofmaintext}
+% Author-identifying back matter. Emitted only in the arXiv/camera-ready
+% build; suppressed in the anonymized workshop submission build, where it
+% would otherwise de-anonymize the paper.
+\ifworkshopbuild
+\section*{Contributions and disclosure}
+Author contributions and the generative-AI usage statement are omitted from
+this anonymized submission and will be included in any camera-ready version.
+Both are present in the public preprint.
+\else
 \section*{Contributions}
 \textbf{A.~Chauhan}: training and evaluation infrastructure, Stage-2
 conditioning variants, cloud experiment orchestration, statistical
@@ -949,3 +1012,4 @@ authors specified the research questions and methodology, reviewed the
 analyses, verified reported numbers against the committed result
 artifacts (every table is generated programmatically from those
 artifacts), and take full responsibility for all content.
+\fi

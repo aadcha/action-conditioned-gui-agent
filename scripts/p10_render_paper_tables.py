@@ -32,6 +32,9 @@ TABDIR = ROOT / "tables"
 
 MACROS: dict[str, str] = {}
 
+_CLS_HIST = {"tap": "click", "type": "type", "swipe_up": "scroll",
+             "swipe_down": "scroll", "swipe_left": "scroll", "swipe_right": "scroll"}
+
 
 def macro(name: str, value: str) -> None:
     assert name.isalpha(), f"macro names must be alphabetic: {name}"
@@ -83,7 +86,7 @@ def seed_stats(files: list[str], which: str, key: str) -> tuple[float, float, li
         m = d["final_test_metrics"] if which == "test" else d["final_val_metrics"]
         vals.append(m[key] if key == "parse_rate" else _metric_from_ped(m["per_example_dist"], key))
     a = np.asarray(vals, dtype=np.float64)
-    return float(a.mean()), float(a.std(ddof=0)), [float(v) for v in a]
+    return float(a.mean()), float(a.std(ddof=1)), [float(v) for v in a]
 
 
 def hist_stats(pattern: str, key: str) -> tuple[float, float]:
@@ -92,7 +95,7 @@ def hist_stats(pattern: str, key: str) -> tuple[float, float]:
         d = json.loads(Path(f).read_text())
         vals.append(_metric_from_ped(d["final_val_metrics"]["per_example_dist"], key))
     a = np.asarray(vals, dtype=np.float64)
-    return float(a.mean()), float(a.std(ddof=0))
+    return float(a.mean()), float(a.std(ddof=1))
 
 
 def write(name: str, lines: list[str]) -> None:
@@ -167,6 +170,42 @@ def exploratory(p8: dict) -> None:
     macro("ExpDtvsBpooled",
           f"{cell['Dtoken_vs_B']['metrics']['hit_at_010']['legacy_pooled']['p_value']:.3g}")
 
+    # ---- exploratory per-class, matched seeds + miss-scored ----
+    # The historical runs' own `per_class` block uses parsed-only denominators
+    # AND (via scripts/p7_compounding_error.py) a 5-seed A/D-hook baseline
+    # against 3-seed B/C/D-token. Both are fixed here: classes come from the
+    # reconstructed val slice, seeds are matched to 42-44, and parse failures
+    # score the sqrt(2) sentinel like everywhere else.
+    scan = sorted((ROOT / "results" / "phase8_reanalysis").glob("stream_index_train_n*.json"))
+    if scan:
+        recs = json.loads(scan[-1].read_text())["records"]
+        AWC = {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"}
+        awc = [r for r in recs if r["label"] in AWC]
+        val_slice = awc[1200:1450]          # the historical n_train=1200 val slice
+        cls = [_CLS_HIST[r["label"]] for r in val_slice]
+
+        def exp_per_class(pat: str) -> dict:
+            out: dict[str, list[float]] = {}
+            for f in sorted(glob.glob(str(P4 / pat))):
+                d = json.loads(Path(f).read_text())
+                dist = np.asarray(d["final_val_metrics"]["per_example_dist"], dtype=np.float64)
+                if dist.shape[0] != len(cls):
+                    continue
+                for c in sorted(set(cls)):
+                    m = np.array([x == c for x in cls])
+                    out.setdefault(c, []).append(float((dist[m] <= 0.10).mean()))
+            return {c: float(np.mean(v)) for c, v in out.items()}
+
+        expc = {nm: exp_per_class(pat) for nm, pat in pats.items()}
+        base = expc.get("A (flat)", {})
+        name_map = {"B (aux loss)": "ExpB", "C (hard routing)": "ExpC",
+                    "D-hook (additive)": "ExpDh", "D-token (prepended)": "ExpDt"}
+        for nm, pre in name_map.items():
+            for c, suf in (("click", "click"), ("scroll", "scroll")):
+                if c in base and c in expc.get(nm, {}):
+                    macro(pre + suf.capitalize() + "Delta",
+                          f"{expc[nm][c] - base[c]:+.3f}")
+
     # ---- validation numbers ----
     v = p8["validation"]
     macro("TypeIPooled", f"{100*v['fixed_checkpoint_null']['pooled_reject_rate']:.1f}\\%")
@@ -224,22 +263,27 @@ def confirmatory(p9: dict) -> None:
     pri = p9["primary"]
     cmap = {"B (aux loss)": ("P1_B_vs_A", False), "D-hook (additive)": ("P2_Dhook_vs_A", False),
             "C (hard routing)": ("C_vs_A", True), "D-token (prepended)": ("Dtoken_vs_A", True)}
-    L = [r"\begin{tabular}{lcccc}", r"\toprule",
-         r"variant & hit@0.10 & mean L2 $\downarrow$ & $\Delta$ hit@0.10 vs.\ A [95\% CI] & perm.\ $p$ (Holm) \\",
+    L = [r"\begin{tabular}{lccccc}", r"\toprule",
+         r"variant & hit@0.10 & mean L2 $\downarrow$ & parse & $\Delta$ hit@0.10 vs.\ A [95\% CI] & perm.\ $p$ (Holm) \\",
          r"\midrule"]
     for nm in pats:
         if nm not in stats:
             continue
         m10, s10, _ = stats[nm]["hit010"]
         l2, _, _ = stats[nm]["l2"]
+        pr, _, _ = stats[nm]["parse"]
+        prs = f"${100*pr:.1f}\\%$"
         if nm in cmap:
             key, secondary = cmap[nm]
             src = p9["secondary"] if secondary else p9["primary"]
             r = src[key]["metrics"]["hit_at_010"]["episode_clustered"]
-            holm = "" if secondary else f" ({src[key]['holm_adjusted_p_hit010']:.3g})"
-            L.append(f"{nm} & ${m10:.3f} \\pm {s10:.3f}$ & ${l2:.3f}$ & {ci(r)} & {fmt_p(r)}{holm} \\\\")
+            hp = src[key].get("holm_adjusted_p_hit010")
+            censored = r["p_value"] <= r["p_resolution"]
+            holm = "" if secondary else (
+                f" ($\\leq${hp:.2g})" if censored else f" ({hp:.3g})")
+            L.append(f"{nm} & ${m10:.3f} \\pm {s10:.3f}$ & ${l2:.3f}$ & {prs} & {ci(r)} & {fmt_p(r)}{holm} \\\\")
         else:
-            L.append(f"{nm} & ${m10:.3f} \\pm {s10:.3f}$ & ${l2:.3f}$ & --- & --- \\\\")
+            L.append(f"{nm} & ${m10:.3f} \\pm {s10:.3f}$ & ${l2:.3f}$ & {prs} & --- & --- \\\\")
     L += [r"\bottomrule", r"\end{tabular}"]
     write("tab_confirmatory_main.tex", L)
 
@@ -248,7 +292,9 @@ def confirmatory(p9: dict) -> None:
         r = pri[key]["metrics"]["hit_at_010"]["episode_clustered"]
         macro(mk, ci(r))
         macro(mk + "p", p_inline(r))
-        macro(mk + "Holm", f"{pri[key]['holm_adjusted_p_hit010']:.3g}")
+        _hp = pri[key]["holm_adjusted_p_hit010"]
+        macro(mk + "Holm", (f"{{\\leq}}{_hp:.2g}"
+                            if r["p_value"] <= r["p_resolution"] else f"{_hp:.3g}"))
         rl = pri[key]["metrics"]["mean_normalized_l2"]["episode_clustered"]
         macro(mk + "Ltwo", ci(rl))
         macro(mk + "Ltwop", p_inline(rl))
@@ -275,14 +321,16 @@ def confirmatory(p9: dict) -> None:
             continue
         m10, s10, _ = seed_stats(files, "test", "hit_at_010")
         l2, _, _ = seed_stats(files, "test", "mean_normalized_l2")
+        pr, _, _ = seed_stats(files, "test", "parse_rate")
+        prs = f"${100*pr:.1f}\\%$"
         if key and key in p9["secondary"]:
             r = p9["secondary"][key]["metrics"]["hit_at_010"]["episode_clustered"]
-            rows.append(f"{nm} & ${m10:.3f} \\pm {s10:.3f}$ & ${l2:.3f}$ & {ci(r)} & {fmt_p(r)} \\\\")
+            rows.append(f"{nm} & ${m10:.3f} \\pm {s10:.3f}$ & ${l2:.3f}$ & {prs} & {ci(r)} & {fmt_p(r)} \\\\")
         else:
-            rows.append(f"{nm} & ${m10:.3f} \\pm {s10:.3f}$ & ${l2:.3f}$ & --- & --- \\\\")
+            rows.append(f"{nm} & ${m10:.3f} \\pm {s10:.3f}$ & ${l2:.3f}$ & {prs} & --- & --- \\\\")
     if rows:
-        L = [r"\begin{tabular}{lcccc}", r"\toprule",
-             r"variant & hit@0.10 & mean L2 $\downarrow$ & $\Delta$ hit@0.10 vs.\ A [95\% CI] & perm.\ $p$ \\",
+        L = [r"\begin{tabular}{lccccc}", r"\toprule",
+             r"variant & hit@0.10 & mean L2 $\downarrow$ & parse & $\Delta$ hit@0.10 vs.\ A [95\% CI] & perm.\ $p$ \\",
              r"\midrule"] + rows + [r"\bottomrule", r"\end{tabular}"]
         write("tab_control.tex", L)
 
@@ -309,14 +357,28 @@ def confirmatory(p9: dict) -> None:
         write("tab_lowdata.tex", L)
 
     # ---- confirmatory per-class decomposition (seed-averaged, test) ----
+    # AITW string label -> canonical class used in the paper's per-class table.
+    _CLS = {"tap": "click", "type": "type", "swipe_up": "scroll",
+            "swipe_down": "scroll", "swipe_left": "scroll", "swipe_right": "scroll"}
+
     def per_class_means(pat: str) -> dict:
+        """Per-class hit@0.10 computed from per_example_dist grouped by the
+        frozen split's own step labels, so parse failures are sentinel-scored
+        and counted as misses — the paper's declared convention. The run
+        JSONs' `per_class` block uses parsed-only denominators (audit finding:
+        C's 3.8% test parse failures inflated its per-class scroll rate), so
+        it must not feed paper tables."""
         acc: dict[str, list[float]] = {}
         ns: dict[str, int] = {}
         for f in sorted(glob.glob(str(P4 / pat))):
-            pc = json.loads(Path(f).read_text())["final_test_metrics"].get("per_class") or {}
-            for cls, v in pc.items():
-                acc.setdefault(cls, []).append(v["hit_at_010"])
-                ns[cls] = v["n"]
+            d = json.loads(Path(f).read_text())
+            dist = np.asarray(d["final_test_metrics"]["per_example_dist"], dtype=np.float64)
+            labels = [_CLS[k["label"]] for k in d["test_step_keys"]]
+            assert len(labels) == dist.shape[0], f"{f}: keys/dist length mismatch"
+            for cls in sorted(set(labels)):
+                mask = np.array([l == cls for l in labels])
+                acc.setdefault(cls, []).append(float((dist[mask] <= 0.10).mean()))
+                ns[cls] = int(mask.sum())
         return {c: (float(np.mean(vs)), ns[c]) for c, vs in acc.items()}
 
     pc_rows = {nm: per_class_means(pat) for nm, pat in pats.items()}
@@ -344,6 +406,15 @@ def confirmatory(p9: dict) -> None:
             macro("ConfAclick", f"{a_pc['click'][0]:.3f}")
             macro("ConfDhclick", f"{dh_pc['click'][0]:.3f}")
             macro("ConfClickDelta", f"{dh_pc['click'][0] - a_pc['click'][0]:+.3f}")
+        # Absolute share of the aggregate gain each class supplies. The
+        # proportional (fold) effect is largest on scroll, but click is 3x
+        # more frequent, so click still supplies most of the absolute gain —
+        # the text must not claim the gain "concentrates in scroll".
+        if a_pc.get("click") and a_pc.get("scroll") and dh_pc:
+            c_abs = a_pc["click"][1] * (dh_pc["click"][0] - a_pc["click"][0])
+            s_abs = a_pc["scroll"][1] * (dh_pc["scroll"][0] - a_pc["scroll"][0])
+            macro("ConfClickAbsShare", f"{100 * c_abs / (c_abs + s_abs):.0f}\\%")
+            macro("ConfScrollAbsShare", f"{100 * s_abs / (c_abs + s_abs):.0f}\\%")
         # Relative (fold) improvements, so the text never hand-types a ratio.
         if a_pc.get("scroll", (0,))[0]:
             macro("ConfScrollFold", f"{dh_pc['scroll'][0] / a_pc['scroll'][0]:.1f}")
