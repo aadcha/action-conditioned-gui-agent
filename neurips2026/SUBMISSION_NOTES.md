@@ -72,8 +72,8 @@ Regular, outside shot at Spotlight with a crisp headline.
    expansion to ~30–40 verified entries. `reference/deep-research-report-
    literature-review.md` has the landscape (verify every number — its
    citations are search-tool artifacts).
-10. **No architecture/method figure exists** — must be drawn (fig:arch
-    placeholder in main.tex).
+10. ~~No architecture/method figure exists~~ — DONE Sep 1: TikZ figure in
+    `figures/arch_diagram.tex` (`\input` from main.tex, builds).
 11. CS231N back-matter (Contributions, GenAI statement) not applicable;
     drop for the workshop version.
 
