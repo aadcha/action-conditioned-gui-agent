@@ -119,6 +119,33 @@ Cost estimate ≈ $35 (E2's n=5000 runs dominate). Monitoring: `scripts/p8_poll.
 the existing JSONs and emits `results/phase8/{PHASE8_RESULTS.md, tables/*.tex,
 ablation_headline_vs_control.png, scaling_curve_multiseed.png}`.
 
+## Interim findings (Sep 1, ~16:45 PDT; E1 11/12, E3 6/6, E6 done, E5 v1 D-hook)
+
+- **5-seed headline strengthens the story.** B − A = +0.064*** and D-hook − A =
+  +0.054*** (1250 paired units), while D-token − A drops to +0.009 (ns) and
+  D-token − B = −0.055***. Ranking B ≈ D-hook > C ≳ D-token ≈ A. The literal
+  prepended embedding is now clearly *not* the mechanism.
+- **Control now has paired bootstrap for all four variants**: B −0.015 ns,
+  D-hook −0.005 ns, C −0.047* on hit@0.10 vs A. Conditioning neutral (B, D-hook)
+  to harmful (C) when type is not spatially informative.
+- **D-token causal test at 5 seeds**: gold − wrong +0.157***, gold − zero
+  +0.069*** (1250 units).
+- **New mechanism finding (E5, D-hook, seed 42, 120 probes):** zeroing the
+  additive embedding at inference does NOT hurt (hit@0.10 0.392 vs 0.358 gold,
+  ns) while a wrong embedding is catastrophic (0.083). D-hook's benefit is a
+  *training-time* effect (like B's auxiliary loss); D-token's is partly
+  inference-time (its zero condition hurts). The "wrong" collapse is almost
+  entirely the click→type swap (click hit 0.432 → 0.012), i.e. conditioning
+  onto `type` makes the model emit the degenerate type coordinate — a confound
+  in the cyclic wrong map that also affects the D-token causal numbers. E5 v2
+  (launched 16:10) adds a click↔scroll "wrong2" map and probes the tokens that
+  actually predict the x/y digits (pre_x, pre_y) instead of only the last
+  prompt token; v1 showed target-region attention barely above chance
+  (0.040 vs 0.026 area share) and changing little with conditioning.
+- **Qualitative v2 base rates (n=1200, seed 42):** click hit@0.10 A 0.343 vs
+  D-hook 0.391; of 169 clicks: 18 rescued, 11 hurt, 45 both correct, 90 both
+  missed. Figures: `figures/qualitative_v2_1x4.png` (main), `_1x6.png` (appendix).
+
 ## Writing plan (post-approval)
 
 Port + tighten from `overleaf_submission/paper.tex` (byte-identical to root
