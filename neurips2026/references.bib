@@ -1,104 +1,421 @@
-@article{uitars,
+% Bibliography for "Action-Conditioned Grounding: Decoupling What to Do from
+% Where to Act in GUI Agents" (VLM4RWD workshop, NeurIPS 2026).
+%
+% NOTE: BibTeX treats an at-sign anywhere outside an entry as the start of a
+% new entry, even inside these comment lines, so never write one here.
+%
+% Every arXiv entry was checked against the arXiv API (id, exact title, full
+% author list); published venues were checked against Crossref / ACL Anthology /
+% conference sites. arXiv-only work uses misc entries with howpublished plus
+% eprint fields (plainnat prints howpublished; eprint is kept for biblatex).
+% Author lists follow the cited (published) version where one exists,
+% otherwise arXiv.
+%
+% Sections:
+%   1. GUI agents, screen grounding, and GUI benchmarks
+%   2. Backbone, positional encoding, and parameter-efficient fine-tuning
+%   3. Factorized / conditioned decision-making and multi-task learning
+%   4. Grounded and faithful VLMs (referring/grounding, hallucination evals)
+%   5. Statistics
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% 1. GUI agents, screen grounding, and GUI benchmarks
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+@misc{uitars,
   title={{UI-TARS}: Pioneering Automated {GUI} Interaction with Native Agents},
-  author={Yao, Yujia and others},
-  journal={arXiv preprint arXiv:2501.12326},
+  author={Yujia Qin and Yining Ye and Junjie Fang and Haoming Wang and Shihao Liang and Shizuo Tian and Junda Zhang and Jiahao Li and Yunxin Li and Shijue Huang and Wanjun Zhong and Kuanye Li and Jiale Yang and Yu Miao and Woyu Lin and Longxiang Liu and Xu Jiang and Qianli Ma and Jingyu Li and Xiaojun Xiao and Kai Cai and Chuang Li and Yaowei Zheng and Chaolin Jin and Chen Li and Xiao Zhou and Minchao Wang and Haoli Chen and Zhaojian Li and Haihua Yang and Haifeng Liu and Feng Lin and Tao Peng and Xin Liu and Guang Shi},
+  year={2025},
+  howpublished={arXiv preprint arXiv:2501.12326},
+  eprint={2501.12326},
+  archivePrefix={arXiv},
+  primaryClass={cs.AI}
+}
+
+@inproceedings{osatlas,
+  title={{OS-ATLAS}: A Foundation Action Model for Generalist {GUI} Agents},
+  author={Zhiyong Wu and Zhenyu Wu and Fangzhi Xu and Yian Wang and Qiushi Sun and Chengyou Jia and Kanzhi Cheng and Zichen Ding and Liheng Chen and Paul Pu Liang and Yu Qiao},
+  booktitle={International Conference on Learning Representations (ICLR)},
   year={2025}
 }
 
-@article{osatlas,
-  title={{OS-Atlas}: A Foundation Action Model for Generalist {GUI} Agents},
-  author={Wu, Zhiyong and others},
-  journal={arXiv preprint arXiv:2410.23218},
-  year={2024}
-}
-
-@article{seeclick,
+@inproceedings{seeclick,
   title={{SeeClick}: Harnessing {GUI} Grounding for Advanced Visual {GUI} Agents},
-  author={Cheng, Kanzhi and others},
-  journal={arXiv preprint arXiv:2401.10935},
-  year={2024}
+  author={Kanzhi Cheng and Qiushi Sun and Yougang Chu and Fangzhi Xu and Yantao Li and Jianbing Zhang and Zhiyong Wu},
+  booktitle={Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)},
+  pages={9313--9332},
+  year={2024},
+  doi={10.18653/v1/2024.acl-long.505}
 }
 
-@article{showui,
+@inproceedings{showui,
   title={{ShowUI}: One Vision-Language-Action Model for {GUI} Visual Agent},
-  author={Lin, Kevin Qinghong and others},
-  journal={arXiv preprint arXiv:2411.17465},
-  year={2024}
+  author={Kevin Qinghong Lin and Linjie Li and Difei Gao and Zhengyuan Yang and Shiwei Wu and Zechen Bai and Stan Weixian Lei and Lijuan Wang and Mike Zheng Shou},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages={19498--19508},
+  year={2025},
+  doi={10.1109/CVPR52734.2025.01816}
 }
 
-@article{guiactor,
+@inproceedings{guiactor,
   title={{GUI-Actor}: Coordinate-Free Visual Grounding for {GUI} Agents},
-  author={Zheng, Qianhui and others},
-  journal={arXiv preprint arXiv:2503.15197},
+  author={Qianhui Wu and Kanzhi Cheng and Rui Yang and Chaoyun Zhang and Jianwei Yang and Huiqiang Jiang and Jian Mu and Baolin Peng and Bo Qiao and Reuben Tan and Si Qin and Lars Liden and Qingwei Lin and Huan Zhang and Tong Zhang and Jianbing Zhang and Dongmei Zhang and Jianfeng Gao},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
   year={2025}
 }
 
-@article{uground,
+@inproceedings{uground,
   title={Navigating the Digital World as Humans Do: Universal Visual Grounding for {GUI} Agents},
-  author={Gou, Boyu and others},
-  journal={arXiv preprint arXiv:2406.01729},
-  year={2024}
-}
-
-@article{uir1,
-  title={{UI-R1}: Enhancing Action Prediction of {GUI} Agents by Reinforcement Learning},
-  author={Lu, Zhengxi and others},
-  journal={arXiv preprint arXiv:2503.21620},
+  author={Boyu Gou and Ruohan Wang and Boyuan Zheng and Yanan Xie and Cheng Chang and Yiheng Shu and Huan Sun and Yu Su},
+  booktitle={International Conference on Learning Representations (ICLR)},
   year={2025}
 }
 
-@article{regionfocus,
-  title={{RegionFocus}: Training-Free Visual Test-Time Scaling for {GUI} Grounding},
-  author={Anonymous},
-  journal={arXiv preprint},
+@inproceedings{uir1,
+  title={{UI-R1}: Enhancing Efficient Action Prediction of {GUI} Agents by Reinforcement Learning},
+  author={Zhengxi Lu and Yuxiang Chai and Yaxuan Guo and Xi Yin and Liang Liu and Hao Wang and Han Xiao and Shuai Ren and Pengxiang Zhao and Guangyi Liu and Guanjing Xiong and Hongsheng Li},
+  booktitle={Proceedings of the AAAI Conference on Artificial Intelligence},
+  volume={40},
+  pages={17608--17616},
+  year={2026},
+  doi={10.1609/aaai.v40i21.38816}
+}
+
+@inproceedings{regionfocus,
+  title={Visual Test-time Scaling for {GUI} Agent Grounding},
+  author={Tiange Luo and Lajanugen Logeswaran and Justin Johnson and Honglak Lee},
+  booktitle={Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
   year={2025}
 }
 
 @inproceedings{mind2web,
   title={{Mind2Web}: Towards a Generalist Agent for the Web},
-  author={Deng, Xiang and others},
-  booktitle={NeurIPS},
+  author={Xiang Deng and Yu Gu and Boyuan Zheng and Shijie Chen and Samuel Stevens and Boshi Wang and Huan Sun and Yu Su},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS), Datasets and Benchmarks Track},
   year={2023}
 }
 
 @inproceedings{aitw,
-  title={Android in the Wild: A Large-Scale Dataset for Android Device Control},
-  author={Rawles, Christopher and others},
-  booktitle={NeurIPS},
-  year={2023}
-}
-
-@article{qwen2vl,
-  title={{Qwen2-VL}: Enhancing Vision-Language Model's Perception of the World at Any Resolution},
-  author={Wang, Peng and others},
-  journal={arXiv preprint arXiv:2409.12191},
-  year={2024}
-}
-
-@inproceedings{saycan,
-  title={Do As {I} Can, Not As {I} Say: Grounding Language in Robotic Affordances},
-  author={Ahn, Michael and others},
-  booktitle={CoRL},
-  year={2022}
-}
-
-@article{react,
-  title={{ReAct}: Synergizing Reasoning and Acting in Language Models},
-  author={Yao, Shunyu and others},
-  journal={arXiv preprint arXiv:2210.03629},
-  year={2022}
-}
-
-@article{rt2,
-  title={{RT-2}: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control},
-  author={Brohan, Anthony and others},
-  journal={arXiv preprint arXiv:2307.15818},
+  title={{Android} in the Wild: A Large-Scale Dataset for {Android} Device Control},
+  author={Christopher Rawles and Alice Li and Daniel Rodriguez and Oriana Riva and Timothy Lillicrap},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS), Datasets and Benchmarks Track},
   year={2023}
 }
 
 @inproceedings{seeact,
-  title={{GPT-4V} Is a Generalist Web Agent, If Grounded},
-  author={Zheng, Boyuan and others},
-  booktitle={ICML},
+  title={{GPT-4V(ision)} is a Generalist Web Agent, if Grounded},
+  author={Boyuan Zheng and Boyu Gou and Jihyung Kil and Huan Sun and Yu Su},
+  booktitle={International Conference on Machine Learning (ICML)},
   year={2024}
+}
+
+@inproceedings{cogagent,
+  title={{CogAgent}: A Visual Language Model for {GUI} Agents},
+  author={Wenyi Hong and Weihan Wang and Qingsong Lv and Jiazheng Xu and Wenmeng Yu and Junhui Ji and Yan Wang and Zihan Wang and Yuxiao Dong and Ming Ding and Jie Tang},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages={14281--14290},
+  year={2024},
+  doi={10.1109/CVPR52733.2024.01354}
+}
+
+@inproceedings{screenai,
+  title={{ScreenAI}: A Vision-Language Model for {UI} and Infographics Understanding},
+  author={Gilles Baechler and Srinivas Sunkara and Maria Wang and Fedir Zubach and Hassan Mansoor and Vincent Etter and Victor C{\u{a}}rbune and Jason Lin and Jindong Chen and Abhanshu Sharma},
+  booktitle={Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence (IJCAI)},
+  year={2024}
+}
+
+@inproceedings{ferretui,
+  title={{Ferret-UI}: Grounded Mobile {UI} Understanding with Multimodal {LLMs}},
+  author={Keen You and Haotian Zhang and Eldon Schoop and Floris Weers and Amanda Swearngin and Jeffrey Nichols and Yinfei Yang and Zhe Gan},
+  booktitle={European Conference on Computer Vision (ECCV)},
+  pages={240--255},
+  year={2024},
+  doi={10.1007/978-3-031-73039-9_14}
+}
+
+@inproceedings{aguvis,
+  title={{Aguvis}: Unified Pure Vision Agents for Autonomous {GUI} Interaction},
+  author={Yiheng Xu and Zekun Wang and Junli Wang and Dunjie Lu and Tianbao Xie and Amrita Saha and Doyen Sahoo and Tao Yu and Caiming Xiong},
+  booktitle={International Conference on Machine Learning (ICML)},
+  year={2025}
+}
+
+@misc{omniparser,
+  title={{OmniParser} for Pure Vision Based {GUI} Agent},
+  author={Yadong Lu and Jianwei Yang and Yelong Shen and Ahmed Awadallah},
+  year={2024},
+  howpublished={arXiv preprint arXiv:2408.00203},
+  eprint={2408.00203},
+  archivePrefix={arXiv},
+  primaryClass={cs.CV}
+}
+
+@inproceedings{autoui,
+  title={You Only Look at Screens: Multimodal Chain-of-Action Agents},
+  author={Zhuosheng Zhang and Aston Zhang},
+  booktitle={Findings of the Association for Computational Linguistics: ACL 2024},
+  pages={3132--3149},
+  year={2024},
+  doi={10.18653/v1/2024.findings-acl.186}
+}
+
+@inproceedings{appagent,
+  title={{AppAgent}: Multimodal Agents as Smartphone Users},
+  author={Chi Zhang and Zhao Yang and Jiaxuan Liu and Yanda Li and Yucheng Han and Xin Chen and Zebiao Huang and Bin Fu and Gang Yu},
+  booktitle={Proceedings of the 2025 CHI Conference on Human Factors in Computing Systems (CHI)},
+  pages={1--20},
+  year={2025},
+  doi={10.1145/3706598.3713600}
+}
+
+@inproceedings{digirl,
+  title={{DigiRL}: Training In-The-Wild Device-Control Agents with Autonomous Reinforcement Learning},
+  author={Hao Bai and Yifei Zhou and Mert Cemri and Jiayi Pan and Alane Suhr and Sergey Levine and Aviral Kumar},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+  year={2024}
+}
+
+@inproceedings{webrl,
+  title={{WebRL}: Training {LLM} Web Agents via Self-Evolving Online Curriculum Reinforcement Learning},
+  author={Zehan Qi and Xiao Liu and Iat Long Iong and Hanyu Lai and Xueqiao Sun and Wenyi Zhao and Yu Yang and Xinyue Yang and Jiadai Sun and Shuntian Yao and Tianjie Zhang and Wei Xu and Jie Tang and Yuxiao Dong},
+  booktitle={International Conference on Learning Representations (ICLR)},
+  year={2025}
+}
+
+@misc{som,
+  title={Set-of-Mark Prompting Unleashes Extraordinary Visual Grounding in {GPT-4V}},
+  author={Jianwei Yang and Hao Zhang and Feng Li and Xueyan Zou and Chunyuan Li and Jianfeng Gao},
+  year={2023},
+  howpublished={arXiv preprint arXiv:2310.11441},
+  eprint={2310.11441},
+  archivePrefix={arXiv},
+  primaryClass={cs.CV}
+}
+
+@inproceedings{androidcontrol,
+  title={On the Effects of Data Scale on {UI} Control Agents},
+  author={Wei Li and William Bishop and Alice Li and Chris Rawles and Folawiyo Campbell-Ajala and Divya Tyamagundlu and Oriana Riva},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS), Datasets and Benchmarks Track},
+  year={2024}
+}
+
+@inproceedings{androidworld,
+  title={{AndroidWorld}: A Dynamic Benchmarking Environment for Autonomous Agents},
+  author={Christopher Rawles and Sarah Clinckemaillie and Yifan Chang and Jonathan Waltz and Gabrielle Lau and Marybeth Fair and Alice Li and William Bishop and Wei Li and Folawiyo Campbell-Ajala and Daniel Toyama and Robert Berry and Divya Tyamagundlu and Timothy Lillicrap and Oriana Riva},
+  booktitle={International Conference on Learning Representations (ICLR)},
+  year={2025}
+}
+
+@inproceedings{screenspotpro,
+  title={{ScreenSpot-Pro}: {GUI} Grounding for Professional High-Resolution Computer Use},
+  author={Kaixin Li and Ziyang Meng and Hongzhan Lin and Ziyang Luo and Yuchen Tian and Jing Ma and Zhiyong Huang and Tat-Seng Chua},
+  booktitle={Proceedings of the 33rd ACM International Conference on Multimedia (MM)},
+  pages={8778--8786},
+  year={2025},
+  doi={10.1145/3746027.3755688}
+}
+
+@inproceedings{ponderpress,
+  title={Ponder {\&} {Press}: Advancing Visual {GUI} Agent towards General Computer Control},
+  author={Yiqin Wang and Haoji Zhang and Jingqi Tian and Yansong Tang},
+  booktitle={Findings of the Association for Computational Linguistics: ACL 2025},
+  pages={1461--1473},
+  year={2025},
+  doi={10.18653/v1/2025.findings-acl.76}
+}
+
+@inproceedings{ariaui,
+  title={{Aria-UI}: Visual Grounding for {GUI} Instructions},
+  author={Yuhao Yang and Yue Wang and Dongxu Li and Ziyang Luo and Bei Chen and Chao Huang and Junnan Li},
+  booktitle={Findings of the Association for Computational Linguistics: ACL 2025},
+  pages={22418--22433},
+  year={2025},
+  doi={10.18653/v1/2025.findings-acl.1152}
+}
+
+@misc{mobileagent,
+  title={{Mobile-Agent}: Autonomous Multi-Modal Mobile Device Agent with Visual Perception},
+  author={Junyang Wang and Haiyang Xu and Jiabo Ye and Ming Yan and Weizhou Shen and Ji Zhang and Fei Huang and Jitao Sang},
+  year={2024},
+  howpublished={arXiv preprint arXiv:2401.16158},
+  eprint={2401.16158},
+  archivePrefix={arXiv},
+  primaryClass={cs.CL},
+  note={ICLR 2024 Workshop on Large Language Model Agents}
+}
+
+@misc{guiaima,
+  title={{GUI-AIMA}: Aligning Intrinsic Multimodal Attention with a Context Anchor for {GUI} Grounding},
+  author={Shijie Zhou and Viet Dac Lai and Hao Tan and Jihyung Kil and Wanrong Zhu and Changyou Chen and Ruiyi Zhang},
+  year={2025},
+  howpublished={arXiv preprint arXiv:2511.00810},
+  eprint={2511.00810},
+  archivePrefix={arXiv},
+  primaryClass={cs.CV}
+}
+
+@misc{guilibra,
+  title={{GUI-Libra}: Training Native {GUI} Agents to Reason and Act with Action-aware Supervision and Partially Verifiable {RL}},
+  author={Rui Yang and Qianhui Wu and Zhaoyang Wang and Hanyang Chen and Ke Yang and Hao Cheng and Huaxiu Yao and Baolin Peng and Huan Zhang and Jianfeng Gao and Tong Zhang},
+  year={2026},
+  howpublished={arXiv preprint arXiv:2602.22190},
+  eprint={2602.22190},
+  archivePrefix={arXiv},
+  primaryClass={cs.LG}
+}
+
+@misc{vscrl,
+  title={Advancing Autonomous {VLM} Agents via Variational Subgoal-Conditioned Reinforcement Learning},
+  author={Qingyuan Wu and Jianheng Liu and Jianye Hao and Jun Wang and Kun Shao},
+  year={2025},
+  howpublished={arXiv preprint arXiv:2502.07949},
+  eprint={2502.07949},
+  archivePrefix={arXiv},
+  primaryClass={cs.LG},
+  note={Presented at the NeurIPS 2025 Workshop on Vision Language Models: Challenges of Real World Deployment}
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% 2. Backbone, positional encoding, and parameter-efficient fine-tuning
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+@misc{qwen2vl,
+  title={{Qwen2-VL}: Enhancing Vision-Language Model's Perception of the World at Any Resolution},
+  author={Peng Wang and Shuai Bai and Sinan Tan and Shijie Wang and Zhihao Fan and Jinze Bai and Keqin Chen and Xuejing Liu and Jialin Wang and Wenbin Ge and Yang Fan and Kai Dang and Mengfei Du and Xuancheng Ren and Rui Men and Dayiheng Liu and Chang Zhou and Jingren Zhou and Junyang Lin},
+  year={2024},
+  howpublished={arXiv preprint arXiv:2409.12191},
+  eprint={2409.12191},
+  archivePrefix={arXiv},
+  primaryClass={cs.CV}
+}
+
+@misc{qwen25vl,
+  title={{Qwen2.5-VL} Technical Report},
+  author={Shuai Bai and Keqin Chen and Xuejing Liu and Jialin Wang and Wenbin Ge and Sibo Song and Kai Dang and Peng Wang and Shijie Wang and Jun Tang and Humen Zhong and Yuanzhi Zhu and Mingkun Yang and Zhaohai Li and Jianqiang Wan and Pengfei Wang and Wei Ding and Zheren Fu and Yiheng Xu and Jiabo Ye and Xi Zhang and Tianbao Xie and Zesen Cheng and Hang Zhang and Zhibo Yang and Haiyang Xu and Junyang Lin},
+  year={2025},
+  howpublished={arXiv preprint arXiv:2502.13923},
+  eprint={2502.13923},
+  archivePrefix={arXiv},
+  primaryClass={cs.CV}
+}
+
+@article{roformer,
+  title={{RoFormer}: Enhanced Transformer with Rotary Position Embedding},
+  author={Jianlin Su and Yu Lu and Shengfeng Pan and Ahmed Murtadha and Bo Wen and Yunfeng Liu},
+  journal={Neurocomputing},
+  volume={568},
+  pages={127063},
+  year={2024},
+  doi={10.1016/j.neucom.2023.127063}
+}
+
+@inproceedings{lora,
+  title={{LoRA}: Low-Rank Adaptation of Large Language Models},
+  author={Edward J. Hu and Yelong Shen and Phillip Wallis and Zeyuan Allen-Zhu and Yuanzhi Li and Shean Wang and Lu Wang and Weizhu Chen},
+  booktitle={International Conference on Learning Representations (ICLR)},
+  year={2022}
+}
+
+@misc{peft,
+  title={{PEFT}: State-of-the-art Parameter-Efficient Fine-Tuning methods},
+  author={Sourab Mangrulkar and Sylvain Gugger and Lysandre Debut and Younes Belkada and Sayak Paul and Benjamin Bossan},
+  howpublished={\url{https://github.com/huggingface/peft}},
+  year={2022}
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% 3. Factorized / conditioned decision-making and multi-task learning
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+@inproceedings{saycan,
+  title={Do As {I} Can, Not As {I} Say: Grounding Language in Robotic Affordances},
+  author={Michael Ahn and Anthony Brohan and Noah Brown and Yevgen Chebotar and Omar Cortes and Byron David and Chelsea Finn and Chuyuan Fu and Keerthana Gopalakrishnan and Karol Hausman and Alex Herzog and Daniel Ho and Jasmine Hsu and Julian Ibarz and Brian Ichter and Alex Irpan and Eric Jang and Rosario Jauregui Ruano and Kyle Jeffrey and Sally Jesmonth and Nikhil J Joshi and Ryan Julian and Dmitry Kalashnikov and Yuheng Kuang and Kuang-Huei Lee and Sergey Levine and Yao Lu and Linda Luu and Carolina Parada and Peter Pastor and Jornell Quiambao and Kanishka Rao and Jarek Rettinghouse and Diego Reyes and Pierre Sermanet and Nicolas Sievers and Clayton Tan and Alexander Toshev and Vincent Vanhoucke and Fei Xia and Ted Xiao and Peng Xu and Sichun Xu and Mengyuan Yan and Andy Zeng},
+  booktitle={Conference on Robot Learning (CoRL)},
+  year={2022}
+}
+
+@inproceedings{rt2,
+  title={{RT-2}: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control},
+  author={Anthony Brohan and Noah Brown and Justice Carbajal and Yevgen Chebotar and Xi Chen and Krzysztof Choromanski and Tianli Ding and Danny Driess and Avinava Dubey and Chelsea Finn and Pete Florence and Chuyuan Fu and Montse Gonzalez Arenas and Keerthana Gopalakrishnan and Kehang Han and Karol Hausman and Alexander Herzog and Jasmine Hsu and Brian Ichter and Alex Irpan and Nikhil Joshi and Ryan Julian and Dmitry Kalashnikov and Yuheng Kuang and Isabel Leal and Lisa Lee and Tsang-Wei Edward Lee and Sergey Levine and Yao Lu and Henryk Michalewski and Igor Mordatch and Karl Pertsch and Kanishka Rao and Krista Reymann and Michael Ryoo and Grecia Salazar and Pannag Sanketi and Pierre Sermanet and Jaspiar Singh and Anikait Singh and Radu Soricut and Huong Tran and Vincent Vanhoucke and Quan Vuong and Ayzaan Wahid and Stefan Welker and Paul Wohlhart and Jialin Wu and Fei Xia and Ted Xiao and Peng Xu and Sichun Xu and Tianhe Yu and Brianna Zitkovich},
+  booktitle={Conference on Robot Learning (CoRL)},
+  year={2023}
+}
+
+@inproceedings{react,
+  title={{ReAct}: Synergizing Reasoning and Acting in Language Models},
+  author={Shunyu Yao and Jeffrey Zhao and Dian Yu and Nan Du and Izhak Shafran and Karthik Narasimhan and Yuan Cao},
+  booktitle={International Conference on Learning Representations (ICLR)},
+  year={2023}
+}
+
+@article{caruana,
+  title={Multitask Learning},
+  author={Rich Caruana},
+  journal={Machine Learning},
+  volume={28},
+  number={1},
+  pages={41--75},
+  year={1997},
+  doi={10.1023/A:1007379606734}
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% 4. Grounded and faithful VLMs: referring/grounding and hallucination evals
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+@inproceedings{kosmos2,
+  title={{Kosmos-2}: Grounding Multimodal Large Language Models to the World},
+  author={Zhiliang Peng and Wenhui Wang and Li Dong and Yaru Hao and Shaohan Huang and Shuming Ma and Furu Wei},
+  booktitle={International Conference on Learning Representations (ICLR)},
+  year={2024}
+}
+
+@misc{shikra,
+  title={{Shikra}: Unleashing Multimodal {LLM}'s Referential Dialogue Magic},
+  author={Keqin Chen and Zhao Zhang and Weili Zeng and Richong Zhang and Feng Zhu and Rui Zhao},
+  year={2023},
+  howpublished={arXiv preprint arXiv:2306.15195},
+  eprint={2306.15195},
+  archivePrefix={arXiv},
+  primaryClass={cs.CV}
+}
+
+@inproceedings{ferret,
+  title={{Ferret}: Refer and Ground Anything Anywhere at Any Granularity},
+  author={Haoxuan You and Haotian Zhang and Zhe Gan and Xianzhi Du and Bowen Zhang and Zirui Wang and Liangliang Cao and Shih-Fu Chang and Yinfei Yang},
+  booktitle={International Conference on Learning Representations (ICLR)},
+  year={2024}
+}
+
+@inproceedings{pope,
+  title={Evaluating Object Hallucination in Large Vision-Language Models},
+  author={Yifan Li and Yifan Du and Kun Zhou and Jinpeng Wang and Wayne Xin Zhao and Ji-Rong Wen},
+  booktitle={Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
+  pages={292--305},
+  year={2023},
+  doi={10.18653/v1/2023.emnlp-main.20}
+}
+
+@inproceedings{hallusionbench,
+  title={{HallusionBench}: An Advanced Diagnostic Suite for Entangled Language Hallucination and Visual Illusion in Large Vision-Language Models},
+  author={Tianrui Guan and Fuxiao Liu and Xiyang Wu and Ruiqi Xian and Zongxia Li and Xiaoyu Liu and Xijun Wang and Lichang Chen and Furong Huang and Yaser Yacoob and Dinesh Manocha and Tianyi Zhou},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages={14375--14385},
+  year={2024},
+  doi={10.1109/CVPR52733.2024.01363}
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% 5. Statistics
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+@book{efron,
+  title={An Introduction to the Bootstrap},
+  author={Bradley Efron and Robert J. Tibshirani},
+  publisher={Chapman \& Hall},
+  address={New York},
+  series={Monographs on Statistics and Applied Probability},
+  number={57},
+  year={1993}
 }
