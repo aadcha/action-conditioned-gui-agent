@@ -105,6 +105,12 @@ user's active profile:
 The workspace is capped at **10 concurrent GPUs** — extra detached runs queue
 (Modal emails a "reached the limit of 10 GPUs" notice; harmless).
 
+With modal client 1.4.3, `modal run --detach` does NOT return after ~30 s as
+noted below: the local client blocks until the remote function returns (35+
+min for an n=1200 Stage 2 run, hours for n=5000) and prints the entrypoint's
+final lines. It still survives if the local process dies. Fire each one in
+its own `run_in_background` Bash and let it sit; do not kill it.
+
 ### Volumes
 
 - `hf-cache` (`HF_CACHE_PATH = /root/.cache/huggingface`) — caches HF model weights so cold starts skip the 4 GB Qwen2-VL download.

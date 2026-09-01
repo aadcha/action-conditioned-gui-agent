@@ -3556,14 +3556,42 @@ def _stage2_attn_aggregate_remote(
         img_tok = getattr(getattr(model.config, "vision_config", object()), "image_token_id", 151655)
     distinct = sorted({e.action_type_id for e in val_examples})
     wrong_map = {d: distinct[(i + 1) % len(distinct)] for i, d in enumerate(distinct)}
+    # Second "wrong" map that never routes a groundable class to `type` (whose
+    # AITW targets are degenerate): click<->scroll, type->click. Isolates
+    # "wrong but plausible" conditioning from "conditioning onto a class with
+    # a pinned coordinate".
+    from src.data.taxonomy import CANONICAL_ACTIONS as _CA
+    _cl, _sc, _ty = _CA["click"], _CA["scroll"], _CA["type"]
+    wrong2_map = {d: d for d in distinct}
+    if _cl in distinct and _sc in distinct:
+        wrong2_map[_cl], wrong2_map[_sc] = _sc, _cl
+    if _ty in distinct:
+        wrong2_map[_ty] = _cl if _cl in distinct else wrong_map[_ty]
+    cond_ids = {"gold": lambda a: a, "wrong": lambda a: wrong_map[a], "wrong2": lambda a: wrong2_map[a],
+                "zero": lambda a: a}
     probe = val_examples[:n_examples]
     radii = (0.10, 0.25)
     model.eval()
     records, renders = [], {}
     n_layers = None
+    tok = processor.tokenizer
     for k, ex in enumerate(probe):
-        inputs, aids = build([ex], False)
+        # Teacher-forced pass (gold answer appended): causal attention means the
+        # rows for the prompt positions are identical to a prompt-only pass, and
+        # we additionally get the rows of the answer positions that PREDICT the
+        # x and y digits.
+        inputs, aids = build([ex], True)
         ids = inputs["input_ids"][0]
+        labels = inputs["labels"][0]
+        ans_pos = (labels != -100).nonzero(as_tuple=True)[0]
+        ans_start = int(ans_pos[0].item())
+        ans_toks = [tok.decode([int(t)]) for t in ids[ans_start:]]
+        first_digit = [i for i, t in enumerate(ans_toks) if any(ch.isdigit() for ch in t)]
+        comma = [i for i, t in enumerate(ans_toks) if "," in t]
+        y_digit = [i for i in first_digit if comma and i > comma[0]]
+        probe_pos = {"last_prompt": ans_start - 1,
+                     "pre_x": ans_start + first_digit[0] - 1 if first_digit else ans_start - 1,
+                     "pre_y": ans_start + y_digit[0] - 1 if y_digit else ans_start - 1}
         img_pos = (ids == img_tok).nonzero(as_tuple=True)[0]
         if len(img_pos) == 0:
             continue
@@ -3578,44 +3606,51 @@ def _stage2_attn_aggregate_remote(
         tx, ty = ex.target_xy
         d_tok = torch.sqrt((cx - tx) ** 2 + (cy - ty) ** 2)
         masks = {r: (d_tok <= r) for r in radii}
-        last_pos = int(inputs["attention_mask"][0].sum().item()) - 1
+        gen_inputs, _ = build([ex], False)
         rec = {"i": k, "gold_action": ID_TO_ACTION[ex.action_type_id], "target_xy": [tx, ty],
-               "n_img_tokens": n_img, "grid": [gh, gw], "conditions": {}}
+               "n_img_tokens": n_img, "grid": [gh, gw], "probe_pos": probe_pos,
+               "answer_tokens": ans_toks, "conditions": {}}
         heat_for_render = {}
-        for cond in ("gold", "wrong", "zero"):
-            cid = ex.action_type_id if cond != "wrong" else wrong_map[ex.action_type_id]
+        for cond, fn in cond_ids.items():
+            cid = fn(ex.action_type_id)
             saved = None
             if cond == "zero":
                 saved = action_embeddings.weight.data.clone(); action_embeddings.weight.data.zero_()
             _holder["action_id"] = torch.tensor([cid], device=device)
             with torch.inference_mode():
-                out = model(**inputs, output_attentions=True)
+                out = model(**{k_: v_ for k_, v_ in inputs.items() if k_ != "labels"}, output_attentions=True)
             n_layers = len(out.attentions)
             layer_ids = {"half": n_layers // 2, "3q": n_layers * 3 // 4, "last": n_layers - 1}
-            cstats = {"cond_action": ID_TO_ACTION[cid], "layers": {}}
-            for lname, li in layer_ids.items():
-                row = out.attentions[li][0].float().mean(0)[last_pos]
-                img_attn = row[img_pos]
-                mass = float(img_attn.sum().item())
-                p = (img_attn / img_attn.sum().clamp(min=1e-12))
-                ent = float(-(p * (p + 1e-12).log()).sum().item())
-                st = {"image_mass": mass, "entropy": ent}
-                for r in radii:
-                    tm = float(img_attn[masks[r]].sum().item())
-                    st[f"target_mass_{r:.2f}"] = tm
-                    st[f"target_frac_{r:.2f}"] = tm / mass if mass > 0 else 0.0
-                    st[f"target_area_frac_{r:.2f}"] = float(masks[r].float().mean().item())
-                cstats["layers"][lname] = st
-                if lname == "3q":
-                    heat_for_render[cond] = img_attn.detach().cpu().numpy()
+            # `layers` keeps the original last-prompt-token stats (backward compatible);
+            # `positions` holds every probe position, keyed position -> layer -> stats.
+            cstats = {"cond_action": ID_TO_ACTION[cid], "layers": {}, "positions": {}}
+            for pname, ppos in probe_pos.items():
+                cstats["positions"][pname] = {}
+                for lname, li in layer_ids.items():
+                    row = out.attentions[li][0].float().mean(0)[ppos]
+                    img_attn = row[img_pos]
+                    mass = float(img_attn.sum().item())
+                    p = (img_attn / img_attn.sum().clamp(min=1e-12))
+                    ent = float(-(p * (p + 1e-12).log()).sum().item())
+                    st = {"image_mass": mass, "entropy": ent}
+                    for r in radii:
+                        tm = float(img_attn[masks[r]].sum().item())
+                        st[f"target_mass_{r:.2f}"] = tm
+                        st[f"target_frac_{r:.2f}"] = tm / mass if mass > 0 else 0.0
+                        st[f"target_area_frac_{r:.2f}"] = float(masks[r].float().mean().item())
+                    cstats["positions"][pname][lname] = st
+                    if pname == "last_prompt":
+                        cstats["layers"][lname] = st
+                    if lname == "3q" and pname == "pre_x":
+                        heat_for_render[cond] = img_attn.detach().cpu().numpy()
             del out
             with torch.inference_mode():
-                gen = model.generate(**inputs, max_new_tokens=16, do_sample=False,
+                gen = model.generate(**gen_inputs, max_new_tokens=16, do_sample=False,
                                      pad_token_id=processor.tokenizer.eos_token_id)
             _holder["action_id"] = None
             if saved is not None:
                 action_embeddings.weight.data.copy_(saved)
-            new = gen[:, inputs["input_ids"].shape[1]:]
+            new = gen[:, gen_inputs["input_ids"].shape[1]:]
             raw = processor.batch_decode(new, skip_special_tokens=True)[0]
             pred = string_to_coord(raw, scale=coord_scale)
             dist = math.sqrt(2.0) if pred is None else math.hypot(pred[0] - tx, pred[1] - ty)
@@ -3642,60 +3677,67 @@ def _stage2_attn_aggregate_remote(
         return {"mean_a": float(a.mean()), "mean_b": float(b.mean()), "delta": float(d.mean()),
                 "ci95": [float(lo), float(hi)], "p_boot": p, "n": int(n)}
     metrics = ["image_mass", "entropy"] + [f"target_frac_{r:.2f}" for r in radii] + [f"target_mass_{r:.2f}" for r in radii]
+    conds = list(cond_ids)
+    others = [c for c in conds if c != "gold"]
     summary = {"variant": variant, "seed": seed, "n_train": n_train, "n_val": n_val, "n_probe": len(records),
-               "n_layers": n_layers, "wrong_map": {ID_TO_ACTION[k]: ID_TO_ACTION[v] for k, v in wrong_map.items()},
-               "action_emb_norm": float(action_embeddings.weight.norm()), "by_layer": {}, "hits": {}, "by_class": {}}
-    for lname in ("half", "3q", "last"):
-        sl = {}
-        for m in metrics:
-            col = {c: [r["conditions"][c]["layers"][lname][m] for r in records] for c in ("gold", "wrong", "zero")}
-            sl[m] = {"mean": {c: float(np.mean(v)) for c, v in col.items()},
-                     "gold_minus_wrong": paired(col["gold"], col["wrong"]),
-                     "gold_minus_zero": paired(col["gold"], col["zero"])}
-        summary["by_layer"][lname] = sl
+               "n_layers": n_layers, "conditions": conds, "probe_positions": list(probe_pos),
+               "wrong_map": {ID_TO_ACTION[k]: ID_TO_ACTION[v] for k, v in wrong_map.items()},
+               "wrong2_map": {ID_TO_ACTION[k]: ID_TO_ACTION[v] for k, v in wrong2_map.items()},
+               "action_emb_norm": float(action_embeddings.weight.norm()),
+               "by_layer": {}, "by_position": {}, "hits": {}, "by_class": {}}
+    for pname in probe_pos:
+        summary["by_position"][pname] = {}
+        for lname in ("half", "3q", "last"):
+            sl = {}
+            for m in metrics:
+                col = {c: [r["conditions"][c]["positions"][pname][lname][m] for r in records] for c in conds}
+                sl[m] = {"mean": {c: float(np.mean(v)) for c, v in col.items()},
+                         **{f"gold_minus_{o}": paired(col["gold"], col[o]) for o in others}}
+            summary["by_position"][pname][lname] = sl
+    summary["by_layer"] = summary["by_position"]["last_prompt"]
     for hm in ("hit_010", "hit_025", "dist"):
-        col = {c: [float(r["conditions"][c][hm]) for r in records] for c in ("gold", "wrong", "zero")}
+        col = {c: [float(r["conditions"][c][hm]) for r in records] for c in conds}
         summary["hits"][hm] = {"mean": {c: float(np.mean(v)) for c, v in col.items()},
-                               "gold_minus_wrong": paired(col["gold"], col["wrong"]),
-                               "gold_minus_zero": paired(col["gold"], col["zero"])}
+                               **{f"gold_minus_{o}": paired(col["gold"], col[o]) for o in others}}
     by_cls = defaultdict(list)
     for r in records:
         by_cls[r["gold_action"]].append(r)
     for cls, rs in by_cls.items():
         summary["by_class"][cls] = {"n": len(rs)}
-        for c in ("gold", "wrong", "zero"):
+        for c in conds:
             summary["by_class"][cls][c] = {
                 "target_frac_0.10": float(np.mean([r["conditions"][c]["layers"]["3q"]["target_frac_0.10"] for r in rs])),
+                "target_frac_0.10_pre_x": float(np.mean([r["conditions"][c]["positions"]["pre_x"]["3q"]["target_frac_0.10"] for r in rs])),
                 "image_mass": float(np.mean([r["conditions"][c]["layers"]["3q"]["image_mass"] for r in rs])),
                 "hit_010": float(np.mean([r["conditions"][c]["hit_010"] for r in rs]))}
-    s3 = summary["by_layer"]["3q"]
-    print(f"[attn-{variant}] 3/4-layer target_frac@0.10: gold={s3['target_frac_0.10']['mean']['gold']:.3f} "
-          f"wrong={s3['target_frac_0.10']['mean']['wrong']:.3f} zero={s3['target_frac_0.10']['mean']['zero']:.3f}")
-    print(f"[attn-{variant}] hit@0.10: gold={summary['hits']['hit_010']['mean']['gold']:.3f} "
-          f"wrong={summary['hits']['hit_010']['mean']['wrong']:.3f} zero={summary['hits']['hit_010']['mean']['zero']:.3f}")
+    for pname in probe_pos:
+        s3 = summary["by_position"][pname]["3q"]["target_frac_0.10"]["mean"]
+        print(f"[attn-{variant}] {pname:<11} 3/4-layer target_frac@0.10: " +
+              "  ".join(f"{c}={s3[c]:.3f}" for c in conds), flush=True)
+    print(f"[attn-{variant}] hit@0.10: " + "  ".join(f"{c}={summary['hits']['hit_010']['mean'][c]:.3f}" for c in conds))
 
     # ---- persist ----
     vdir = _Path(STAGE1_CACHE_PATH) / "attn_aggregate" / variant
     vdir.mkdir(parents=True, exist_ok=True)
-    tag = f"{variant}_seed{seed}_n{n_train}"
+    tag = f"{variant}_seed{seed}_n{n_train}_v2"
     (vdir / f"attn_aggregate_{tag}.json").write_text(_json.dumps({"summary": summary, "records": records}, indent=1))
     for cls, (ex, rec, heats, (gh, gw)) in renders.items():
         img = ex.image.convert("RGB")
-        fig, axes = plt.subplots(1, 4, figsize=(13, 5.2))
+        fig, axes = plt.subplots(1, 1 + len(conds), figsize=(3.3 * (1 + len(conds)), 5.2))
         goal = "\n".join(textwrap.wrap(ex.goal_info, 34)[:3])
         axes[0].imshow(img); axes[0].set_title(f"gold: {cls}\n{goal}", fontsize=8)
         axes[0].scatter([rec["target_xy"][0] * img.width], [rec["target_xy"][1] * img.height], s=200, marker="o",
                         facecolors="none", edgecolors="#11cc11", linewidths=2.5)
         axes[0].axis("off")
-        for j, cond in enumerate(("gold", "wrong", "zero")):
+        for j, cond in enumerate(conds):
             heat = heats[cond]
             heat = heat.reshape(gh, gw) if heat.size == gh * gw else heat[: (int(math.sqrt(heat.size)) ** 2)].reshape(int(math.sqrt(heat.size)), -1)
             ax = axes[j + 1]; ax.imshow(img, alpha=0.55)
             ax.imshow(heat, cmap="jet", alpha=0.5, extent=[0, img.width, img.height, 0], aspect="auto")
             ax.scatter([rec["target_xy"][0] * img.width], [rec["target_xy"][1] * img.height], s=200, marker="o",
                        facecolors="none", edgecolors="white", linewidths=2.0)
-            st = rec["conditions"][cond]["layers"]["3q"]
-            ax.set_title(f"cond={cond} ({rec['conditions'][cond]['cond_action']})\n"
+            st = rec["conditions"][cond]["positions"]["pre_x"]["3q"]
+            ax.set_title(f"cond={cond} ({rec['conditions'][cond]['cond_action']}), pre-x token\n"
                          f"img mass={st['image_mass']:.3f}  target frac@0.10={st['target_frac_0.10']:.2f}", fontsize=8)
             ax.axis("off")
         fig.tight_layout()
