@@ -3386,6 +3386,368 @@ def pull_attn_viz() -> None:
     print(f"[viz] pulled {len(res['pngs'])} figures to {outdir}")
 
 
+# ---- Phase 8 aggregate attention analysis (replaces the 3-example anecdote) --
+#
+# Trains a conditioned variant (Dhook | Dtoken) at the headline config with
+# eager attention, then over the first `n_examples` val examples measures, under
+# gold / wrong (cyclic-permuted) / zero conditioning:
+#   image_mass    attention from the last prompt token to all image tokens
+#   target_frac_r share of that image attention within radius r of the gold
+#                 point (r = 0.10, 0.25 normalized) -- "does conditioning move
+#                 evidence toward the target?"
+#   entropy       entropy of the image-attention distribution
+#   hit@r         greedy-decoded coordinate hit under the same conditioning
+# Head-averaged attention is recorded at the 1/2-depth, 3/4-depth and last
+# layers (3/4 is the primary, matching attn_viz). Persists raw per-example
+# records + a paired-bootstrap summary + a few high-DPI heatmaps to the Volume
+# under attn_aggregate/<variant>/ so a --detach run is recoverable.
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret],
+    timeout=14400,
+)
+def _stage2_attn_aggregate_remote(
+    variant: str, n_train: int, n_val: int, epochs: int, lr: float, seed: int,
+    data_mix: str, n_examples: int, coord_scale: int, n_render: int, init_std: float,
+) -> dict:
+    import os, sys, random, math, textwrap, json as _json
+    from collections import Counter, defaultdict
+    from pathlib import Path as _Path
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+
+    import numpy as np
+    import torch
+    import torch.nn as nn
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from peft import LoraConfig, get_peft_model
+    from qwen_vl_utils import process_vision_info
+    from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+    from src.data.aitw import iter_aitw_steps
+    from src.data.taxonomy import ID_TO_ACTION
+    from src.train.stage2 import Stage2Example, coord_to_string, string_to_coord
+
+    assert variant in ("Dhook", "Dtoken"), variant
+    torch.manual_seed(seed); random.seed(seed)
+    _DATA_MIX_LABELS = {
+        "taps_only": {"tap"},
+        "taps_and_swipes": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right"},
+        "all_with_coords": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"},
+    }
+    allowed = _DATA_MIX_LABELS.get(data_mix, {"tap"})
+    print(f"[attn-{variant}] streaming AITW train (data_mix={data_mix})...")
+    examples_all = []
+    need = n_train + n_val
+    for step in iter_aitw_steps(split="train", n_max=max(need * 4, 1000), include_images=True):
+        if step.string_label not in allowed:
+            continue
+        examples_all.append(Stage2Example(
+            image=step.open_image(), goal_info=step.goal_info,
+            action_type_id=step.canonical_action_id,
+            target_xy=(step.touch_yx[1], step.touch_yx[0])))
+        if len(examples_all) >= need:
+            break
+    train_examples = examples_all[:n_train]
+    val_examples = examples_all[n_train:n_train + n_val]
+    print(f"[attn-{variant}] train n={len(train_examples)} val n={len(val_examples)} "
+          f"val dist={Counter(e.action_type_id for e in val_examples)}")
+
+    # eager attention is required for output_attentions (sdpa/flash return None)
+    base = Qwen2VLForConditionalGeneration.from_pretrained(
+        "Qwen/Qwen2-VL-2B-Instruct", torch_dtype=torch.bfloat16, device_map="auto",
+        attn_implementation="eager")
+    processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")
+    SLOT = "<|action_slot|>"
+    slot_id = None
+    if variant == "Dtoken":
+        n_added = processor.tokenizer.add_special_tokens({"additional_special_tokens": [SLOT]})
+        if n_added:
+            base.resize_token_embeddings(len(processor.tokenizer))
+        slot_id = processor.tokenizer.convert_tokens_to_ids(SLOT)
+    model = get_peft_model(base, LoraConfig(r=16, lora_alpha=32,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], lora_dropout=0.05, task_type="CAUSAL_LM"))
+    hf_cache.commit()
+    device = next(model.parameters()).device
+    hidden = model.get_input_embeddings().embedding_dim
+
+    action_embeddings = nn.Embedding(8, hidden).to(device=device, dtype=torch.bfloat16)
+    if variant == "Dhook":
+        nn.init.zeros_(action_embeddings.weight)
+    else:
+        nn.init.normal_(action_embeddings.weight, mean=0.0, std=init_std)
+    _holder = {"action_id": None}
+
+    if variant == "Dhook":
+        def _hook(module, args, output):
+            aid = _holder["action_id"]
+            return output if aid is None else output + action_embeddings(aid).unsqueeze(1).to(output.dtype)
+        PROMPT = "Goal: {goal}\nPredict the action coordinate."
+    else:
+        def _hook(module, args, output):
+            aid = _holder["action_id"]
+            if aid is None:
+                return output
+            slot_mask = (args[0] == slot_id)
+            if not bool(slot_mask.any()):
+                return output
+            out = output.clone()
+            for bt in slot_mask.nonzero(as_tuple=False):
+                b, t = int(bt[0]), int(bt[1])
+                out[b, t] = action_embeddings(aid[b]).to(out.dtype)
+            return out
+        PROMPT = f"{SLOT} Goal: {{goal}}\nPredict the action coordinate."
+    hook = model.get_input_embeddings().register_forward_hook(_hook)
+
+    def build(examples, include_labels):
+        msgs = []
+        for ex in examples:
+            m = [{"role": "user", "content": [{"type": "image", "image": ex.image},
+                                              {"type": "text", "text": PROMPT.format(goal=ex.goal_info)}]}]
+            if include_labels:
+                m.append({"role": "assistant", "content": [{"type": "text", "text": coord_to_string(ex.target_xy, coord_scale)}]})
+            msgs.append(m)
+        texts = [processor.apply_chat_template(m, tokenize=False, add_generation_prompt=(not include_labels)) for m in msgs]
+        ii, vi = process_vision_info(msgs)
+        inputs = processor(text=texts, images=ii, videos=vi, padding=True, return_tensors="pt").to(device)
+        if include_labels:
+            labels = inputs["input_ids"].clone()
+            im_start = processor.tokenizer.convert_tokens_to_ids("<|im_start|>")
+            assistant_id = processor.tokenizer.convert_tokens_to_ids("assistant")
+            for b in range(labels.shape[0]):
+                row = inputs["input_ids"][b]; starts = (row == im_start).nonzero(as_tuple=True)[0].tolist(); cut = 0
+                for idx in reversed(starts):
+                    if idx + 1 < row.shape[0] and row[idx + 1].item() == assistant_id:
+                        cut = idx + 2
+                        if cut < row.shape[0]: cut += 1
+                        break
+                labels[b, :cut] = -100
+            inputs["labels"] = labels
+        aids = torch.tensor([e.action_type_id for e in examples], dtype=torch.long, device=device)
+        return inputs, aids
+
+    # ---- train (byte-identical loop to the per-variant remotes, batch 1) ----
+    params = [p for p in model.parameters() if p.requires_grad] + list(action_embeddings.parameters())
+    opt = torch.optim.AdamW(params, lr=lr, weight_decay=0.01)
+    for epoch in range(1, epochs + 1):
+        rng = random.Random(seed + epoch); order = list(range(len(train_examples))); rng.shuffle(order)
+        model.train(); ep_loss = 0.0
+        for n, i in enumerate(order):
+            inputs, aids = build([train_examples[i]], True)
+            _holder["action_id"] = aids
+            loss = model(**inputs).loss
+            _holder["action_id"] = None
+            opt.zero_grad(); loss.backward()
+            torch.nn.utils.clip_grad_norm_(params, 1.0); opt.step()
+            ep_loss += float(loss.item())
+            if (n + 1) % 100 == 0:
+                print(f"[attn-{variant}]   epoch {epoch} step {n+1}/{len(order)} loss={loss.item():.4f}", flush=True)
+        print(f"[attn-{variant}] epoch {epoch} avg loss={ep_loss/max(len(order),1):.4f} "
+              f"ae_norm={float(action_embeddings.weight.norm()):.4f}", flush=True)
+
+    # ---- attention + prediction under gold / wrong / zero conditioning ----
+    img_tok = getattr(model.config, "image_token_id", None)
+    if img_tok is None:
+        img_tok = getattr(getattr(model.config, "vision_config", object()), "image_token_id", 151655)
+    distinct = sorted({e.action_type_id for e in val_examples})
+    wrong_map = {d: distinct[(i + 1) % len(distinct)] for i, d in enumerate(distinct)}
+    probe = val_examples[:n_examples]
+    radii = (0.10, 0.25)
+    model.eval()
+    records, renders = [], {}
+    n_layers = None
+    for k, ex in enumerate(probe):
+        inputs, aids = build([ex], False)
+        ids = inputs["input_ids"][0]
+        img_pos = (ids == img_tok).nonzero(as_tuple=True)[0]
+        if len(img_pos) == 0:
+            continue
+        t_, gh2, gw2 = inputs["image_grid_thw"][0].tolist()
+        gh, gw = gh2 // 2, gw2 // 2
+        n_img = len(img_pos)
+        if gh * gw != n_img:
+            side = int(math.sqrt(n_img)); gh, gw = side, max(1, n_img // side)
+        rows = torch.arange(n_img, device=device) // gw
+        cols = torch.arange(n_img, device=device) % gw
+        cx = (cols.float() + 0.5) / gw; cy = (rows.float() + 0.5) / gh
+        tx, ty = ex.target_xy
+        d_tok = torch.sqrt((cx - tx) ** 2 + (cy - ty) ** 2)
+        masks = {r: (d_tok <= r) for r in radii}
+        last_pos = int(inputs["attention_mask"][0].sum().item()) - 1
+        rec = {"i": k, "gold_action": ID_TO_ACTION[ex.action_type_id], "target_xy": [tx, ty],
+               "n_img_tokens": n_img, "grid": [gh, gw], "conditions": {}}
+        heat_for_render = {}
+        for cond in ("gold", "wrong", "zero"):
+            cid = ex.action_type_id if cond != "wrong" else wrong_map[ex.action_type_id]
+            saved = None
+            if cond == "zero":
+                saved = action_embeddings.weight.data.clone(); action_embeddings.weight.data.zero_()
+            _holder["action_id"] = torch.tensor([cid], device=device)
+            with torch.inference_mode():
+                out = model(**inputs, output_attentions=True)
+            n_layers = len(out.attentions)
+            layer_ids = {"half": n_layers // 2, "3q": n_layers * 3 // 4, "last": n_layers - 1}
+            cstats = {"cond_action": ID_TO_ACTION[cid], "layers": {}}
+            for lname, li in layer_ids.items():
+                row = out.attentions[li][0].float().mean(0)[last_pos]
+                img_attn = row[img_pos]
+                mass = float(img_attn.sum().item())
+                p = (img_attn / img_attn.sum().clamp(min=1e-12))
+                ent = float(-(p * (p + 1e-12).log()).sum().item())
+                st = {"image_mass": mass, "entropy": ent}
+                for r in radii:
+                    tm = float(img_attn[masks[r]].sum().item())
+                    st[f"target_mass_{r:.2f}"] = tm
+                    st[f"target_frac_{r:.2f}"] = tm / mass if mass > 0 else 0.0
+                    st[f"target_area_frac_{r:.2f}"] = float(masks[r].float().mean().item())
+                cstats["layers"][lname] = st
+                if lname == "3q":
+                    heat_for_render[cond] = img_attn.detach().cpu().numpy()
+            del out
+            with torch.inference_mode():
+                gen = model.generate(**inputs, max_new_tokens=16, do_sample=False,
+                                     pad_token_id=processor.tokenizer.eos_token_id)
+            _holder["action_id"] = None
+            if saved is not None:
+                action_embeddings.weight.data.copy_(saved)
+            new = gen[:, inputs["input_ids"].shape[1]:]
+            raw = processor.batch_decode(new, skip_special_tokens=True)[0]
+            pred = string_to_coord(raw, scale=coord_scale)
+            dist = math.sqrt(2.0) if pred is None else math.hypot(pred[0] - tx, pred[1] - ty)
+            cstats.update({"pred_xy": list(pred) if pred else None, "dist": dist,
+                           "hit_010": dist <= 0.10, "hit_025": dist <= 0.25})
+            rec["conditions"][cond] = cstats
+        records.append(rec)
+        if len(renders) < n_render and rec["gold_action"] not in renders:
+            renders[rec["gold_action"]] = (ex, rec, heat_for_render, (gh, gw))
+        if (k + 1) % 20 == 0:
+            g = rec["conditions"]["gold"]["layers"]["3q"]; w = rec["conditions"]["wrong"]["layers"]["3q"]
+            print(f"[attn-{variant}] {k+1}/{len(probe)}  gold target_frac@0.10={g['target_frac_0.10']:.3f} "
+                  f"wrong={w['target_frac_0.10']:.3f}", flush=True)
+    hook.remove()
+
+    # ---- paired summary over examples (numpy bootstrap, 10k resamples) ----
+    rng = np.random.default_rng(0)
+    def paired(a, b, n_boot=10000):
+        a = np.asarray(a, dtype=float); b = np.asarray(b, dtype=float); d = a - b; n = len(d)
+        if n == 0:
+            return None
+        idx = rng.integers(0, n, size=(n_boot, n)); boots = d[idx].mean(1)
+        lo, hi = np.percentile(boots, [2.5, 97.5]); p = float(min(1.0, 2 * min((boots <= 0).mean(), (boots >= 0).mean())))
+        return {"mean_a": float(a.mean()), "mean_b": float(b.mean()), "delta": float(d.mean()),
+                "ci95": [float(lo), float(hi)], "p_boot": p, "n": int(n)}
+    metrics = ["image_mass", "entropy"] + [f"target_frac_{r:.2f}" for r in radii] + [f"target_mass_{r:.2f}" for r in radii]
+    summary = {"variant": variant, "seed": seed, "n_train": n_train, "n_val": n_val, "n_probe": len(records),
+               "n_layers": n_layers, "wrong_map": {ID_TO_ACTION[k]: ID_TO_ACTION[v] for k, v in wrong_map.items()},
+               "action_emb_norm": float(action_embeddings.weight.norm()), "by_layer": {}, "hits": {}, "by_class": {}}
+    for lname in ("half", "3q", "last"):
+        sl = {}
+        for m in metrics:
+            col = {c: [r["conditions"][c]["layers"][lname][m] for r in records] for c in ("gold", "wrong", "zero")}
+            sl[m] = {"mean": {c: float(np.mean(v)) for c, v in col.items()},
+                     "gold_minus_wrong": paired(col["gold"], col["wrong"]),
+                     "gold_minus_zero": paired(col["gold"], col["zero"])}
+        summary["by_layer"][lname] = sl
+    for hm in ("hit_010", "hit_025", "dist"):
+        col = {c: [float(r["conditions"][c][hm]) for r in records] for c in ("gold", "wrong", "zero")}
+        summary["hits"][hm] = {"mean": {c: float(np.mean(v)) for c, v in col.items()},
+                               "gold_minus_wrong": paired(col["gold"], col["wrong"]),
+                               "gold_minus_zero": paired(col["gold"], col["zero"])}
+    by_cls = defaultdict(list)
+    for r in records:
+        by_cls[r["gold_action"]].append(r)
+    for cls, rs in by_cls.items():
+        summary["by_class"][cls] = {"n": len(rs)}
+        for c in ("gold", "wrong", "zero"):
+            summary["by_class"][cls][c] = {
+                "target_frac_0.10": float(np.mean([r["conditions"][c]["layers"]["3q"]["target_frac_0.10"] for r in rs])),
+                "image_mass": float(np.mean([r["conditions"][c]["layers"]["3q"]["image_mass"] for r in rs])),
+                "hit_010": float(np.mean([r["conditions"][c]["hit_010"] for r in rs]))}
+    s3 = summary["by_layer"]["3q"]
+    print(f"[attn-{variant}] 3/4-layer target_frac@0.10: gold={s3['target_frac_0.10']['mean']['gold']:.3f} "
+          f"wrong={s3['target_frac_0.10']['mean']['wrong']:.3f} zero={s3['target_frac_0.10']['mean']['zero']:.3f}")
+    print(f"[attn-{variant}] hit@0.10: gold={summary['hits']['hit_010']['mean']['gold']:.3f} "
+          f"wrong={summary['hits']['hit_010']['mean']['wrong']:.3f} zero={summary['hits']['hit_010']['mean']['zero']:.3f}")
+
+    # ---- persist ----
+    vdir = _Path(STAGE1_CACHE_PATH) / "attn_aggregate" / variant
+    vdir.mkdir(parents=True, exist_ok=True)
+    tag = f"{variant}_seed{seed}_n{n_train}"
+    (vdir / f"attn_aggregate_{tag}.json").write_text(_json.dumps({"summary": summary, "records": records}, indent=1))
+    for cls, (ex, rec, heats, (gh, gw)) in renders.items():
+        img = ex.image.convert("RGB")
+        fig, axes = plt.subplots(1, 4, figsize=(13, 5.2))
+        goal = "\n".join(textwrap.wrap(ex.goal_info, 34)[:3])
+        axes[0].imshow(img); axes[0].set_title(f"gold: {cls}\n{goal}", fontsize=8)
+        axes[0].scatter([rec["target_xy"][0] * img.width], [rec["target_xy"][1] * img.height], s=200, marker="o",
+                        facecolors="none", edgecolors="#11cc11", linewidths=2.5)
+        axes[0].axis("off")
+        for j, cond in enumerate(("gold", "wrong", "zero")):
+            heat = heats[cond]
+            heat = heat.reshape(gh, gw) if heat.size == gh * gw else heat[: (int(math.sqrt(heat.size)) ** 2)].reshape(int(math.sqrt(heat.size)), -1)
+            ax = axes[j + 1]; ax.imshow(img, alpha=0.55)
+            ax.imshow(heat, cmap="jet", alpha=0.5, extent=[0, img.width, img.height, 0], aspect="auto")
+            ax.scatter([rec["target_xy"][0] * img.width], [rec["target_xy"][1] * img.height], s=200, marker="o",
+                       facecolors="none", edgecolors="white", linewidths=2.0)
+            st = rec["conditions"][cond]["layers"]["3q"]
+            ax.set_title(f"cond={cond} ({rec['conditions'][cond]['cond_action']})\n"
+                         f"img mass={st['image_mass']:.3f}  target frac@0.10={st['target_frac_0.10']:.2f}", fontsize=8)
+            ax.axis("off")
+        fig.tight_layout()
+        fig.savefig(vdir / f"attn_{tag}_{cls}.png", dpi=220, bbox_inches="tight"); plt.close(fig)
+    stage1_cache.commit()
+    print(f"[attn-{variant}] persisted to {vdir}")
+    return {"summary": summary, "n_records": len(records)}
+
+
+@app.local_entrypoint()
+def attn_aggregate(
+    variant: str = "Dhook", n_train: int = 1200, n_val: int = 250, epochs: int = 2, lr: float = 2e-5,
+    seed: int = 42, data_mix: str = "all_with_coords", n_examples: int = 120, coord_scale: int = 1000,
+    n_render: int = 3, init_std: float = 0.02,
+) -> None:
+    """Aggregate attention analysis for Dhook | Dtoken at the headline config. Use --detach.
+
+    init_std only applies to Dtoken (Dhook is always zero-init, matching the headline runs).
+    Pull afterwards with `modal run modal_app.py::pull_attn_aggregate`.
+    """
+    _stage2_attn_aggregate_remote.remote(
+        variant, n_train, n_val, epochs, lr, seed, data_mix, n_examples, coord_scale, n_render, init_std)
+
+
+@app.function(image=image, volumes={STAGE1_CACHE_PATH: stage1_cache}, timeout=300)
+def _pull_attn_aggregate() -> dict:
+    import base64 as _b64
+    from pathlib import Path as _Path
+    vdir = _Path(STAGE1_CACHE_PATH) / "attn_aggregate"
+    out = {}
+    if not vdir.exists():
+        return out
+    for p in sorted(vdir.rglob("*")):
+        if p.is_file():
+            out[str(p.relative_to(vdir))] = _b64.b64encode(p.read_bytes()).decode()
+    return out
+
+
+@app.local_entrypoint()
+def pull_attn_aggregate() -> None:
+    """Pull attn_aggregate/ from the Volume into results/phase8/attn_aggregate/."""
+    import base64
+    from pathlib import Path
+    res = _pull_attn_aggregate.remote()
+    outdir = Path("results/phase8/attn_aggregate")
+    for rel, b64 in res.items():
+        dst = outdir / rel; dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes(base64.b64decode(b64))
+        print(f"[attn] pulled {dst}")
+    print(f"[attn] {len(res)} files")
+
+
 # ---- Phase 6 variant D-token: M-RoPE-correct prepended action token ---------
 #
 # The hypothesis's ACTUAL architecture, done correctly. A dedicated
@@ -4012,7 +4374,7 @@ def train_stage2_lowdata_sweep(
 )
 def _stage2_qualitative_remote(
     n_train: int = 800, n_val: int = 150, epochs: int = 2, lr: float = 2e-5,
-    seed: int = 42, coord_scale: int = 1000,
+    seed: int = 42, coord_scale: int = 1000, out_subdir: str = "qualitative",
 ) -> dict:
     import math
     import os
@@ -4170,9 +4532,16 @@ def _stage2_qualitative_remote(
     clicks = [r for r in rows if r["action"] == "click"]
     scrolls = [r for r in rows if r["action"] == "scroll"]
     types = [r for r in rows if r["action"] == "type"]
+    # Fixed selection protocol (documented in the figure caption): the panel
+    # set is a SPREAD of outcomes, not a highlight reel -- rescues AND hurts
+    # are both shown, and the base rate of each outcome class is persisted in
+    # render.json so the caption can state it.
     click_wins = [r for r in clicks if r["distD"] <= 0.10 and r["distA"] >= 0.18]
+    click_hurts = [r for r in clicks if r["distA"] <= 0.10 and r["distD"] >= 0.18]
     both_ok = [r for r in clicks if r["distA"] <= 0.10 and r["distD"] <= 0.10]
+    both_miss = [r for r in clicks if r["distA"] > 0.10 and r["distD"] > 0.10]
     scroll_wins = [r for r in scrolls if r["distD"] <= 0.12]
+    scroll_hurts = [r for r in scrolls if r["distA"] <= 0.12 and r["distD"] > 0.12]
     # prefer 'type' examples whose predictions stay on-canvas (cleaner panel)
     types_clean = [r for r in types if r["distA"] <= 1.45 and r["distD"] <= 1.45] or types
 
@@ -4188,8 +4557,9 @@ def _stage2_qualitative_remote(
                 break
 
     take(click_wins, "click: conditioning rescues", 2, key=lambda r: -(r["distA"] - r["distD"]))
+    take(click_hurts, "click: conditioning hurts", 1, key=lambda r: -(r["distD"] - r["distA"]))
     take(both_ok, "click: both correct", 1, key=lambda r: r["distA"] + r["distD"])
-    take(scroll_wins, "scroll: conditioning helps", 2, key=lambda r: r["distD"])
+    take(scroll_wins, "scroll: conditioning helps", 1, key=lambda r: r["distD"])
     take(types_clean, "type: degenerate (both fail)", 1, key=lambda r: r["distD"])
     for r in sorted(rows, key=lambda r: r["distD"]):  # pad to 6 with best remaining
         if len(sel) >= 6:
@@ -4197,8 +4567,15 @@ def _stage2_qualitative_remote(
         if r["i"] not in used:
             sel.append({"title": r["action"], **r}); used.add(r["i"])
     sel = sel[:6]
+    outcome_counts = {
+        "n_click": len(clicks), "n_scroll": len(scrolls), "n_type": len(types),
+        "click_rescue": len(click_wins), "click_hurt": len(click_hurts),
+        "click_both_ok": len(both_ok), "click_both_miss": len(both_miss),
+        "scroll_D_hit012": len(scroll_wins), "scroll_hurt": len(scroll_hurts),
+    }
+    print(f"[qual] outcome counts: {outcome_counts}", flush=True)
 
-    out_dir = _Path(STAGE1_CACHE_PATH) / "qualitative"; out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = _Path(STAGE1_CACHE_PATH) / out_subdir; out_dir.mkdir(parents=True, exist_ok=True)
 
     # ---- dump raw selected screenshots + coords (for fast local re-rendering) ----
     data_dir = out_dir / "data"; data_dir.mkdir(parents=True, exist_ok=True)
@@ -4212,9 +4589,11 @@ def _stage2_qualitative_remote(
                               "predA": r["predA"], "predD": r["predD"],
                               "distA": r["distA"], "distD": r["distD"]})
     (out_dir / "render.json").write_text(_json.dumps(
-        {"n_train": n_train, "n_val": len(val_examples),
+        {"n_train": n_train, "n_val": len(val_examples), "seed": seed,
          "click_hit_A": sum(1 for r in clicks if r["distA"] <= 0.10) / max(len(clicks), 1),
          "click_hit_D": sum(1 for r in clicks if r["distD"] <= 0.10) / max(len(clicks), 1),
+         "outcome_counts": outcome_counts,
+         "all_rows": rows,
          "panels": render_panels}, indent=2, default=float))
 
     # ---- inline render: axes LOCKED to image, off-canvas markers CLAMPED ----
@@ -4252,22 +4631,25 @@ def _stage2_qualitative_remote(
     fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.012),
                ncol=3, fontsize=11, frameon=False)
     fig.suptitle("Qualitative grounding: predicted vs. ground-truth point "
-                 "(AITW all_with_coords, n_train=800)", y=0.975, fontsize=12)
+                 f"(AITW all_with_coords, n_train={n_train})", y=0.975, fontsize=12)
 
     figpath = out_dir / "qualitative_grounding.png"
-    fig.savefig(figpath, dpi=150, bbox_inches="tight"); plt.close(fig)
+    fig.savefig(figpath, dpi=300, bbox_inches="tight"); plt.close(fig)
     stage1_cache.commit()
     print(f"[qual] saved {figpath} with {len(sel)} panels; raw dump in {data_dir}")
-    return {"figure": "qualitative/qualitative_grounding.png", "n_selected": len(sel)}
+    return {"figure": f"{out_subdir}/qualitative_grounding.png", "n_selected": len(sel),
+            "outcome_counts": outcome_counts}
 
 
 @app.local_entrypoint()
 def stage2_qualitative(
     n_train: int = 800, n_val: int = 150, epochs: int = 2, lr: float = 2e-5, seed: int = 42,
+    out_subdir: str = "qualitative",
 ) -> None:
     """Generate the predicted-vs-ground-truth qualitative figure. Use --detach.
 
     Pull afterwards with:
-        modal volume get stage1-cache qualitative/qualitative_grounding.png results/phase4/
+        modal volume get stage1-cache <out_subdir>/qualitative_grounding.png results/phase8/
+        modal volume get stage1-cache <out_subdir>/render.json results/phase8/
     """
-    _stage2_qualitative_remote.remote(n_train, n_val, epochs, lr, seed)
+    _stage2_qualitative_remote.remote(n_train, n_val, epochs, lr, seed, 1000, out_subdir)
