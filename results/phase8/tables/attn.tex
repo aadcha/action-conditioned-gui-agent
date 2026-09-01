@@ -1,0 +1,15 @@
+\begin{table}[t]
+\centering
+\small
+\caption{Where does the model look? Share of last-prompt-token image attention that falls within 0.10 of the gold target (3/4-depth layer, head-averaged) and greedy hit@0.10 under gold, wrong and zeroed action conditioning, over the first 120 validation examples. $\Delta$ = gold $-$ condition with 95\% paired-bootstrap CI.}
+\label{tab:attn}
+\begin{tabular}{llcccc}
+\toprule
+Model & Cond. & target frac@0.10 & image mass & hit@0.10 & $\Delta$ target frac (gold $-$ cond.) \\
+\midrule
+D-hook (additive) & gold & 0.040 & 0.124 & 0.358 & -- \\
+ & wrong & 0.036 & 0.087 & 0.083 & +0.004 [-0.001, +0.008] \\
+ & zero & 0.036 & 0.112 & 0.392 & +0.003 [+0.002, +0.005]$^{***}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
