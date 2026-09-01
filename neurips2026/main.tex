@@ -1,0 +1,187 @@
+\documentclass{article}
+
+% VLM4RWD 2026 (2nd Workshop on Grounded and Faithful Vision-Language Models
+% for Real-World Deployment), NeurIPS 2026, Sydney.
+% Double-blind, 8 pages excluding references/appendices, non-archival.
+% Submission via OpenReview: NeurIPS.cc/2026/Workshop/VLM4RWD
+% Deadline: Sep 5, 2026, 8:59 PM PDT.
+\usepackage[dblblindworkshop]{neurips_2026}
+% Camera-ready: switch to \usepackage[dblblindworkshop, final]{neurips_2026}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{xcolor}
+
+\graphicspath{{figures/}}
+
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+\newcommand{\hitat}[1]{hit@#1}
+
+\workshoptitle{2nd Workshop on Grounded and Faithful Vision-Language Models for Real-World Deployment (VLM4RWD)}
+
+\title{Action-Conditioned Grounding: Decoupling What to Do from Where to Act in GUI Agents}
+
+% Double-blind: author block intentionally anonymized by the style file at
+% submission time. Fill in for camera-ready only.
+\author{Anonymous Author(s)}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\todo{150--200 words. Structure: (1) GUI agents must ground language intents
+to screen coordinates; errors are localization failures, a core
+grounded-perception problem. (2) We test whether factoring the policy into
+WHAT (action-type classification) and WHERE (action-type-conditioned
+grounding) improves grounding in a 2B-parameter VLM (Qwen2-VL-2B + LoRA).
+(3) Findings: action-type supervision helps when type is spatially
+predictive; the literal learned action-embedding mechanism is NOT the winning
+mechanism (auxiliary loss captures the benefit more simply); and a
+cautionary mechanistic result: naive inputs\_embeds injection silently
+bypasses M-RoPE and produces false negatives. (4) Controlled multi-seed,
+low-data study relevant to practitioners deploying small VLMs.}
+\end{abstract}
+
+% ---------------------------------------------------------------------------
+% Workshop-topic mapping (delete before submission):
+%   Sec 1, 3, 5  -> "Grounded perception and evidence localization"
+%                   (coordinate grounding on real screens IS evidence localization)
+%   Sec 3, 5, 6  -> "Training paradigms and architectures for grounded VLMs/VLAs"
+%                   (conditioning-mechanism ablation A/B/C/D-hook/D-token)
+%   Sec 6        -> "Out-of-distribution detection and failure analysis" +
+%                   "Interpretability" (M-RoPE injection pitfall, causal-use test,
+%                   attention analysis)
+%   Sec 5.3      -> "Reliable embodied agent decision-making" (end-to-end
+%                   predicted-type pipeline vs oracle)
+% ---------------------------------------------------------------------------
+
+\section{Introduction}
+\label{sec:intro}
+\todo{Frame GUI-action grounding as evidence localization for real-world
+deployment. The factorization hypothesis: separate "what action" from
+"where". Preview the supported/refuted/mechanism findings honestly ---
+the honest-negative-result angle is the paper's personality. End with an
+explicit contribution list (3--4 bullets).}
+
+\section{Related Work}
+\label{sec:related}
+\todo{Four short paragraphs:
+(1) GUI agents and screen grounding (Mind2Web, AITW, SeeClick, CogAgent,
+ScreenAI, OS-Atlas, UGround, Aguvis...);
+(2) action/goal-conditioned policies and factorized decision-making;
+(3) grounding + faithfulness in VLMs (workshop framing);
+(4) parameter-efficient adaptation of small VLMs.
+references.bib currently has only 15 entries --- needs expansion to
+~30--40.}
+
+\section{Method: Factoring the GUI Policy}
+\label{sec:method}
+
+\subsection{Problem Setup and Action Taxonomy}
+\todo{UnifiedStep over Mind2Web + AITW; canonical 8-class action space;
+coordinates on a 0--999 grid emitted as text tokens.}
+
+\subsection{Stage 1: What --- Action-Type Classification}
+\todo{Frozen Qwen2-VL-2B pooled features + 3-layer MLP; text vs vision vs
+vision+text feature modes.}
+
+\subsection{Stage 2: Where --- Action-Conditioned Grounding}
+\todo{The five matched-compute conditioning variants:
+A (flat, no conditioning), B (auxiliary action-type loss),
+C (hard routing), D-hook (additive embedding-hook conditioning),
+D-token (M-RoPE-correct prepended learned action token).
+Figure~\ref{fig:arch}: architecture diagram (NEEDS DRAWING).}
+
+\begin{figure}[t]
+  \centering
+  % \includegraphics[width=\linewidth]{arch_diagram.pdf}
+  \fbox{\parbox[c][4cm][c]{0.9\linewidth}{\centering \todo{Architecture
+  figure: two-stage pipeline + the five Stage-2 conditioning variants.}}}
+  \caption{\todo{caption}}
+  \label{fig:arch}
+\end{figure}
+
+\section{Experimental Setup}
+\label{sec:setup}
+\todo{Datasets and splits; data mixes (all\_with\_coords vs the
+taps\_and\_swipes control); metrics (\hitat{r}, macro-F1); seeds 42/43/44;
+paired bootstrap over shared test examples; LoRA + training config; compute
+(single L4, total spend). Emphasize matched-compute comparisons.}
+
+\section{Results}
+\label{sec:results}
+
+\subsection{Does Action-Type Supervision Improve Grounding?}
+\todo{Main table: A/B/C/D-hook/D-token on all\_with\_coords, \hitat{0.10}
+mean $\pm$ std over 3 seeds + paired-bootstrap deltas vs A. Headline:
+B $\approx$ D-hook $>$ D-token $\gtrsim$ C $>$ A.}
+
+\subsection{Control: When Action Type Is Not Spatially Informative}
+\todo{taps\_and\_swipes mix: conditioning neutral-to-harmful. This is the
+faithfulness/honesty angle --- conditioning helps only when type carries
+spatial evidence.}
+
+\subsection{End-to-End: Predicted Types vs Oracle}
+\todo{Stage-1 predicted types feeding Stage 2 beat flat A; $\sim$0.02 oracle
+gap.}
+
+\subsection{Low-Data Regime}
+\todo{n\_train $\in \{300, 500, 800\}$ $\times$ seeds 42/43/44 for
+A/B/D-hook; D-hook most stable. Figure: scaling curves
+(results/phase4 figures).}
+
+\section{Mechanism Analysis}
+\label{sec:mechanism}
+
+\subsection{A Cautionary Tale: Embedding Injection Silently Breaks M-RoPE}
+\todo{The false 8$\sigma$ negative from inputs\_embeds slot replacement;
+why Qwen2-VL's multimodal position ids depend on input\_ids; D-hook/D-token
+fix. This subsection is a deployment-relevant failure-analysis contribution
+in its own right.}
+
+\subsection{Is the Learned Action Embedding Causally Used?}
+\todo{D-token gold/wrong/zero intervention: gold $-$ wrong $= +0.192$
+\hitat{0.10}, gold $-$ zero $= +0.093$. "Used but not best", not "ignored".}
+
+\section{Discussion and Limitations}
+\label{sec:discussion}
+\todo{Small model, small n, two datasets, coordinate-text output format;
+what generalizes and what might not. Honest scoping.}
+
+\section{Conclusion}
+\label{sec:conclusion}
+\todo{3--4 sentences.}
+
+\begin{ack}
+\todo{Camera-ready only (funding/compute acknowledgments). Hidden at
+submission time by the style file.}
+\end{ack}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\clearpage
+\appendix
+
+\section{Reproduction Details}
+\todo{Hyperparameters, prompts, data filtering, per-class metrics.}
+
+\section{Additional Results}
+\todo{Full per-seed tables; attention visualizations
+(results/phase4/attn\_viz); Dfrozen post-mortem.}
+
+% NeurIPS checklist: required for the main track; most workshops do not
+% require it. Confirm against the VLM4RWD CFP before submission; if needed:
+% \input{checklist}
+
+\end{document}
