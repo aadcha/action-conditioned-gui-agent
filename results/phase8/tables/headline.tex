@@ -1,0 +1,17 @@
+\begin{table}[t]
+\centering
+\small
+\caption{Stage 2 grounding on AITW \texttt{all\_with\_coords} (n$_{\text{train}}$=1200, n$_{\text{val}}$=250, 5 seeds). Mean $\pm$ std over seeds; $\Delta$ with 95\% paired-bootstrap CI over pooled (seed, example) units; $^{*}p<.05$, $^{**}p<.01$, $^{***}p<.001$.}
+\label{tab:headline}
+\begin{tabular}{lccccc}
+\toprule
+Variant & hit@0.05 & hit@0.10 & hit@0.25 & mean L2 $\downarrow$ & $\Delta$hit@0.10 vs.\ A \\
+\midrule
+A: flat & 0.127 $\pm$ 0.044 & 0.229 $\pm$ 0.041 & 0.500 $\pm$ 0.028 & 0.406 $\pm$ 0.027 & -- \\
+B: aux.\ loss & 0.195 $\pm$ 0.010 & 0.305 $\pm$ 0.015 & 0.585 $\pm$ 0.022 & 0.362 $\pm$ 0.003 & +0.051 [+0.024, +0.079]$^{***}$ \\
+C: hard routing & 0.180 $\pm$ 0.007 & 0.279 $\pm$ 0.039 & 0.543 $\pm$ 0.072 & 0.412 $\pm$ 0.011 & +0.024 [-0.005, +0.053] \\
+D-hook: additive & 0.166 $\pm$ 0.047 & 0.275 $\pm$ 0.048 & 0.558 $\pm$ 0.025 & 0.371 $\pm$ 0.012 & +0.045 [+0.017, +0.073]$^{**}$ \\
+D-token: prepended & 0.184 $\pm$ 0.014 & 0.269 $\pm$ 0.031 & 0.533 $\pm$ 0.031 & 0.375 $\pm$ 0.012 & +0.015 [-0.011, +0.041] \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -92,6 +92,33 @@ Total if all approved: ~$20–25 of the ~$148 remaining Modal budget; all
 submittable in parallel (one `modal run --detach` per background Bash — see
 CLAUDE.md burn warning).
 
+## Launch record — Sep 1, 2026 ~14:20–14:45 PDT (all six approved; 35 detached jobs)
+
+User ruled the old seed-45/46 A/D-hook runs and the old qualitative render
+invalid, so E1 re-runs seeds 45/46 for ALL five variants. Modal profile:
+`MODAL_PROFILE=sentinel` (see CLAUDE.md). Workspace cap 10 GPUs → jobs queue.
+
+| Exp | Jobs | Expected Volume artifacts |
+|---|---|---|
+| E1 | A/B/C/Dhook/Dtoken × seeds 45,46 @ n=1200 (+ Dtoken `--causal-eval` × 2) = 12 | `stage2_runs/{variantA,variantB,variantC,Dhook,Dtoken}_seed4{5,6}_n1200_…` |
+| E2 | A/B/Dhook × n∈{2500,5000} × seeds 43,44 = 12 | `stage2_runs/…_n{2500,5000}_…` |
+| E3 | A, Dhook × seeds 42–44 @ taps_and_swipes n=1000 = 6 | `stage2_runs/…_mix-taps_and_swipes…` (overwrites pre-logging runs) |
+| E4 | m2w A, Dhook seed 44 = 2 | `stage2_runs/m2w_{A,Dhook}_seed44_n1000_ep2.json` |
+| E5 | `attn_aggregate --variant {Dhook,Dtoken}` (new entrypoint) = 2 | `attn_aggregate/<variant>/…json + png` |
+| E6 | `stage2_qualitative --n-train 1200 --n-val 250 --out-subdir qualitative_v2` = 1 | `qualitative_v2/qualitative_grounding.png`, `render.json` |
+
+Cost estimate ≈ $35 (E2's n=5000 runs dominate). Monitoring: `scripts/p8_poll.py`
+(`--wave 1` = everything except E2; `--wave 2` = E2). After landing:
+
+    MODAL_PROFILE=sentinel uv run modal run modal_app.py::list_stage2_runs
+    MODAL_PROFILE=sentinel uv run modal run modal_app.py::pull_attn_aggregate
+    MODAL_PROFILE=sentinel uv run modal volume get stage1-cache qualitative_v2/ results/phase8/qualitative_v2/
+    uv run python scripts/p8_consolidate.py && uv run python scripts/p8_attn_summary.py
+
+`scripts/p8_consolidate.py` reproduces the PHASE6/PHASE7 numbers exactly from
+the existing JSONs and emits `results/phase8/{PHASE8_RESULTS.md, tables/*.tex,
+ablation_headline_vs_control.png, scaling_curve_multiseed.png}`.
+
 ## Writing plan (post-approval)
 
 Port + tighten from `overleaf_submission/paper.tex` (byte-identical to root

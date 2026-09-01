@@ -93,6 +93,18 @@ Spec files in `reference/` (untouched): PROJECT_OVERVIEW.md, roadmap.md, deep-re
 
 The `modal_app.py` file is the SINGLE source of all cloud entrypoints. Pattern: each `_xxx_remote` function runs on Modal (decorated with `@app.function`), and a corresponding `@app.local_entrypoint()` wraps it for `modal run` invocation.
 
+### Modal profile (Sep 2026)
+
+`~/.modal.toml` has two profiles; the ACTIVE one (`mercor-rl`) has a dead token
+("Token not found"). The project's workspace is the `sentinel` profile. Prefix
+every Modal command with `MODAL_PROFILE=sentinel` rather than switching the
+user's active profile:
+
+    MODAL_PROFILE=sentinel uv run modal app list
+
+The workspace is capped at **10 concurrent GPUs** — extra detached runs queue
+(Modal emails a "reached the limit of 10 GPUs" notice; harmless).
+
 ### Volumes
 
 - `hf-cache` (`HF_CACHE_PATH = /root/.cache/huggingface`) — caches HF model weights so cold starts skip the 4 GB Qwen2-VL download.
