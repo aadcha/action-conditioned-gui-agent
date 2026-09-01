@@ -466,8 +466,15 @@ def main() -> None:
     (TABLES / "causal.tex").write_text(tex_causal(caus))
     plot_headline_vs_control(head, ctrl, P8 / "ablation_headline_vs_control.png")
     plot_scaling(scal, P8 / "scaling_curve_multiseed.png")
+    # mirror paper-facing outputs into the submission directory
+    import shutil
+    paper_tables = ROOT / "neurips2026" / "tables"; paper_tables.mkdir(parents=True, exist_ok=True)
+    for t in TABLES.glob("*.tex"):
+        shutil.copy(t, paper_tables / t.name)
+    for f in ("ablation_headline_vs_control.png", "scaling_curve_multiseed.png"):
+        shutil.copy(P8 / f, ROOT / "neurips2026" / "figures" / f)
     print((P8 / "PHASE8_RESULTS.md").read_text())
-    print(f"wrote {P8}/PHASE8_RESULTS.md, phase8_summary.json, tables/*.tex, 2 figures")
+    print(f"wrote {P8}/PHASE8_RESULTS.md, phase8_summary.json, tables/*.tex, 2 figures (mirrored to neurips2026/)")
 
 
 if __name__ == "__main__":
