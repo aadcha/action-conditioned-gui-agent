@@ -20,6 +20,8 @@
 \usepackage{microtype}
 \usepackage{graphicx}
 \usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc}
 
 \graphicspath{{figures/}}
 
@@ -104,10 +106,12 @@ Figure~\ref{fig:arch}: architecture diagram (NEEDS DRAWING).}
 
 \begin{figure}[t]
   \centering
-  % \includegraphics[width=\linewidth]{arch_diagram.pdf}
-  \fbox{\parbox[c][4cm][c]{0.9\linewidth}{\centering \todo{Architecture
-  figure: two-stage pipeline + the five Stage-2 conditioning variants.}}}
-  \caption{\todo{caption}}
+  \resizebox{\linewidth}{!}{\input{figures/arch_diagram}}
+  \caption{\todo{caption: two-stage factorization. Stage 1 predicts the action
+  type from frozen pooled features; Stage 2 grounds the action to a coordinate
+  string, optionally conditioned on the type through one of five matched
+  mechanisms. D-slot is the retracted variant whose \texttt{inputs\_embeds}
+  injection bypassed M-RoPE.}}
   \label{fig:arch}
 \end{figure}
 
