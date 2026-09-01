@@ -35,3 +35,36 @@ Per gold class (target_frac@0.10 at last_prompt if available else last_prompt / 
 | scroll | 22 | 0.031 / 0.364 | 0.037 / 0.409 | 0.033 / 0.227 |
 | type | 17 | 0.000 / 0.000 | 0.000 / 0.000 | 0.000 / 0.000 |
 
+## D-token (prepended) — seed 42, n_train=1200, 120 probe examples, embedding norm 2.22, file `attn_aggregate_Dtoken_seed42_n1200.json`
+
+wrong map {'click': 'type', 'type': 'scroll', 'scroll': 'click'}; wrong2 map n/a. Chance target_frac@0.10 (area share) = 0.026.
+
+**Probe position `last_prompt`, layer 3q**
+
+| condition | target_frac@0.10 | target_frac@0.25 | image_mass | entropy |
+|---|---|---|---|---|
+| gold | 0.037 | 0.188 | 0.145 | 4.75 |
+| wrong | 0.034 | 0.174 | 0.176 | 4.86 |
+| zero | 0.035 | 0.178 | 0.172 | 4.86 |
+
+| contrast | Δ target_frac@0.10 | Δ target_frac@0.25 | Δ image_mass |
+|---|---|---|---|
+| gold − wrong | +0.004 [+0.001, +0.007] * | +0.014 [+0.007, +0.021] *** | -0.032 [-0.040, -0.023] *** |
+| gold − zero | +0.002 [-0.000, +0.005] ns | +0.010 [+0.005, +0.016] *** | -0.028 [-0.034, -0.022] *** |
+
+**Greedy decoding under each conditioning**
+
+| condition | hit@0.10 | hit@0.25 | mean dist | Δ hit@0.10 vs gold |
+|---|---|---|---|---|
+| gold | 0.267 | 0.575 | 0.370 | -- |
+| wrong | 0.117 | 0.308 | 0.625 | +0.150 [+0.058, +0.242] *** |
+| zero | 0.142 | 0.400 | 0.517 | +0.125 [+0.042, +0.208] ** |
+
+Per gold class (target_frac@0.10 at last_prompt if available else last_prompt / hit@0.10):
+
+| class | n | gold | wrong | zero |
+|---|---|---|---|---|
+| click | 81 | 0.047 / 0.284 | 0.041 / 0.062 | 0.043 / 0.123 |
+| scroll | 22 | 0.032 / 0.409 | 0.033 / 0.409 | 0.033 / 0.318 |
+| type | 17 | 0.000 / 0.000 | 0.000 / 0.000 | 0.000 / 0.000 |
+
