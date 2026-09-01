@@ -1,0 +1,16 @@
+\begin{table}[t]
+\centering
+\small
+\caption{Control: AITW \texttt{taps\_and\_swipes} (n$_{\text{train}}$=1000, n$_{\text{val}}$=200, 3 seeds), where action type is not spatially informative.}
+\label{tab:control}
+\begin{tabular}{lccccc}
+\toprule
+Variant & hit@0.05 & hit@0.10 & hit@0.25 & mean L2 $\downarrow$ & $\Delta$hit@0.10 vs.\ A \\
+\midrule
+A: flat & 0.235 $\pm$ 0.018 & 0.387 $\pm$ 0.019 & 0.723 $\pm$ 0.021 & 0.185 $\pm$ 0.003 & -- \\
+B: aux.\ loss & 0.225 $\pm$ 0.015 & 0.368 $\pm$ 0.012 & 0.730 $\pm$ 0.039 & 0.173 $\pm$ 0.011 & -0.015 [-0.045, +0.018] \\
+C: hard routing & 0.217 $\pm$ 0.016 & 0.325 $\pm$ 0.040 & 0.635 $\pm$ 0.064 & 0.271 $\pm$ 0.068 & -0.047 [-0.095, -0.002]$^{*}$ \\
+D-hook: additive & 0.235 $\pm$ 0.022 & 0.363 $\pm$ 0.021 & 0.725 $\pm$ 0.043 & 0.182 $\pm$ 0.009 & -0.005 [-0.040, +0.032] \\
+\bottomrule
+\end{tabular}
+\end{table}
