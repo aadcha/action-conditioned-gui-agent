@@ -503,14 +503,10 @@ def section_causal() -> dict:
                              "n_seeds": len(agg[c][m]), "values": agg[c][m]} for m in METRICS} for c in conds},
            "paired": {}}
     if dists["gold"]:
-        g = pool_distances_across_seeds(dists["gold"])
+        mk = lambda ds: [Run(Path("c"), "c", s, 1200, "all_with_coords", {}, d) for s, d in zip(seeds, ds)]
         for other in ("wrong", "zero"):
-            o = pool_distances_across_seeds(dists[other])
-            for m in ("hit_at_010", "hit_at_025", "mean_normalized_l2"):
-                r = paired_bootstrap(o, g, metric=m, n_boot=N_BOOT, seed=0)
-                out["paired"][f"gold_minus_{other}"] = out["paired"].get(f"gold_minus_{other}", {})
-                out["paired"][f"gold_minus_{other}"][m] = {"delta": r.delta, "ci_low": r.ci_low, "ci_high": r.ci_high,
-                                                           "p_boot": r.p_value, "n_units": int(g.shape[0])}
+            out["paired"][f"gold_minus_{other}"] = {m: paired(mk(dists[other]), mk(dists["gold"]), m)
+                                                   for m in ("hit_at_010", "hit_at_025", "mean_normalized_l2")}
     return out
 
 
