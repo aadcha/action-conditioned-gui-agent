@@ -1,0 +1,39 @@
+**Summary**
+The paper asks whether a small GUI grounding model (Qwen2-VL-2B with LoRA) grounds better when told which action type it is grounding. It compares four ways of injecting the type (auxiliary loss B, hard-routed action word C, additive embedding D-hook, prepended learned token D-token) against a flat baseline on two AITW mixes and a Mind2Web control, plus a 300 to 5,000 example scaling study. B and D-hook raise hit@0.10 by about 0.05 to 0.06 where the type predicts location and do nothing on the control; the originally hypothesized D-token does not help. Interventions and attention probes argue the benefit is a training-time effect, and the paper reports an `inputs_embeds`/M-RoPE pitfall that had produced a false negative.
+
+**Strengths**
+- Matched data, compute, adapters and decoding across variants, multiple seeds, and a control mix where conditioning should not help (Sec. 4, Tables 1-2): the right design for the question.
+- The intervention study (Tables 3-4) is the genuinely informative part: D-hook can be zeroed at test time and D-token cannot, which cleanly separates training-time from inference-time use of a signal.
+- Unusually candid reporting: the refuted hypothesis, the retracted variant, per-seed ranges and the optimistic-interval caveat are all stated. Cheap to reproduce (under 100 L4 GPU-hours, App. A).
+
+**Weaknesses**
+1. Inference on correlated units. The abstract advertises "paired bootstrap tests over 1,250 examples" (l. 7-8); it is 250 validation examples times five seeds (l. 152-156), and App. A (l. 473-475) concedes the intervals are "somewhat optimistic". With n_val = 250, per-seed std of 0.04 (Table 1) and effects of 0.05, a cluster bootstrap over examples or a five-seed paired test could remove the stars the headline rests on. Table 7 runs many uncorrected tests, and "adding two seeds widened the gap" (l. 176-177) reads as sequential testing. Identical settings also carry different numbers: flat A on taps_and_swipes is 0.390 ± 0.010 at l. 222 but 0.382 ± 0.015 in Table 2; D-hook is 0.392 ± 0.043 at l. 230 but 0.363 ± 0.021 in Table 2.
+2. Scaling study and headline mix design. The validation slice moves with n (l. 147-149), so every row of Table 7 is measured on a different 250-example set; A swings 0.139, 0.315, 0.261, 0.255, 0.244, 0.363, and D-hook's "consistent" advantage (abstract l. 15-16) includes +0.001 (ns) at n = 500. The mix named all_with_coords contains 35 ungroundable type events out of 250 (Table 6), a constant 14% of the denominator. The control's swipe target is the touch point of a gesture that the official AITW metric matches by axis only, and on Mind2Web only 10% of points land inside the gold element (l. 191-192), so that control is a floor rather than a null.
+3. Closest prior work is missing and preempts the framing. CoCo-Agent (Ma et al., Findings of ACL 2024) decomposes AITW actions into type prediction followed by target prediction conditioned on the type: that is variant C and the paper's what-then-where thesis. LiMAC (Christianos et al., ICLR 2025 spotlight) places a small action-type classifier ahead of a LoRA-tuned Qwen2-VL-2B on AitW and AndroidControl, the same backbone and data (grounding via UI-tree elements rather than pixels). Neither is cited. The mapping at l. 74-76 is also loose: GUI-Libra's action-aware SFT is token reweighting (alpha_a = 2, alpha_g = 4), not a type loss, and GUI-AIMA's anchor carries no action semantics. What is new is the mechanism comparison and the interventions; the title, abstract and contribution (1) sell the factorization.
+4. Contribution (4) is a documented library behavior. transformers issue #35463 (31 Dec 2024) and PR #35466 (merged 8 Jan 2025) record that Qwen2-VL derives its rope index from `input_ids` and that `inputs_embeds`-only calls broke. The paper never states its transformers version. This is an appendix note, not an abstract-level contribution.
+5. D-token lacks its control. D-token inserts a never-seen vocabulary token (l. 128-130) with a different initialization from D-hook (l. 466-467); no variant trains the same slot with a frozen or constant embedding, so "no better than baseline" may be conditioning gain minus foreign-token cost. The retracted D-slot had exactly this control (l. 223-224). The cyclic wrong map routes most clicks to the degenerate type target (l. 241-244), inflating Table 3.
+6. Motivation and regime. The claim that joint decoders "ground consistently within the wrong choice" and compound errors (l. 27-30) is never tested: no variant predicts type and coordinate jointly at test time and there is no multi-step evaluation. The baseline sits at 0.23 hit@0.10 after two epochs at batch size 1 on 1,200 examples, one learning rate, lambda = 1 unswept (l. 280-281), and B's gain is gone at 5,000 examples; published AITW agents are at 70 to 90% step accuracy and nothing here shows the effect survives there. The faithfulness/deployment link (l. 88-90) rests on one attention statistic from 120 screens, one seed, one layer.
+7. Presentation. Fig. 2's three panels are unreadable at column width; Fig. 4's screenshots are illegible; Sec. C (l. 477) is an empty header; Fig. 5 duplicates Tables 1-2; no code, split-index or data-processing release is promised.
+
+**Questions for the authors**
+1. Does Table 1 survive a cluster bootstrap over the 250 examples (resample examples, keep all seeds) and a five-seed paired test?
+2. Please reconcile l. 222/230 with Table 2, and Table 1's D-token 0.238 with Table 3's 0.236. Which transformers version produced the D-slot failure?
+3. Will you train a D-token control with a frozen or constant slot embedding?
+4. In Sec. 5.4 (l. 196-198), was the Stage-1 MLP fit only on training-slice features?
+5. Why not a fixed validation set across n?
+
+**Limitations**
+Section 7 is candid about scale, seeds, the single-layer attention probe and the absence of ScreenSpot or task-level evaluation. Missing: the correlated-unit caveat belongs in the main text, not App. A; the moving validation set; the 14% ungroundable share of the headline mix; the untested foreign-token confound; and a note that the practitioner advice (l. 287-290) comes from a heavily undertrained regime.
+
+**Ratings**: Soundness 2, Presentation 3, Contribution 2, Overall 4, Confidence 4.
+
+**Recommendation**: Reject (borderline; a re-analysis rather than new compute could change it).
+
+**What would change my score**
+1. Re-run headline and scaling statistics with a cluster bootstrap over examples and seed-level tests, and report which stars survive; if the headline holds, I move to 5-6 (poster).
+2. Cite and position against CoCo-Agent and LiMAC, reframe the contribution as a mechanism study, and demote the M-RoPE pitfall to an appendix with the library version.
+3. Add the constant-slot D-token control and a fixed validation set for the scaling study.
+4. One comparison to a published AITW number, or a click-only mix with the type class removed, so readers can place the regime.
+5. Release code, split indices and prompts; fix Figs. 2 and 4 and the empty section.
+
+Sources checked for the novelty and pitfall claims: [CoCo-Agent](https://arxiv.org/abs/2402.11941), [LiMAC](https://arxiv.org/abs/2410.17883), [GUI-Libra](https://arxiv.org/abs/2602.22190), [GUI-AIMA](https://arxiv.org/abs/2511.00810), [K2-Agent](https://arxiv.org/abs/2603.00676), [transformers issue #35463](https://github.com/huggingface/transformers/issues/35463), [transformers PR #35466](https://github.com/huggingface/transformers/pull/35466), [AITW repository](https://github.com/google-research/google-research/tree/master/android_in_the_wild).

@@ -1,0 +1,43 @@
+**Summary**
+The paper asks whether a coordinate-emitting GUI grounder benefits from being told the action type. Using Qwen2-VL-2B with LoRA, it trains a frozen-feature MLP for action type (Stage 1) and compares four ways of feeding the type into the grounder (auxiliary loss B, hard-routed action word C, additive embedding D-hook, prepended token D-token) against a flat baseline A under matched data and compute. On an AITW mix of taps, swipes and type events (n_train = 1,200, five seeds), B and D-hook improve hit@0.10 by +0.064/+0.054 (Table 1); nothing helps on a taps-and-swipes control (Table 2) or on a Mind2Web control; D-token does not help. Intervention tests (gold/wrong/zero embeddings, Tables 3-4), a 300-5,000 scaling study (Table 7) and a documented M-RoPE/`inputs_embeds` pitfall (Sec. 6.1) round out the study.
+
+**Strengths**
+- Unusually careful experimental hygiene for a small study: matched data order and optimizer, five seeds on the headline cell, paired statistics, a control mix, and the public retraction of an earlier false negative.
+- The gold/wrong/zero intervention design (Sec. 6.2-6.3) is a good template for mechanism claims in GUI grounding and yields a real finding (zeroing is neutral for D-hook, catastrophic for D-token).
+- The M-RoPE pitfall is a practically useful warning: HF's `get_rope_index` needs `input_ids` to place image tokens, and the community has already hit `inputs_embeds` breakage (transformers issue #35463).
+- Clear writing; limitations are candid.
+
+**Weaknesses**
+1. The headline effect is confounded with the ungroundable `type` class. The only difference between the "spatially informative" mix and the control is the 35/250 (14%) `type` events whose target is a sentinel at distance sqrt(2) (lines 140-143, 179-180). Every conditioning gain is a click gain (Table 6; flat click hit@0.10 falls to 0.256 versus ~0.38 on the control), and on Mind2Web, where `type` targets are real text fields, D-hook gives nothing (lines 189-192). The parsimonious reading is that conditioning tells the model when not to emit the sentinel, a dataset artifact, not "the action type predicts the target location" (abstract). The authors half-concede this (lines 274-275) but do not run the decisive experiment: the same clicks+scrolls mix at n = 1,200, or a class-centroid "type-only" predictor quantifying spatial informativeness per mix. Worse for the practical lesson: a deployed pipeline routes `type` in Stage 1 and never grounds it, which leaves exactly the control setting, where conditioning is inert.
+2. The flat baseline is not representative and the absolute numbers sit near floor. hit@0.10 of 0.23-0.29 on AITW clicks and a 10% in-element rate on Mind2Web (line 192) are far from fine-tuned small agents (Auto-UI 68.2 and CogAgent 65.4 AMS on AITW General; LiMAC 72.2 on AitW; Ferret-UI Lite-3B 91.6 on ScreenSpot-v2). Null results at a floor (Mind2Web) are uninformative. No grounding-pretrained 2-3B backbone (UGround-V1-2B, ShowUI-2B, OS-Atlas-Base-4B, UI-TARS-2B, Qwen2.5-VL-3B) is tried, there is one learning rate, batch size 1, no checkpoint selection, and the baseline's seed variance (0.043, range 0.169-0.280) is 3-10x that of B/D-hook, which suggests an under-tuned baseline stabilized by the extra signal rather than a grounding gain. The AITW standard action-matching metric (14% distance or same box) is never reported, so nothing is comparable to the literature.
+3. Related work misses the closest prior art. CoCo-Agent (Ma et al., ACL Findings 2024) introduced "conditional action prediction" on AITW: action type first, then the target conditioned on it in the same stream, which is exactly variant C. LiMAC (Christianos et al., ICLR 2025 spotlight) predicts the action type with a small Action Transformer and then selects the click target conditioned on it, invoking a VLM only for text; that is the paper's what/where split on AndroidControl and AitW. Neither is cited. GUI-Libra's "action-aware supervision" (line 74) is reasoning-versus-action token reweighting, not action-type supervision. The remaining novelty is the mechanism comparison and should be framed as such.
+4. The most obvious mechanism is missing: putting the type in the text prompt ("Action: click"), which uses pretrained word embeddings and no new parameters. Without it, "the prepended token is no better than the baseline" (abstract) cannot be separated from a poorly optimized fresh embedding (N(0, 0.02^2) init at LR 2e-5, final norm 2.2), which the authors concede at lines 280-281 but not in the abstract.
+5. Statistics are overstated. "Paired bootstrap tests over 1,250 examples" (lines 8, 44) describes 250 examples evaluated five times; the pooled units are correlated (lines 473-475). A cluster bootstrap over examples, or seed-level paired tests, is needed. Adding seeds 45-46 moved the baseline from 0.255 to 0.229 (Table 7 vs Table 1), so the headline delta is seed-sensitive.
+6. Internal inconsistencies: Sec. 6.1 gives flat 0.390 +/- 0.010 and D-hook 0.392 +/- 0.043 on taps_and_swipes, but Table 2 gives 0.382 +/- 0.015 and 0.363 +/- 0.021; D-token gold in Table 3 (0.236 +/- 0.058) differs from Table 1 (0.238 +/- 0.049) for the same models and set; "ten points" (line 53) vs "nine-point" (line 222); Section C is empty; contribution (1) claims four mechanisms on two datasets, but only D-hook ran on Mind2Web, with no table.
+7. The mechanism story overreaches. D-hook is said not to depend on the signal at inference (lines 262-263, 289), yet a wrong type collapses it from 0.358 to 0.083-0.100 (Table 4), more than D-token. Zero is likely neutral because E[click] stayed near its zero init for the majority class; per-class norms are needed. The practitioner lesson "prefer conditioning the model does not depend on at inference" does not follow, and the E2E gap (0.021 with 16% Stage-1 errors) shows the fragility. The predicted-type-vs-flat comparison (0.271 vs 0.255, three seeds) has no CI.
+8. Data protocol: sequential slicing of the AITW stream (lines 454-456) does not guarantee episode-disjoint validation; AITW instructions recur across many episodes. The subset is never named. The control's "no spatial information" is asserted, not measured (scroll touch points cluster mid-screen; D-hook improves scrolls in Table 6).
+
+**Questions for the authors**
+1. Results for a clicks+scrolls mix at n = 1,200 on the identical validation slice, and a class-centroid baseline for each mix?
+2. How is the sentinel serialized during training, and what fraction of flat-baseline click misses land on it?
+3. Please reconcile the Sec. 6.1/Table 2 and Table 3/Table 1 discrepancies.
+4. Norms of E[click], E[scroll], E[type] for D-hook; does zeroing hurt scroll examples specifically?
+5. Which AITW subset, and are train/validation episodes and instruction templates disjoint?
+6. A text-prompt conditioning variant, and a learning-rate sweep for the D-token table?
+
+**Limitations**
+Scale, seed variance, one-layer attention analysis and the ungroundable `type` class are acknowledged. Missing: the implication of the sentinel confound for the headline claim, baseline tuning, the absence of any grounding-pretrained backbone, comparability to standard AITW metrics, and a code/data release statement.
+
+**Ratings**
+Soundness: 2. Presentation: 3. Contribution: 2. Overall: 4. Confidence: 4.
+
+**Recommendation**
+Reject (close; fixable).
+
+**What would change my score**
+1. The clicks+scrolls experiment and centroid baseline; if the gain survives, I would move to Accept (poster), and the abstract must be reworded either way.
+2. A tuned or grounding-pretrained baseline (Qwen2.5-VL-3B or UGround-V1-2B) at one size, plus AITW action-matching numbers.
+3. Cite and position against CoCo-Agent and LiMAC; add text-prompt conditioning.
+4. Cluster-bootstrap statistics and the numerical reconciliations in W6.
+
+Sources consulted: [CoCo-Agent](https://arxiv.org/abs/2402.11941), [LiMAC](https://arxiv.org/abs/2410.17883), [GUI-Libra](https://arxiv.org/abs/2602.22190), [AITW action matching](https://github.com/google-research/google-research/blob/master/android_in_the_wild/action_matching.py), [transformers issue #35463](https://github.com/huggingface/transformers/issues/35463), [Ferret-UI Lite](https://arxiv.org/abs/2509.26539), [GUI-Actor](https://arxiv.org/abs/2506.03143), [GUI-AIMA](https://arxiv.org/abs/2511.00810), [MolmoPoint](https://arxiv.org/abs/2603.28069), [Prefill determines GUI grounding](https://arxiv.org/abs/2605.12549).
