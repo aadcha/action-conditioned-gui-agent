@@ -222,14 +222,14 @@ def md_variants(sec: dict) -> str:
 
 def tex_variants(sec: dict, label: str, caption: str) -> str:
     L = ["\\begin{table}[t]", "\\centering", "\\small", f"\\caption{{{caption}}}", f"\\label{{{label}}}",
-         "\\begin{tabular}{lccccc}", "\\toprule",
+         "\\resizebox{\\linewidth}{!}{\\begin{tabular}{lccccc}", "\\toprule",
          "Variant & hit@0.05 & hit@0.10 & hit@0.25 & mean L2 $\\downarrow$ & $\\Delta$hit@0.10 vs.\\ A \\\\", "\\midrule"]
     for v, cells in sec["cells"].items():
         d = sec["deltas_vs_A"].get(v, {}).get("hit_at_010") if v != "A" else None
         L.append(f"{TEX_NAMES[v]} & {tex_ms(cells['hit_at_005'])} & {tex_ms(cells['hit_at_010'])} & "
                  f"{tex_ms(cells['hit_at_025'])} & {tex_ms(cells['mean_normalized_l2'])} & "
-                 f"{tex_delta(d) if d else '--'} \\\\")
-    L += ["\\bottomrule", "\\end{tabular}", "\\end{table}"]
+                 f"{tex_delta(d) if d else ''} \\\\")
+    L += ["\\bottomrule", "\\end{tabular}}", "\\end{table}"]
     return "\n".join(L) + "\n"
 
 
@@ -264,13 +264,13 @@ def tex_scaling(sec: dict) -> str:
          "\\caption{Conditioning advantage vs.\\ training-set size (AITW \\texttt{all\\_with\\_coords}, 3 seeds per cell, "
          "paired bootstrap over pooled (seed, example) units). Absolute values are not comparable across rows because the "
          "validation slice moves with $n$.}", "\\label{tab:scaling}",
-         "\\begin{tabular}{rccccc}", "\\toprule",
+         "\\resizebox{\\linewidth}{!}{\\begin{tabular}{rccccc}", "\\toprule",
          "$n_{\\text{train}}$ & A hit@0.10 & B $-$ A & D-hook $-$ A & B $-$ A (hit@0.25) & D-hook $-$ A (hit@0.25) \\\\", "\\midrule"]
     for n in sec["ns"]:
         c = sec["cells"][n]; d = sec["deltas"][n]
         L.append(f"{n} & {tex_ms(c['A']['hit_at_010'])} & {tex_delta(d['B']['hit_at_010'])} & {tex_delta(d['Dhook']['hit_at_010'])} & "
                  f"{tex_delta(d['B']['hit_at_025'])} & {tex_delta(d['Dhook']['hit_at_025'])} \\\\")
-    L += ["\\bottomrule", "\\end{tabular}", "\\end{table}"]
+    L += ["\\bottomrule", "\\end{tabular}}", "\\end{table}"]
     return "\n".join(L) + "\n"
 
 
@@ -414,16 +414,16 @@ def tex_causal(sec: dict) -> str:
     L = ["\\begin{table}[t]", "\\centering", "\\small",
          f"\\caption{{D-token causal-use test: the same trained model evaluated with the gold action embedding, a wrong "
          f"(cyclically permuted) one, and a zeroed one ({len(sec['seeds'])} seeds, paired bootstrap over pooled examples).}}",
-         "\\label{tab:causal}", "\\begin{tabular}{lcccc}", "\\toprule",
+         "\\label{tab:causal}", "\\resizebox{\\linewidth}{!}{\\begin{tabular}{lcccc}", "\\toprule",
          "Conditioning & hit@0.05 & hit@0.10 & hit@0.25 & mean L2 $\\downarrow$ \\\\", "\\midrule"]
     for c in ("gold", "wrong", "zero"):
         cc = sec["cells"][c]
         L.append(f"{c} & " + " & ".join(tex_ms(cc[m]) for m in METRICS) + " \\\\")
     L.append("\\midrule")
     for k, ds in sec["paired"].items():
-        L.append(f"{k.replace('_minus_', ' $-$ ')} & -- & {tex_delta(ds['hit_at_010'])} & {tex_delta(ds['hit_at_025'])} & "
+        L.append(f"{k.replace('_minus_', ' $-$ ')} & & {tex_delta(ds['hit_at_010'])} & {tex_delta(ds['hit_at_025'])} & "
                  f"{tex_delta(ds['mean_normalized_l2'])} \\\\")
-    L += ["\\bottomrule", "\\end{tabular}", "\\end{table}"]
+    L += ["\\bottomrule", "\\end{tabular}}", "\\end{table}"]
     return "\n".join(L) + "\n"
 
 
