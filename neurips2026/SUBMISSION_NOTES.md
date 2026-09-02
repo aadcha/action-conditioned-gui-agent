@@ -240,9 +240,10 @@ changed:
   noise of B. Added as a sixth row; the refutation is now specific to the
   learned prepended token.
 - Attention v3: free-running probe keeps the localization (D-hook 0.092,
-  D-token 0.085 vs 0.111/0.095 teacher-forced). Flat-A row: first run crashed
-  on a progress print (fixed), re-fired ~16:35; add one appendix sentence when
-  it lands.
+  D-token 0.085 vs 0.111/0.095 teacher-forced). Flat-A row (landed ~17:20):
+  A localizes as much as the conditioned models (0.117 at the y token) while
+  grounding worse (0.258 vs 0.358), so conditioning adds no localization;
+  stated in Appendix E. Attention stays a consistency check only.
 - Body ends on page 8; refs on page 9; no em dashes; stock-phrase scan clean.
 
 ## Writing plan (post-approval)
