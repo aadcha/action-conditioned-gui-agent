@@ -13,6 +13,7 @@ Data mix `all_with_coords`, n_train=1200, seeds requested [42, 43, 44, 45, 46]. 
 | C (hard routing) | 5 | 0.170 ± 0.022 | 0.264 ± 0.045 | 0.538 ± 0.059 | 0.421 ± 0.016 | 0.924–0.980 |
 | D-hook (additive) | 5 | 0.170 ± 0.042 | 0.282 ± 0.041 | 0.563 ± 0.016 | 0.370 ± 0.010 | 1.000–1.000 |
 | D-token (prepended) | 5 | 0.144 ± 0.056 | 0.238 ± 0.049 | 0.504 ± 0.055 | 0.386 ± 0.021 | 1.000–1.000 |
+| D-text (action word in prompt) | 0 | -- | -- | -- | -- | -- |
 
 Paired deltas vs A (Δ [95% CI] sig):
 
@@ -22,6 +23,7 @@ Paired deltas vs A (Δ [95% CI] sig):
 | C (hard routing) − A | +0.039 [+0.021, +0.057] *** / cluster [+0.018, +0.062] ** / seed-t p=0.065 | +0.035 [+0.010, +0.060] ** / cluster [+0.001, +0.069] * / seed-t p=0.189 | +0.038 [+0.011, +0.066] ** / cluster [-0.006, +0.082] ns / seed-t p=0.174 | +0.016 [-0.001, +0.033] ns / cluster [-0.011, +0.043] ns / seed-t p=0.080 | 1250 |
 | D-hook (additive) − A | +0.040 [+0.022, +0.058] *** / cluster [+0.018, +0.063] *** / seed-t p=0.020 | +0.054 [+0.031, +0.075] *** / cluster [+0.022, +0.086] *** / seed-t p=0.028 | +0.064 [+0.042, +0.087] *** / cluster [+0.031, +0.098] *** / seed-t p=0.009 | -0.036 [-0.045, -0.026] *** / cluster [-0.050, -0.022] *** / seed-t p=0.025 | 1250 |
 | D-token (prepended) − A | +0.014 [-0.002, +0.029] ns / cluster [-0.004, +0.032] ns / seed-t p=0.360 | +0.009 [-0.012, +0.028] ns / cluster [-0.015, +0.034] ns / seed-t p=0.465 | +0.005 [-0.014, +0.025] ns / cluster [-0.020, +0.030] ns / seed-t p=0.810 | -0.019 [-0.028, -0.011] *** / cluster [-0.032, -0.008] *** / seed-t p=0.241 | 1250 |
+| D-text (action word in prompt) − A | -- | -- | -- | -- | -- |
 
 Paired deltas vs B:
 
@@ -30,6 +32,7 @@ Paired deltas vs B:
 | C (hard routing) − B | -0.009 [-0.027, +0.009] ns / cluster [-0.031, +0.013] ns / seed-t p=0.505 | -0.029 [-0.053, -0.006] * / cluster [-0.062, +0.004] ns / seed-t p=0.187 | -0.044 [-0.071, -0.017] ** / cluster [-0.086, -0.003] * / seed-t p=0.065 | +0.056 [+0.041, +0.072] *** / cluster [+0.031, +0.083] *** / seed-t p=0.001 | 1250 |
 | D-hook (additive) − B | -0.008 [-0.026, +0.009] ns / cluster [-0.030, +0.014] ns / seed-t p=0.463 | -0.010 [-0.033, +0.012] ns / cluster [-0.043, +0.024] ns / seed-t p=0.563 | -0.018 [-0.042, +0.004] ns / cluster [-0.048, +0.012] ns / seed-t p=0.296 | +0.005 [-0.002, +0.012] ns / cluster [-0.006, +0.017] ns / seed-t p=0.306 | 1250 |
 | D-token (prepended) − B | -0.034 [-0.052, -0.017] *** / cluster [-0.056, -0.013] ** / seed-t p=0.112 | -0.055 [-0.079, -0.031] *** / cluster [-0.088, -0.024] *** / seed-t p=0.016 | -0.078 [-0.102, -0.054] *** / cluster [-0.110, -0.045] *** / seed-t p=0.010 | +0.021 [+0.013, +0.029] *** / cluster [+0.009, +0.034] ** / seed-t p=0.046 | 1250 |
+| D-text (action word in prompt) − B | -- | -- | -- | -- | -- |
 
 Per-class hit@0.10 (mean ± std over seeds; basis: per-example distances, parse failures = miss):
 
@@ -40,6 +43,7 @@ Per-class hit@0.10 (mean ± std over seeds; basis: per-example distances, parse 
 | C (hard routing) | 0.350 ± 0.061 | 0.148 ± 0.073 | 0.000 ± 0.000 |
 | D-hook (additive) | 0.321 ± 0.064 | 0.357 ± 0.039 | 0.000 ± 0.000 |
 | D-token (prepended) | 0.269 ± 0.069 | 0.304 ± 0.090 | 0.000 ± 0.000 |
+| D-text (action word in prompt) | -- | -- | -- |
 
 ### Control (taps_and_swipes, n_train=1000, n_val=200)
 
@@ -75,6 +79,39 @@ Per-class hit@0.10 (mean ± std over seeds; basis: run-logged per_class blocks (
 | B (aux loss) | 0.386 ± 0.019 | 0.302 ± 0.047 |
 | C (hard routing) | 0.378 ± 0.057 | 0.174 ± 0.154 |
 | D-hook (additive) | 0.365 ± 0.035 | 0.357 ± 0.036 |
+
+### Type events removed from training (same 250-example validation slice, seeds 42–44)
+
+| variant | training stream | hit@0.10 | hit@0.25 | mean L2 | click hit@0.10 | scroll hit@0.10 |
+|---|---|---|---|---|---|---|
+| A (flat) | with type | 0.255 ± 0.026 | 0.515 ± 0.027 | 0.392 ± 0.012 | 0.294 ± 0.042 | 0.304 ± 0.022 |
+| A (flat) | type removed | 0.292 | 0.564 | 0.433 | 0.355 | 0.283 |
+| B (aux loss) | with type | 0.305 ± 0.015 | 0.585 ± 0.022 | 0.362 ± 0.003 | 0.373 ± 0.020 | 0.290 ± 0.013 |
+| B (aux loss) | type removed | -- | -- | -- | -- | -- |
+| D-hook (additive) | with type | 0.300 ± 0.035 | 0.569 ± 0.018 | 0.365 ± 0.008 | 0.351 ± 0.048 | 0.341 ± 0.045 |
+| D-hook (additive) | type removed | -- | -- | -- | -- | -- |
+
+Paired deltas within the type-removed condition (vs A trained without type):
+
+| contrast | hit@0.10 | hit@0.25 | mean L2 |
+|---|---|---|---|
+| B (aux loss) − A (both without type) | -- | -- | -- |
+| D-hook (additive) − A (both without type) | -- | -- | -- |
+
+Effect of removing type events from training (without − with), per variant:
+
+| variant | hit@0.10 | hit@0.25 | mean L2 |
+|---|---|---|---|
+| A (flat) | +0.036 [-0.012, +0.084] ns / cluster [-0.012, +0.084] ns | +0.036 [-0.008, +0.084] ns / cluster [-0.008, +0.084] ns | +0.052 [+0.029, +0.075] *** / cluster [+0.029, +0.075] *** |
+| B (aux loss) | -- | -- | -- |
+| D-hook (additive) | -- | -- | -- |
+
+Click-only paired deltas vs A (hit@0.10):
+
+| contrast | with type | type removed |
+|---|---|---|
+| B (aux loss) − A | +0.079 [+0.043, +0.116] *** / cluster [+0.037, +0.120] *** / seed-t p=0.038 | -- |
+| D-hook (additive) − A | +0.057 [+0.022, +0.093] ** / cluster [+0.018, +0.099] ** / seed-t p=0.224 | -- |
 
 ### Data-scaling curve (all_with_coords, seeds 42–44 at every n)
 
@@ -128,3 +165,28 @@ Seed-level only (this job does not log per-example distances).
 |---|---|---|---|---|
 | gold minus wrong | +0.157 [+0.131, +0.182] *** / cluster [+0.114, +0.201] *** / seed-t p=0.002 | +0.302 [+0.273, +0.331] *** / cluster [+0.246, +0.356] *** / seed-t p=0.000 | -0.342 [-0.360, -0.324] *** / cluster [-0.375, -0.309] *** / seed-t p=0.001 | 1250 |
 | gold minus zero | +0.069 [+0.045, +0.092] *** / cluster [+0.038, +0.100] *** / seed-t p=0.139 | +0.086 [+0.062, +0.109] *** / cluster [+0.056, +0.117] *** / seed-t p=0.159 | -0.103 [-0.116, -0.090] *** / cluster [-0.121, -0.086] *** / seed-t p=0.024 | 1250 |
+
+### Full-power interventions (same trained model, five conditionings; seeds 42–46, 250 examples)
+
+**D-hook (additive)** seeds [42, 43, 44, 45, 46]; action-embedding row norms: click 0.044, scroll 0.046, type 0.041; backbone token-embedding mean norm 0.579
+
+| condition | hit@0.05 | hit@0.10 | hit@0.25 | mean L2 | click hit@0.10 | scroll hit@0.10 | gold − condition (hit@0.10) |
+|---|---|---|---|---|---|---|---|
+| gold | 0.162 ± 0.042 | 0.275 ± 0.040 | 0.554 ± 0.018 | 0.371 ± 0.010 | 0.310 ± 0.060 | 0.357 ± 0.052 | -- |
+| wrong | 0.009 ± 0.002 | 0.054 ± 0.009 | 0.162 ± 0.004 | 0.847 ± 0.006 | 0.006 ± 0.000 | 0.270 ± 0.050 | +0.222 [+0.195, +0.248] *** / cluster [+0.174, +0.270] *** / seed-t p=0.000 |
+| wrong2 | 0.040 ± 0.052 | 0.099 ± 0.056 | 0.290 ± 0.061 | 0.555 ± 0.037 | 0.073 ± 0.087 | 0.270 ± 0.050 | +0.176 [+0.150, +0.203] *** / cluster [+0.133, +0.221] *** / seed-t p=0.003 |
+| zero | 0.142 ± 0.031 | 0.248 ± 0.032 | 0.520 ± 0.034 | 0.451 ± 0.021 | 0.288 ± 0.053 | 0.291 ± 0.050 | +0.027 [+0.003, +0.050] * / cluster [-0.006, +0.060] ns / seed-t p=0.224 |
+| classmean | 0.104 ± 0.049 | 0.206 ± 0.058 | 0.489 ± 0.065 | 0.476 ± 0.042 | 0.217 ± 0.099 | 0.322 ± 0.064 | +0.070 [+0.043, +0.096] *** / cluster [+0.034, +0.106] *** / seed-t p=0.133 |
+| flat A (same examples) | 0.130 ± 0.039 | 0.229 ± 0.043 | 0.499 ± 0.029 | 0.406 ± 0.028 | 0.256 | 0.304 | gold − A: +0.046 [+0.025, +0.068] *** / cluster [+0.017, +0.077] ** / seed-t p=0.032; zero − A: +0.019 [-0.003, +0.041] ns / cluster [-0.006, +0.045] ns / seed-t p=0.429 |
+
+**D-token (prepended)** seeds [42, 43, 44]; action-embedding row norms: click 0.773, scroll 0.782, type 0.790; backbone token-embedding mean norm 0.579
+
+| condition | hit@0.05 | hit@0.10 | hit@0.25 | mean L2 | click hit@0.10 | scroll hit@0.10 | gold − condition (hit@0.10) |
+|---|---|---|---|---|---|---|---|
+| gold | 0.181 ± 0.013 | 0.276 ± 0.034 | 0.536 ± 0.026 | 0.374 ± 0.013 | 0.325 ± 0.026 | 0.304 ± 0.132 | -- |
+| wrong | 0.017 ± 0.002 | 0.084 ± 0.014 | 0.203 ± 0.036 | 0.712 ± 0.095 | 0.037 ± 0.027 | 0.319 ± 0.066 | +0.192 [+0.157, +0.228] *** / cluster [+0.139, +0.244] *** / seed-t p=0.004 |
+| wrong2 | 0.041 ± 0.026 | 0.144 ± 0.036 | 0.364 ± 0.071 | 0.539 ± 0.077 | 0.126 ± 0.048 | 0.319 ± 0.066 | +0.132 [+0.093, +0.169] *** / cluster [+0.077, +0.187] *** / seed-t p=0.069 |
+| zero | 0.092 ± 0.068 | 0.180 ± 0.088 | 0.420 ± 0.139 | 0.494 ± 0.084 | 0.187 ± 0.134 | 0.290 ± 0.033 | +0.096 [+0.061, +0.131] *** / cluster [+0.053, +0.140] *** / seed-t p=0.307 |
+| classmean | 0.079 ± 0.054 | 0.175 ± 0.055 | 0.395 ± 0.080 | 0.491 ± 0.064 | 0.178 ± 0.085 | 0.297 ± 0.033 | +0.101 [+0.067, +0.136] *** / cluster [+0.057, +0.147] *** / seed-t p=0.182 |
+| flat A (same examples) | 0.130 ± 0.039 | 0.229 ± 0.043 | 0.499 ± 0.029 | 0.406 ± 0.028 | 0.256 | 0.304 | gold − A: +0.021 [-0.003, +0.045] ns / cluster [-0.007, +0.051] ns / seed-t p=0.047; zero − A: -0.075 [-0.108, -0.044] *** / cluster [-0.112, -0.039] *** / seed-t p=0.375 |
+
