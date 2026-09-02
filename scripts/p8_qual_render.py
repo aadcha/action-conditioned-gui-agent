@@ -72,12 +72,19 @@ def render(panels: list[dict], meta: dict, out: Path, title: str) -> None:
 
 def main() -> None:
     meta = json.loads((QDIR / "render.json").read_text())
-    oc = meta["outcome_counts"]
     panels = meta["panels"]
+    # Exhaustive outcome partition of the clicks at r = 0.10 (the panel-selection
+    # thresholds in modal_app.py are stricter and do not partition).
+    clicks = [r for r in meta["all_rows"] if r["action"] == "click"]
+    both = sum(r["distA"] <= 0.10 and r["distD"] <= 0.10 for r in clicks)
+    rescue = sum(r["distA"] > 0.10 and r["distD"] <= 0.10 for r in clicks)
+    hurt = sum(r["distA"] <= 0.10 and r["distD"] > 0.10 for r in clicks)
+    miss = len(clicks) - both - rescue - hurt
+    print(f"clicks={len(clicks)} both={both} rescue={rescue} hurt={hurt} both_miss={miss}")
     base = (f"AITW all_with_coords, n_train={meta['n_train']}, seed {meta.get('seed', 42)}: click hit@0.10 "
-            f"A={meta['click_hit_A']:.2f} vs D-hook={meta['click_hit_D']:.2f}; of {oc['n_click']} clicks, "
-            f"{oc['click_rescue']} rescued, {oc['click_hurt']} hurt, {oc['click_both_ok']} both correct, "
-            f"{oc['click_both_miss']} both missed (distances are normalized L2)")
+            f"A={meta['click_hit_A']:.2f} vs D-hook={meta['click_hit_D']:.2f}; of {len(clicks)} clicks, "
+            f"{rescue} rescued (A miss, D hit), {hurt} hurt (A hit, D miss), {both} both correct, "
+            f"{miss} both missed at r=0.10 (distances are normalized L2)")
     FIGS.mkdir(parents=True, exist_ok=True)
     render(panels, meta, FIGS / "qualitative_v2_1x6.png", base)
     want = ["click: conditioning rescues", "click: conditioning hurts", "click: both correct", "scroll: conditioning helps"]
