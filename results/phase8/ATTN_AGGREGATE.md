@@ -2,7 +2,7 @@
 
 Head-averaged attention from a probe token to the image tokens. `target_frac@r` = share of that token's image attention within r of the gold point; chance = share of image tokens within r. Paired bootstrap over probe examples, 10k resamples. Conditions: `gold` = gold type; `wrong` = wrong: cyclic (click→type); `wrong2` = wrong: click↔scroll; `zero` = zeroed embedding.
 
-## D-hook (additive) — seed 42, n_train=1200, 120 probe examples, embedding norm 0.08, file `attn_aggregate_Dhook_seed42_n1200_v2.json`
+## D-hook (additive) — seed 42, n_train=1200, 120 probe examples, embedding norm 0.08, file `attn_aggregate_Dhook_seed42_n1200_v3.json`
 
 wrong map {'click': 'type', 'type': 'scroll', 'scroll': 'click'}; wrong2 map {'click': 'scroll', 'type': 'click', 'scroll': 'click'}. Chance target_frac@0.10 (area share) = 0.026.
 
@@ -51,6 +51,11 @@ wrong map {'click': 'type', 'type': 'scroll', 'scroll': 'click'}; wrong2 map {'c
 | gold − wrong2 | +0.062 [+0.040, +0.086] *** | +0.094 [+0.063, +0.126] *** | +0.035 [+0.014, +0.056] ** |
 | gold − zero | -0.008 [-0.017, +0.001] ns | -0.013 [-0.030, +0.002] ns | -0.027 [-0.037, -0.016] *** |
 
+**Free-running probe (gold condition, model's own answer teacher-forced; n = examples whose output parsed)**
+
+- `pre_x_pred`: n=120, target_frac@0.10=0.039, target_frac@0.25=0.217, image_mass=0.132
+- `pre_y_pred`: n=120, target_frac@0.10=0.092, target_frac@0.25=0.263, image_mass=0.239
+
 **Greedy decoding under each conditioning**
 
 | condition | hit@0.10 | hit@0.25 | mean dist | Δ hit@0.10 vs gold |
@@ -68,7 +73,7 @@ Per gold class (target_frac@0.10 at pre_y if available else last_prompt / hit@0.
 | scroll | 22 | 0.031 / 0.364 | 0.037 / 0.409 | 0.037 / 0.409 | 0.033 / 0.227 |
 | type | 17 | 0.000 / 0.000 | 0.000 / 0.000 | 0.000 / 0.000 | 0.000 / 0.000 |
 
-## D-token (prepended) — seed 42, n_train=1200, 120 probe examples, embedding norm 2.22, file `attn_aggregate_Dtoken_seed42_n1200_v2.json`
+## D-token (prepended) — seed 42, n_train=1200, 120 probe examples, embedding norm 2.22, file `attn_aggregate_Dtoken_seed42_n1200_v3.json`
 
 wrong map {'click': 'type', 'type': 'scroll', 'scroll': 'click'}; wrong2 map {'click': 'scroll', 'type': 'click', 'scroll': 'click'}. Chance target_frac@0.10 (area share) = 0.026.
 
@@ -116,6 +121,11 @@ wrong map {'click': 'type', 'type': 'scroll', 'scroll': 'click'}; wrong2 map {'c
 | gold − wrong | +0.015 [+0.006, +0.025] ** | +0.041 [+0.023, +0.059] *** | +0.010 [+0.002, +0.019] * |
 | gold − wrong2 | +0.016 [+0.006, +0.026] ** | +0.040 [+0.023, +0.058] *** | +0.002 [-0.008, +0.011] ns |
 | gold − zero | +0.016 [+0.009, +0.024] *** | +0.043 [+0.030, +0.056] *** | +0.015 [+0.009, +0.021] *** |
+
+**Free-running probe (gold condition, model's own answer teacher-forced; n = examples whose output parsed)**
+
+- `pre_x_pred`: n=120, target_frac@0.10=0.038, target_frac@0.25=0.211, image_mass=0.170
+- `pre_y_pred`: n=120, target_frac@0.10=0.085, target_frac@0.25=0.276, image_mass=0.272
 
 **Greedy decoding under each conditioning**
 
