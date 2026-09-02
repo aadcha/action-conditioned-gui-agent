@@ -173,9 +173,13 @@ ablation_headline_vs_control.png, scaling_curve_multiseed.png}`.
   `results/phase8/PHASE8_RESULTS.md`, `ATTN_AGGREGATE.md`, LaTeX tables in
   `neurips2026/tables/`, figures in `neurips2026/figures/` (headline-vs-control,
   scaling_curve_multiseed, attn_aggregate, qualitative_v2_1x4/1x6, arch_diagram).
-- Remaining open question for the user: whether to re-run the D-token causal
-  evals with the click↔scroll wrong map (E5 v2 already shows the non-degenerate
-  map is equally harmful, so this is optional polish).
+- User decision (Sep 1): NO re-run of the D-token causal evals with the
+  click↔scroll map — "we're working with the data we have available."
+  Paper handling: lead the causal section with gold − zero (+0.069***,
+  confound-free); report gold − wrong with one sentence that the cyclic map
+  routes clicks onto the degenerate `type` coordinate; cite the single-seed
+  click↔scroll numbers from E5 v2 (D-hook 0.358→0.100, D-token 0.267→0.142)
+  as corroboration that plausible-but-wrong conditioning is also harmful.
 
 ## Writing plan (post-approval)
 
