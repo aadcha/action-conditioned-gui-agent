@@ -34,7 +34,7 @@ ADIR = P8 / "attn_aggregate"
 CCOL = {"gold": "#2a9d4a", "wrong": "#c9184a", "wrong2": "#e07b39", "zero": "#888888"}
 CDESC = {"gold": "gold type", "wrong": "wrong: cyclic (click→type)", "wrong2": "wrong: click↔scroll", "zero": "zeroed embedding"}
 TEXDESC = {"gold": "gold type", "wrong": "wrong (cyclic)", "wrong2": "wrong (click$\\leftrightarrow$scroll)", "zero": "zeroed"}
-VNAME = {"Dhook": "D-hook (additive)", "Dtoken": "D-token (prepended)"}
+VNAME = {"A": "A (flat)", "Dhook": "D-hook (additive)", "Dtoken": "D-token (prepended)"}
 
 
 def stars(p: float | None) -> str:
@@ -114,6 +114,11 @@ def main() -> None:
                 k = f"gold_minus_{c}"
                 md.append(f"| gold − {c} | {fmt_d(bl['target_frac_0.10'].get(k))} | {fmt_d(bl['target_frac_0.25'].get(k))} | "
                           f"{fmt_d(bl['image_mass'].get(k))} |")
+            md.append("")
+        if s.get("pred_prefix"):
+            md += ["**Free-running probe (gold condition, model's own answer teacher-forced; n = examples whose output parsed)**", ""]
+            for pname, st in s["pred_prefix"].items():
+                md.append(f"- `{pname}`: n={st['n']}, target_frac@0.10={st['target_frac_0.10']:.3f}, target_frac@0.25={st['target_frac_0.25']:.3f}, image_mass={st['image_mass']:.3f}")
             md.append("")
         h = s["hits"]
         md += ["**Greedy decoding under each conditioning**", "", "| condition | hit@0.10 | hit@0.25 | mean dist | Δ hit@0.10 vs gold |", "|---|---|---|---|---|"]
