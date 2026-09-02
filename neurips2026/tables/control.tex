@@ -3,14 +3,14 @@
 \small
 \caption{Control: AITW \texttt{taps\_and\_swipes} (n$_{\text{train}}$=1000, n$_{\text{val}}$=200, 3 seeds), where action type is not spatially informative.}
 \label{tab:control}
-\resizebox{\linewidth}{!}{\begin{tabular}{lccccc}
+\resizebox{\linewidth}{!}{\begin{tabular}{lcccccc}
 \toprule
-Variant & hit@0.05 & hit@0.10 & hit@0.25 & mean L2 $\downarrow$ & $\Delta$hit@0.10 vs.\ A \\
+Variant & hit@0.05 & hit@0.10 & hit@0.25 & mean L2 $\downarrow$ & $\Delta$hit@0.10 vs.\ A [cluster CI] & seed-level $p$ \\
 \midrule
-A: flat & 0.243 $\pm$ 0.020 & 0.382 $\pm$ 0.015 & 0.720 $\pm$ 0.017 & 0.185 $\pm$ 0.003 &  \\
-B: aux.\ loss & 0.225 $\pm$ 0.015 & 0.368 $\pm$ 0.012 & 0.730 $\pm$ 0.039 & 0.173 $\pm$ 0.011 & -0.013 [-0.038, +0.012] \\
-C: hard routing & 0.217 $\pm$ 0.016 & 0.325 $\pm$ 0.040 & 0.635 $\pm$ 0.064 & 0.271 $\pm$ 0.068 & -0.057 [-0.093, -0.020]$^{**}$ \\
-D-hook: additive & 0.235 $\pm$ 0.022 & 0.363 $\pm$ 0.021 & 0.725 $\pm$ 0.043 & 0.182 $\pm$ 0.009 & -0.018 [-0.047, +0.010] \\
+A: flat & 0.243 $\pm$ 0.020 & 0.382 $\pm$ 0.015 & 0.720 $\pm$ 0.017 & 0.185 $\pm$ 0.003 &  &  \\
+B: aux.\ loss & 0.225 $\pm$ 0.015 & 0.368 $\pm$ 0.012 & 0.730 $\pm$ 0.039 & 0.173 $\pm$ 0.011 & -0.013 [-0.038, +0.012] & 0.456 \\
+C: hard routing & 0.217 $\pm$ 0.016 & 0.325 $\pm$ 0.040 & 0.635 $\pm$ 0.064 & 0.271 $\pm$ 0.068 & -0.057 [-0.108, -0.007]$^{*}$ & 0.215 \\
+D-hook: additive & 0.235 $\pm$ 0.022 & 0.363 $\pm$ 0.021 & 0.725 $\pm$ 0.043 & 0.182 $\pm$ 0.009 & -0.018 [-0.052, +0.015] & 0.334 \\
 \bottomrule
 \end{tabular}}
 \end{table}

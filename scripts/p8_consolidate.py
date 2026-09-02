@@ -152,6 +152,62 @@ def _metric_vals(dist: np.ndarray, m: str) -> np.ndarray:
     return dist if m == "mean_normalized_l2" else (dist <= RADII[m]).astype(float)
 
 
+def slice_labels(mix: str, n: int) -> list[str] | None:
+    """Per-example action labels of a deterministic validation slice, when a job logged them.
+    The qualitative job logs gold coordinates and actions for the headline slice."""
+    if mix == "all_with_coords" and n == 1200:
+        p = P8 / "qualitative_v2" / "render.json"
+        if p.exists():
+            rows = json.loads(p.read_text()).get("all_rows") or []
+            if len(rows) == 250:
+                return [r["action"] for r in rows]
+    return None
+
+
+def section_e2e() -> dict:
+    """Predicted-type pipeline vs oracle vs flat A, per seed and paired over examples."""
+    out = {"seeds": [], "per_seed": [], "paired": {}}
+    a_d, o_d, p_d = [], [], []
+    for s in CURVE_SEEDS:
+        pe = P4 / f"e2e_seed{s}_n1200_ep2_lr2e-05_mix-all_with_coords.json"
+        ra = load_run("A", s, 1200, "all_with_coords")
+        if not pe.exists() or ra is None or ra.dist is None:
+            continue
+        e = json.loads(pe.read_text())
+        od = np.asarray(e["oracle_per_example_dist"], float); pd_ = np.asarray(e["predicted_per_example_dist"], float)
+        L = min(len(od), len(pd_), len(ra.dist))
+        a_d.append(ra.dist[:L]); o_d.append(od[:L]); p_d.append(pd_[:L]); out["seeds"].append(s)
+        out["per_seed"].append({"seed": s, "stage1_acc": e.get("stage1_val_acc"), "stage1_macro_f1": e.get("stage1_val_macro_f1"),
+                                "A_hit010": float((ra.dist[:L] <= 0.10).mean()), "oracle_hit010": float((od[:L] <= 0.10).mean()),
+                                "predicted_hit010": float((pd_[:L] <= 0.10).mean())})
+    if not a_d:
+        return out
+    def _pair(x, y, m):
+        rx = [Run(Path("x"), "x", s, 1200, "all_with_coords", {}, d) for s, d in zip(out["seeds"], x)]
+        ry = [Run(Path("y"), "y", s, 1200, "all_with_coords", {}, d) for s, d in zip(out["seeds"], y)]
+        return paired(rx, ry, m)
+    for m in ("hit_at_010", "hit_at_025", "mean_normalized_l2"):
+        out["paired"][m] = {"predicted_minus_A": _pair(a_d, p_d, m), "oracle_minus_A": _pair(a_d, o_d, m),
+                            "oracle_minus_predicted": _pair(p_d, o_d, m)}
+    out["means"] = {k: float(np.mean([p[k] for p in out["per_seed"]])) for k in ("stage1_acc", "stage1_macro_f1", "A_hit010", "oracle_hit010", "predicted_hit010")}
+    return out
+
+
+def md_e2e(sec: dict) -> str:
+    if not sec.get("per_seed"):
+        return "### End to end\n\n(no e2e runs found)\n"
+    L = [f"### End to end: Stage-1 predicted types vs oracle vs flat A (seeds {sec['seeds']})", "",
+         "| seed | Stage-1 acc | Stage-1 macro-F1 | A hit@0.10 | oracle hit@0.10 | predicted hit@0.10 |", "|---|---|---|---|---|---|"]
+    for p in sec["per_seed"]:
+        L.append(f"| {p['seed']} | {p['stage1_acc']:.3f} | {p['stage1_macro_f1']:.3f} | {p['A_hit010']:.3f} | {p['oracle_hit010']:.3f} | {p['predicted_hit010']:.3f} |")
+    m = sec["means"]
+    L += [f"| mean | {m['stage1_acc']:.3f} | {m['stage1_macro_f1']:.3f} | {m['A_hit010']:.3f} | {m['oracle_hit010']:.3f} | {m['predicted_hit010']:.3f} |", "",
+          "| contrast | hit@0.10 | hit@0.25 | mean L2 |", "|---|---|---|---|"]
+    for k in ("predicted_minus_A", "oracle_minus_A", "oracle_minus_predicted"):
+        L.append(f"| {k.replace('_', ' ')} | " + " | ".join(fmt_delta(sec["paired"][mm][k]) for mm in ("hit_at_010", "hit_at_025", "mean_normalized_l2")) + " |")
+    return "\n".join(L) + "\n"
+
+
 def stars(p: float | None) -> str:
     if p is None or math.isnan(p):
         return ""
@@ -182,11 +238,28 @@ def fmt_delta(d: dict | None) -> str:
 
 
 def tex_delta(d: dict | None) -> str:
+    """Delta with the cluster-bootstrap interval (examples resampled, seeds kept together) when available."""
     if d is None:
         return "--"
+    if "cluster_ci_low" in d:
+        return tex_delta_cluster(d)
     s = stars(d["p_boot"])
-    s = "" if s == "ns" else f"$^{{{s.replace('*', '*')}}}$"
+    s = "" if s == "ns" else f"$^{{{s}}}$"
     return f"{d['delta']:+.3f} [{d['ci_low']:+.3f}, {d['ci_high']:+.3f}]{s}"
+
+
+def tex_delta_cluster(d: dict | None) -> str:
+    if d is None:
+        return "--"
+    s = stars(d["cluster_p"])
+    s = "" if s == "ns" else f"$^{{{s}}}$"
+    return f"{d['delta']:+.3f} [{d['cluster_ci_low']:+.3f}, {d['cluster_ci_high']:+.3f}]{s}"
+
+
+def tex_seed_p(d: dict | None) -> str:
+    if d is None or math.isnan(d.get("seed_t_p", float("nan"))):
+        return "--"
+    return f"{d['seed_t_p']:.3f}"
 
 
 # ---------------------------------------------------------------------------
@@ -203,11 +276,19 @@ def section_variants(mix: str, n: int, seeds: list[int], variants: list[str], ti
         if v not in ("A", "B") and "B" in runs:
             out["deltas_vs_B"][v] = {m: paired(runs["B"], runs[v], m) for m in METRICS}
     out["per_class"] = {}
+    labels = slice_labels(mix, n)
+    out["per_class_basis"] = ("per-example distances, parse failures = miss" if labels is not None
+                              else "run-logged per_class blocks (parsed outputs only)")
     for v in variants:
         pc = defaultdict(list)
         for r in runs[v]:
-            for cls, blk in r.per_class.items():
-                pc[cls].append(blk.get("hit_at_010", math.nan))
+            if labels is not None and r.dist is not None and len(r.dist) == len(labels):
+                for cls in sorted(set(labels)):
+                    msk = np.array([l == cls for l in labels])
+                    pc[cls].append(float((r.dist[msk] <= 0.10).mean()))
+            else:
+                for cls, blk in r.per_class.items():
+                    pc[cls].append(blk.get("hit_at_010", math.nan))
         out["per_class"][v] = {cls: {"mean": float(np.mean(x)), "std": float(np.std(x, ddof=1)) if len(x) > 1 else 0.0,
                                      "n_seeds": len(x)} for cls, x in pc.items()}
     out["title"] = title
@@ -239,7 +320,7 @@ def md_variants(sec: dict) -> str:
             L.append(f"| {NAMES[v]} − B | " + " | ".join(fmt_delta(ds[m]) for m in METRICS) + f" | {u} |")
     classes = sorted({c for pcs in sec["per_class"].values() for c in pcs})
     if classes:
-        L += ["", "Per-class hit@0.10 (mean ± std over seeds):", "",
+        L += ["", f"Per-class hit@0.10 (mean ± std over seeds; basis: {sec.get('per_class_basis')}):", "",
               "| variant | " + " | ".join(classes) + " |", "|---|" + "---|" * len(classes)]
         for v, pcs in sec["per_class"].items():
             L.append(f"| {NAMES[v]} | " + " | ".join(fmt_ms(pcs[c]) if c in pcs else "--" for c in classes) + " |")
@@ -250,22 +331,26 @@ def md_variants(sec: dict) -> str:
 
 def tex_variants(sec: dict, label: str, caption: str) -> str:
     L = ["\\begin{table}[t]", "\\centering", "\\small", f"\\caption{{{caption}}}", f"\\label{{{label}}}",
-         "\\resizebox{\\linewidth}{!}{\\begin{tabular}{lccccc}", "\\toprule",
-         "Variant & hit@0.05 & hit@0.10 & hit@0.25 & mean L2 $\\downarrow$ & $\\Delta$hit@0.10 vs.\\ A \\\\", "\\midrule"]
+         "\\resizebox{\\linewidth}{!}{\\begin{tabular}{lcccccc}", "\\toprule",
+         "Variant & hit@0.05 & hit@0.10 & hit@0.25 & mean L2 $\\downarrow$ & $\\Delta$hit@0.10 vs.\\ A [cluster CI] & seed-level $p$ \\\\", "\\midrule"]
     for v, cells in sec["cells"].items():
         d = sec["deltas_vs_A"].get(v, {}).get("hit_at_010") if v != "A" else None
         L.append(f"{TEX_NAMES[v]} & {tex_ms(cells['hit_at_005'])} & {tex_ms(cells['hit_at_010'])} & "
                  f"{tex_ms(cells['hit_at_025'])} & {tex_ms(cells['mean_normalized_l2'])} & "
-                 f"{tex_delta(d) if d else ''} \\\\")
+                 f"{tex_delta_cluster(d) if d else ''} & {tex_seed_p(d) if d else ''} \\\\")
     L += ["\\bottomrule", "\\end{tabular}}", "\\end{table}"]
     return "\n".join(L) + "\n"
 
 
 # ---------------------------------------------------------------------------
 def section_scaling() -> dict:
-    out = {"ns": CURVE_NS, "seeds": CURVE_SEEDS, "cells": {}, "deltas": {}}
+    out = {"ns": CURVE_NS, "seeds": CURVE_SEEDS, "cells": {}, "deltas": {}, "val_mix": {}}
     for n in CURVE_NS:
         runs = {v: [r for s in CURVE_SEEDS if (r := load_run(v, s, n, "all_with_coords"))] for v in ("A", "B", "Dhook")}
+        ra = runs["A"][0] if runs["A"] else None
+        if ra is not None:
+            raw = json.loads(ra.path.read_text()).get("val_action_distribution") or {}
+            out["val_mix"][n] = {{"0": "click", "3": "scroll", "2": "type"}.get(k, k): v for k, v in raw.items()}
         out["cells"][n] = {v: {m: cell(runs[v], m) for m in ("hit_at_010", "hit_at_025", "mean_normalized_l2")} for v in runs}
         out["deltas"][n] = {v: {m: paired(runs["A"], runs[v], m) for m in ("hit_at_010", "hit_at_025", "mean_normalized_l2")}
                             for v in ("B", "Dhook")}
@@ -283,21 +368,25 @@ def md_scaling(sec: dict) -> str:
                  f"{fmt_ms(c['A']['hit_at_025'])} | {fmt_ms(c['B']['hit_at_025'])} | {fmt_ms(c['Dhook']['hit_at_025'])} | "
                  f"{fmt_delta(d['B']['hit_at_025'])} | {fmt_delta(d['Dhook']['hit_at_025'])} |")
     L += ["", "Note: the val slice is `examples[n_train:n_train+250]`, so absolute numbers are NOT comparable across n; "
-          "only the within-n deltas are. Seeds (s) shown for A; B and D-hook have the same seed count unless a run is missing."]
+          "only the within-n deltas are. Seeds (s) shown for A; B and D-hook have the same seed count unless a run is missing.", "",
+          "Validation class mix per n: " + "; ".join(f"n={n}: " + ", ".join(f"{k} {v}" for k, v in mx.items()) for n, mx in sec["val_mix"].items())]
     return "\n".join(L) + "\n"
 
 
 def tex_scaling(sec: dict) -> str:
-    L = ["\\begin{table}[t]", "\\centering", "\\small",
-         "\\caption{Conditioning advantage vs.\\ training-set size (AITW \\texttt{all\\_with\\_coords}, 3 seeds per cell, "
-         "paired bootstrap over pooled (seed, example) units). Absolute values are not comparable across rows because the "
-         "validation slice moves with $n$.}", "\\label{tab:scaling}",
-         "\\resizebox{\\linewidth}{!}{\\begin{tabular}{rccccc}", "\\toprule",
-         "$n_{\\text{train}}$ & A hit@0.10 & B $-$ A & D-hook $-$ A & B $-$ A (hit@0.25) & D-hook $-$ A (hit@0.25) \\\\", "\\midrule"]
+    L = ["\\begin{table}[h]", "\\centering", "\\small",
+         "\\caption{Conditioning advantage vs.\\ training-set size (AITW \\texttt{all\\_with\\_coords}, 3 seeds per cell). "
+         "Intervals are 95\\% cluster bootstraps over validation examples (all seeds of a sampled example kept together); "
+         "stars from the same bootstrap. Absolute values are not comparable across rows because the validation slice moves "
+         "with $n$; its click/scroll/type counts are given per row. The study is descriptive: 24 contrasts, no multiplicity correction.}",
+         "\\label{tab:scaling}",
+         "\\resizebox{\\linewidth}{!}{\\begin{tabular}{rlccccc}", "\\toprule",
+         "$n_{\\text{train}}$ & val mix (c/s/t) & A hit@0.10 & B $-$ A & D-hook $-$ A & B $-$ A (hit@0.25) & D-hook $-$ A (hit@0.25) \\\\", "\\midrule"]
     for n in sec["ns"]:
-        c = sec["cells"][n]; d = sec["deltas"][n]
-        L.append(f"{n} & {tex_ms(c['A']['hit_at_010'])} & {tex_delta(d['B']['hit_at_010'])} & {tex_delta(d['Dhook']['hit_at_010'])} & "
-                 f"{tex_delta(d['B']['hit_at_025'])} & {tex_delta(d['Dhook']['hit_at_025'])} \\\\")
+        c = sec["cells"][n]; d = sec["deltas"][n]; mx = sec["val_mix"].get(n, {})
+        mix_txt = "/".join(str(mx.get(k, "?")) for k in ("click", "scroll", "type"))
+        L.append(f"{n} & {mix_txt} & {tex_ms(c['A']['hit_at_010'])} & {tex_delta_cluster(d['B']['hit_at_010'])} & {tex_delta_cluster(d['Dhook']['hit_at_010'])} & "
+                 f"{tex_delta_cluster(d['B']['hit_at_025'])} & {tex_delta_cluster(d['Dhook']['hit_at_025'])} \\\\")
     L += ["\\bottomrule", "\\end{tabular}}", "\\end{table}"]
     return "\n".join(L) + "\n"
 
@@ -475,14 +564,17 @@ def main() -> None:
     scal = section_scaling()
     m2w = section_m2w()
     caus = section_causal()
+    e2e = section_e2e()
 
     md = ["# Phase 8 results — pre-submission consolidation", "",
           "Generated by `scripts/p8_consolidate.py` from `results/phase4/*.json`. "
-          "See `neurips2026/SUBMISSION_NOTES.md` for the experiment plan (E1–E6).", "",
-          md_variants(head), md_variants(ctrl), md_scaling(scal), md_m2w(m2w), md_causal(caus)]
+          "See `neurips2026/SUBMISSION_NOTES.md` for the experiment plan (E1–E6). "
+          "Each delta shows: pooled-unit bootstrap CI and stars / cluster bootstrap over examples (seeds kept together) CI and stars / "
+          "seed-level paired t-test p (n = shared seeds).", "",
+          md_variants(head), md_variants(ctrl), md_scaling(scal), md_e2e(e2e), md_m2w(m2w), md_causal(caus)]
     (P8 / "PHASE8_RESULTS.md").write_text("\n".join(md))
     (P8 / "phase8_summary.json").write_text(json.dumps(strip_runs(
-        {"headline": head, "control": ctrl, "scaling": scal, "m2w": m2w, "causal": caus}), indent=2))
+        {"headline": head, "control": ctrl, "scaling": scal, "e2e": e2e, "m2w": m2w, "causal": caus}), indent=2))
     (TABLES / "headline.tex").write_text(tex_variants(
         head, "tab:headline", "Stage 2 grounding on AITW \\texttt{all\\_with\\_coords} (n$_{\\text{train}}$=1200, n$_{\\text{val}}$=250, "
         f"{head['cells']['A']['hit_at_010']['n_seeds']} seeds). Mean $\\pm$ std over seeds; $\\Delta$ with 95\\% paired-bootstrap CI over pooled "
