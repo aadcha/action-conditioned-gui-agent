@@ -142,6 +142,18 @@ ablation_headline_vs_control.png, scaling_curve_multiseed.png}`.
   actually predict the x/y digits (pre_x, pre_y) instead of only the last
   prompt token; v1 showed target-region attention barely above chance
   (0.040 vs 0.026 area share) and changing little with conditioning.
+- **E5 v2 (both variants, seed 42, 120 probes, y-predicting token, 3/4 layer):**
+  target_frac@0.10 (chance 0.026) — D-hook: gold 0.111, wrong 0.064, wrong2
+  0.049, zero 0.119 (gold−zero −0.008 ns; gold−wrong2 +0.062***). D-token:
+  gold 0.095, wrong 0.080, wrong2 0.079, zero 0.079 (gold−zero +0.016***).
+  Decoded hit@0.10 — D-hook: 0.358 / 0.083 / 0.100 / 0.392; D-token:
+  0.267 / 0.117 / 0.142 / 0.142. So (i) localization happens at the token that
+  predicts y, not at the last prompt token; (ii) the non-degenerate wrong map is
+  as harmful as the cyclic one, so the "wrong hurts" result is NOT just the
+  type-coordinate confound; (iii) D-hook's embedding is redundant at inference
+  (zero = gold) while D-token's is used (zero < gold) — attention and decoded
+  hits agree. Figure `figures/attn_aggregate.png`, table `tables/attn.tex`,
+  full per-position numbers in `results/phase8/ATTN_AGGREGATE.md`.
 - **Qualitative v2 base rates (n=1200, seed 42):** click hit@0.10 A 0.343 vs
   D-hook 0.391; of 169 clicks: 18 rescued, 11 hurt, 45 both correct, 90 both
   missed. Figures: `figures/qualitative_v2_1x4.png` (main), `_1x6.png` (appendix).
