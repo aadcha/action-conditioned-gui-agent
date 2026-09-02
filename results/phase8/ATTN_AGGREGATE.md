@@ -68,36 +68,69 @@ Per gold class (target_frac@0.10 at pre_y if available else last_prompt / hit@0.
 | scroll | 22 | 0.031 / 0.364 | 0.037 / 0.409 | 0.037 / 0.409 | 0.033 / 0.227 |
 | type | 17 | 0.000 / 0.000 | 0.000 / 0.000 | 0.000 / 0.000 | 0.000 / 0.000 |
 
-## D-token (prepended) — seed 42, n_train=1200, 120 probe examples, embedding norm 2.22, file `attn_aggregate_Dtoken_seed42_n1200.json`
+## D-token (prepended) — seed 42, n_train=1200, 120 probe examples, embedding norm 2.22, file `attn_aggregate_Dtoken_seed42_n1200_v2.json`
 
-wrong map {'click': 'type', 'type': 'scroll', 'scroll': 'click'}; wrong2 map n/a. Chance target_frac@0.10 (area share) = 0.026.
+wrong map {'click': 'type', 'type': 'scroll', 'scroll': 'click'}; wrong2 map {'click': 'scroll', 'type': 'click', 'scroll': 'click'}. Chance target_frac@0.10 (area share) = 0.026.
 
 **Probe position `last_prompt`, layer 3q**
 
 | condition | target_frac@0.10 | target_frac@0.25 | image_mass | entropy |
 |---|---|---|---|---|
-| gold | 0.037 | 0.188 | 0.145 | 4.75 |
-| wrong | 0.034 | 0.174 | 0.176 | 4.86 |
+| gold | 0.038 | 0.188 | 0.145 | 4.75 |
+| wrong | 0.034 | 0.175 | 0.177 | 4.86 |
+| wrong2 | 0.034 | 0.176 | 0.180 | 4.82 |
 | zero | 0.035 | 0.178 | 0.172 | 4.86 |
 
 | contrast | Δ target_frac@0.10 | Δ target_frac@0.25 | Δ image_mass |
 |---|---|---|---|
-| gold − wrong | +0.004 [+0.001, +0.007] * | +0.014 [+0.007, +0.021] *** | -0.032 [-0.040, -0.023] *** |
-| gold − zero | +0.002 [-0.000, +0.005] ns | +0.010 [+0.005, +0.016] *** | -0.028 [-0.034, -0.022] *** |
+| gold − wrong | +0.004 [+0.001, +0.007] * | +0.014 [+0.007, +0.021] *** | -0.032 [-0.040, -0.024] *** |
+| gold − wrong2 | +0.004 [+0.001, +0.008] * | +0.013 [+0.007, +0.019] *** | -0.035 [-0.045, -0.024] *** |
+| gold − zero | +0.002 [+0.000, +0.005] * | +0.010 [+0.005, +0.015] *** | -0.027 [-0.033, -0.021] *** |
+
+**Probe position `pre_x`, layer 3q**
+
+| condition | target_frac@0.10 | target_frac@0.25 | image_mass | entropy |
+|---|---|---|---|---|
+| gold | 0.038 | 0.211 | 0.170 | 4.50 |
+| wrong | 0.034 | 0.191 | 0.182 | 4.47 |
+| wrong2 | 0.033 | 0.192 | 0.191 | 4.46 |
+| zero | 0.035 | 0.193 | 0.180 | 4.45 |
+
+| contrast | Δ target_frac@0.10 | Δ target_frac@0.25 | Δ image_mass |
+|---|---|---|---|
+| gold − wrong | +0.004 [+0.001, +0.007] ** | +0.020 [+0.013, +0.028] *** | -0.013 [-0.017, -0.008] *** |
+| gold − wrong2 | +0.004 [+0.002, +0.007] *** | +0.020 [+0.013, +0.027] *** | -0.021 [-0.027, -0.015] *** |
+| gold − zero | +0.003 [+0.001, +0.005] ** | +0.018 [+0.012, +0.025] *** | -0.010 [-0.014, -0.006] *** |
+
+**Probe position `pre_y`, layer 3q**
+
+| condition | target_frac@0.10 | target_frac@0.25 | image_mass | entropy |
+|---|---|---|---|---|
+| gold | 0.095 | 0.290 | 0.270 | 4.89 |
+| wrong | 0.080 | 0.249 | 0.260 | 4.87 |
+| wrong2 | 0.079 | 0.249 | 0.268 | 4.88 |
+| zero | 0.079 | 0.247 | 0.255 | 4.89 |
+
+| contrast | Δ target_frac@0.10 | Δ target_frac@0.25 | Δ image_mass |
+|---|---|---|---|
+| gold − wrong | +0.015 [+0.006, +0.025] ** | +0.041 [+0.023, +0.059] *** | +0.010 [+0.002, +0.019] * |
+| gold − wrong2 | +0.016 [+0.006, +0.026] ** | +0.040 [+0.023, +0.058] *** | +0.002 [-0.008, +0.011] ns |
+| gold − zero | +0.016 [+0.009, +0.024] *** | +0.043 [+0.030, +0.056] *** | +0.015 [+0.009, +0.021] *** |
 
 **Greedy decoding under each conditioning**
 
 | condition | hit@0.10 | hit@0.25 | mean dist | Δ hit@0.10 vs gold |
 |---|---|---|---|---|
 | gold | 0.267 | 0.575 | 0.370 | -- |
-| wrong | 0.117 | 0.308 | 0.625 | +0.150 [+0.058, +0.242] *** |
+| wrong | 0.117 | 0.308 | 0.625 | +0.150 [+0.058, +0.233] ** |
+| wrong2 | 0.142 | 0.408 | 0.570 | +0.125 [+0.033, +0.217] ** |
 | zero | 0.142 | 0.400 | 0.517 | +0.125 [+0.042, +0.208] ** |
 
 Per gold class (target_frac@0.10 at pre_y if available else last_prompt / hit@0.10):
 
-| class | n | gold | wrong | zero |
-|---|---|---|---|---|
-| click | 81 | 0.047 / 0.284 | 0.041 / 0.062 | 0.043 / 0.123 |
-| scroll | 22 | 0.032 / 0.409 | 0.033 / 0.409 | 0.033 / 0.318 |
-| type | 17 | 0.000 / 0.000 | 0.000 / 0.000 | 0.000 / 0.000 |
+| class | n | gold | wrong | wrong2 | zero |
+|---|---|---|---|---|---|
+| click | 81 | 0.047 / 0.284 | 0.041 / 0.062 | 0.041 / 0.099 | 0.043 / 0.123 |
+| scroll | 22 | 0.032 / 0.409 | 0.033 / 0.409 | 0.033 / 0.409 | 0.033 / 0.318 |
+| type | 17 | 0.000 / 0.000 | 0.000 / 0.000 | 0.000 / 0.000 | 0.000 / 0.000 |
 
