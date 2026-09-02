@@ -7,9 +7,10 @@
 \toprule
 Model & Conditioning & target frac@0.10 & $\Delta$ vs.\ gold & hit@0.10 & $\Delta$ vs.\ gold \\
 \midrule
-D-hook (additive) & gold type & 0.040 & -- & 0.358 & -- \\
- & wrong: cyclic (click→type) & 0.036 & +0.004 [-0.001, +0.008] & 0.083 & +0.275 [+0.183, +0.367]$^{***}$ \\
- & zeroed embedding & 0.036 & +0.003 [+0.002, +0.005]$^{***}$ & 0.392 & -0.033 [-0.117, +0.050] \\
+D-hook (additive) & gold type & 0.111 & -- & 0.358 & -- \\
+ & wrong: cyclic (click→type) & 0.064 & +0.048 [+0.030, +0.065]$^{***}$ & 0.083 & +0.275 [+0.183, +0.367]$^{***}$ \\
+ & wrong: click↔scroll & 0.049 & +0.062 [+0.040, +0.086]$^{***}$ & 0.100 & +0.258 [+0.167, +0.350]$^{***}$ \\
+ & zeroed embedding & 0.119 & -0.008 [-0.017, +0.001] & 0.392 & -0.033 [-0.117, +0.042] \\
 \midrule
 D-token (prepended) & gold type & 0.037 & -- & 0.267 & -- \\
  & wrong: cyclic (click→type) & 0.034 & +0.004 [+0.001, +0.007]$^{*}$ & 0.117 & +0.150 [+0.058, +0.242]$^{***}$ \\
