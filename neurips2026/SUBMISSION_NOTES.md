@@ -219,6 +219,32 @@ User authorized experiments and rewriting at my discretion. Done so far:
   D-text x 5 seeds, attention v3 (A/Dhook/Dtoken; flat-A row + free-running
   probe). `\pending{}` slots in main.tex mark where they go.
 
+## Revision complete (Sep 2, ~16:30 PDT; commit edbb1ce)
+
+All 27 follow-up runs landed (~$25). What they showed and how the paper
+changed:
+- Interventions at 5 seeds (both mechanisms): D-hook wrong 0.275→0.054,
+  wrong2 →0.099, class-mean →0.206 (+0.070***), zero →0.248 (+0.027, cluster
+  CI [−0.006,+0.060], ns); zeroed D-hook ≈ flat A (+0.019 ns). D-token: every
+  perturbation collapses it incl. class-mean; zeroed D-token is BELOW A
+  (−0.067***). D-hook rows have norm 0.04 vs token-embedding norm 0.58. The
+  single-seed "zeroing costs nothing" claim was dropped; paper now says both
+  embeddings are consulted at inference and differ in what remains when the
+  signal is removed.
+- No-type (type events removed from training, same val slice, 3 seeds):
+  flat A rises 0.255→0.297 (+0.043**); on the type-free stream D-hook − A =
+  +0.008 (ns), B − A = +0.021 (ns) overall (B keeps click +0.039* and
+  hit@0.25 +0.053***). Paper now says the gain is protection from the
+  degenerate class, not a general spatial prior; consistent with the control.
+- D-text (type as a word in the prompt, 5 seeds): +0.057*** over A, within
+  noise of B. Added as a sixth row; the refutation is now specific to the
+  learned prepended token.
+- Attention v3: free-running probe keeps the localization (D-hook 0.092,
+  D-token 0.085 vs 0.111/0.095 teacher-forced). Flat-A row: first run crashed
+  on a progress print (fixed), re-fired ~16:35; add one appendix sentence when
+  it lands.
+- Body ends on page 8; refs on page 9; no em dashes; stock-phrase scan clean.
+
 ## Writing plan (post-approval)
 
 Port + tighten from `overleaf_submission/paper.tex` (byte-identical to root
