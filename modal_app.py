@@ -3727,9 +3727,10 @@ def _stage2_attn_aggregate_remote(
         if len(renders) < n_render and rec["gold_action"] not in renders:
             renders[rec["gold_action"]] = (ex, rec, heat_for_render, (gh, gw))
         if (k + 1) % 20 == 0:
-            g = rec["conditions"]["gold"]["layers"]["3q"]; w = rec["conditions"]["wrong"]["layers"]["3q"]
+            g = rec["conditions"]["gold"]["layers"]["3q"]
+            w = rec["conditions"].get("wrong", {}).get("layers", {}).get("3q", {}).get("target_frac_0.10", float("nan"))
             print(f"[attn-{variant}] {k+1}/{len(probe)}  gold target_frac@0.10={g['target_frac_0.10']:.3f} "
-                  f"wrong={w['target_frac_0.10']:.3f}", flush=True)
+                  f"wrong={w:.3f}", flush=True)
     hook.remove()
 
     # ---- paired summary over examples (numpy bootstrap, 10k resamples) ----
