@@ -33,6 +33,7 @@ P8 = ROOT / "results" / "phase8"
 ADIR = P8 / "attn_aggregate"
 CCOL = {"gold": "#2a9d4a", "wrong": "#c9184a", "wrong2": "#e07b39", "zero": "#888888"}
 CDESC = {"gold": "gold type", "wrong": "wrong: cyclic (click→type)", "wrong2": "wrong: click↔scroll", "zero": "zeroed embedding"}
+TEXDESC = {"gold": "gold type", "wrong": "wrong (cyclic)", "wrong2": "wrong (click$\\leftrightarrow$scroll)", "zero": "zeroed"}
 VNAME = {"Dhook": "D-hook (additive)", "Dtoken": "D-token (prepended)"}
 
 
@@ -83,12 +84,13 @@ def main() -> None:
           "Head-averaged attention from a probe token to the image tokens. `target_frac@r` = share of that token's image "
           "attention within r of the gold point; chance = share of image tokens within r. Paired bootstrap over probe "
           "examples, 10k resamples. Conditions: " + "; ".join(f"`{k}` = {v}" for k, v in CDESC.items()) + ".", ""]
-    tex = ["\\begin{table}[t]", "\\centering", "\\small",
-           "\\caption{Where does the model look, and does it matter? Share of the x-predicting token's image attention "
-           "within 0.10 of the gold target (3/4-depth layer) and greedy hit@0.10 under gold, wrong and zeroed action "
-           "conditioning on the first 120 validation examples. $\\Delta$ = gold $-$ condition, 95\\% paired-bootstrap CI.}",
-           "\\label{tab:attn}", "\\begin{tabular}{llcccc}", "\\toprule",
-           "Model & Conditioning & target frac@0.10 & $\\Delta$ vs.\\ gold & hit@0.10 & $\\Delta$ vs.\\ gold \\\\", "\\midrule"]
+    pos_name = {"pre_y": "y-predicting", "pre_x": "x-predicting", "last_prompt": "last prompt"}.get(a.pos, a.pos)
+    tex = ["\\begin{table}[t]", "\\centering", "\\footnotesize",
+           f"\\caption{{Where the model looks, and whether it matters. Share of the {pos_name} token's image attention "
+           "within 0.10 of the gold target (3/4-depth layer; chance is 0.026) and greedy hit@0.10 under gold, wrong and zeroed action "
+           "conditioning on the first 120 validation examples, one seed per model. $\\Delta$ = gold $-$ condition with 95\\% paired-bootstrap CI.}",
+           "\\label{tab:attn}", "\\resizebox{\\linewidth}{!}{\\begin{tabular}{llcccc}", "\\toprule",
+           "Model & Conditioning & target attn.\\ & $\\Delta$ vs.\\ gold & hit@0.10 & $\\Delta$ vs.\\ gold \\\\", "\\midrule"]
     for v, d in data.items():
         s = d["summary"]; recs = d["records"]
         conds = s.get("conditions", ["gold", "wrong", "zero"])
@@ -127,12 +129,12 @@ def main() -> None:
         bl = pos_block(s, a.pos, a.layer)
         for i, c in enumerate(conds):
             k = f"gold_minus_{c}"
-            tex.append(f"{VNAME.get(v, v) if i == 0 else ''} & {CDESC[c]} & {bl['target_frac_0.10']['mean'][c]:.3f} & "
-                       f"{'--' if c == 'gold' else tex_d(bl['target_frac_0.10'].get(k))} & {h['hit_010']['mean'][c]:.3f} & "
-                       f"{'--' if c == 'gold' else tex_d(h['hit_010'].get(k))} \\\\")
+            tex.append(f"{VNAME.get(v, v) if i == 0 else ''} & {TEXDESC[c]} & {bl['target_frac_0.10']['mean'][c]:.3f} & "
+                       f"{'' if c == 'gold' else tex_d(bl['target_frac_0.10'].get(k))} & {h['hit_010']['mean'][c]:.3f} & "
+                       f"{'' if c == 'gold' else tex_d(h['hit_010'].get(k))} \\\\")
         tex.append("\\midrule")
     tex[-1] = "\\bottomrule"
-    tex += ["\\end{tabular}", "\\end{table}"]
+    tex += ["\\end{tabular}}", "\\end{table}"]
     (P8 / "ATTN_AGGREGATE.md").write_text("\n".join(md) + "\n")
     (P8 / "tables").mkdir(exist_ok=True)
     (P8 / "tables" / "attn.tex").write_text("\n".join(tex) + "\n")

@@ -1,21 +1,21 @@
 \begin{table}[t]
 \centering
-\small
-\caption{Where does the model look, and does it matter? Share of the x-predicting token's image attention within 0.10 of the gold target (3/4-depth layer) and greedy hit@0.10 under gold, wrong and zeroed action conditioning on the first 120 validation examples. $\Delta$ = gold $-$ condition, 95\% paired-bootstrap CI.}
+\footnotesize
+\caption{Where the model looks, and whether it matters. Share of the y-predicting token's image attention within 0.10 of the gold target (3/4-depth layer; chance is 0.026) and greedy hit@0.10 under gold, wrong and zeroed action conditioning on the first 120 validation examples, one seed per model. $\Delta$ = gold $-$ condition with 95\% paired-bootstrap CI.}
 \label{tab:attn}
-\begin{tabular}{llcccc}
+\resizebox{\linewidth}{!}{\begin{tabular}{llcccc}
 \toprule
-Model & Conditioning & target frac@0.10 & $\Delta$ vs.\ gold & hit@0.10 & $\Delta$ vs.\ gold \\
+Model & Conditioning & target attn.\ & $\Delta$ vs.\ gold & hit@0.10 & $\Delta$ vs.\ gold \\
 \midrule
-D-hook (additive) & gold type & 0.111 & -- & 0.358 & -- \\
- & wrong: cyclic (click→type) & 0.064 & +0.048 [+0.030, +0.065]$^{***}$ & 0.083 & +0.275 [+0.183, +0.367]$^{***}$ \\
- & wrong: click↔scroll & 0.049 & +0.062 [+0.040, +0.086]$^{***}$ & 0.100 & +0.258 [+0.167, +0.350]$^{***}$ \\
- & zeroed embedding & 0.119 & -0.008 [-0.017, +0.001] & 0.392 & -0.033 [-0.117, +0.042] \\
+D-hook (additive) & gold type & 0.111 &  & 0.358 &  \\
+ & wrong (cyclic) & 0.064 & +0.048 [+0.030, +0.065]$^{***}$ & 0.083 & +0.275 [+0.183, +0.367]$^{***}$ \\
+ & wrong (click$\leftrightarrow$scroll) & 0.049 & +0.062 [+0.040, +0.086]$^{***}$ & 0.100 & +0.258 [+0.167, +0.350]$^{***}$ \\
+ & zeroed & 0.119 & -0.008 [-0.017, +0.001] & 0.392 & -0.033 [-0.117, +0.042] \\
 \midrule
-D-token (prepended) & gold type & 0.095 & -- & 0.267 & -- \\
- & wrong: cyclic (click→type) & 0.080 & +0.015 [+0.006, +0.025]$^{**}$ & 0.117 & +0.150 [+0.058, +0.233]$^{**}$ \\
- & wrong: click↔scroll & 0.079 & +0.016 [+0.006, +0.026]$^{**}$ & 0.142 & +0.125 [+0.033, +0.217]$^{**}$ \\
- & zeroed embedding & 0.079 & +0.016 [+0.009, +0.024]$^{***}$ & 0.142 & +0.125 [+0.042, +0.208]$^{**}$ \\
+D-token (prepended) & gold type & 0.095 &  & 0.267 &  \\
+ & wrong (cyclic) & 0.080 & +0.015 [+0.006, +0.025]$^{**}$ & 0.117 & +0.150 [+0.058, +0.233]$^{**}$ \\
+ & wrong (click$\leftrightarrow$scroll) & 0.079 & +0.016 [+0.006, +0.026]$^{**}$ & 0.142 & +0.125 [+0.033, +0.217]$^{**}$ \\
+ & zeroed & 0.079 & +0.016 [+0.009, +0.024]$^{***}$ & 0.142 & +0.125 [+0.042, +0.208]$^{**}$ \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{table}
