@@ -199,6 +199,26 @@ is required (currently not included); (3) the `ack` block is hidden by the
 style at submission; (4) camera-ready needs the `final` option and real
 author block; (5) do not mention the CS231N origin (double-blind).
 
+## Revision after the mock panel (Sep 2)
+
+User authorized experiments and rewriting at my discretion. Done so far:
+- Analysis: cluster bootstrap over examples + seed-level paired t-tests on
+  every contrast; per-class table on the Table-1 basis; sentinel-emission
+  analysis (`scripts/p8_sentinel_analysis.py`); e2e paired analysis; scaling
+  class mix; exhaustive qualitative categories.
+- Paper rewritten (commit 46573c2): headline reframed around the mixed
+  action stream with a degenerate-target class; statistics stated at two
+  levels; e2e descriptive; scaling descriptive; CoCo-Agent + LiMAC cited and
+  positioned; GUI-Libra description corrected; M-RoPE account corrected
+  (1-D fallback) and demoted, transformers issue #35463 cited; D-text variant
+  added; numbers reconciled (Sec 6.4 vs Table 2; Table 1 vs Table 3;
+  qualitative categories partition; "nine points").
+- 27 follow-up jobs launched ~14:55 PDT: interventions (Dhook/Dtoken x 5
+  seeds, gold/wrong/wrong2/zero/classmean + embedding norms), no-type
+  (A/B/Dhook x 3 seeds, type removed from training only, same val slice),
+  D-text x 5 seeds, attention v3 (A/Dhook/Dtoken; flat-A row + free-running
+  probe). `\pending{}` slots in main.tex mark where they go.
+
 ## Writing plan (post-approval)
 
 Port + tighten from `overleaf_submission/paper.tex` (byte-identical to root
