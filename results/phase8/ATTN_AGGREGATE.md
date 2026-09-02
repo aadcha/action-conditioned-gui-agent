@@ -2,6 +2,56 @@
 
 Head-averaged attention from a probe token to the image tokens. `target_frac@r` = share of that token's image attention within r of the gold point; chance = share of image tokens within r. Paired bootstrap over probe examples, 10k resamples. Conditions: `gold` = gold type; `wrong` = wrong: cyclic (click→type); `wrong2` = wrong: click↔scroll; `zero` = zeroed embedding.
 
+## A (flat) — seed 42, n_train=1200, 120 probe examples, embedding norm 0.00, file `attn_aggregate_A_seed42_n1200_v3.json`
+
+wrong map {'click': 'type', 'type': 'scroll', 'scroll': 'click'}; wrong2 map {'click': 'scroll', 'type': 'click', 'scroll': 'click'}. Chance target_frac@0.10 (area share) = 0.026.
+
+**Probe position `last_prompt`, layer 3q**
+
+| condition | target_frac@0.10 | target_frac@0.25 | image_mass | entropy |
+|---|---|---|---|---|
+| gold | 0.038 | 0.191 | 0.185 | 4.79 |
+
+| contrast | Δ target_frac@0.10 | Δ target_frac@0.25 | Δ image_mass |
+|---|---|---|---|
+
+**Probe position `pre_x`, layer 3q**
+
+| condition | target_frac@0.10 | target_frac@0.25 | image_mass | entropy |
+|---|---|---|---|---|
+| gold | 0.040 | 0.209 | 0.211 | 4.60 |
+
+| contrast | Δ target_frac@0.10 | Δ target_frac@0.25 | Δ image_mass |
+|---|---|---|---|
+
+**Probe position `pre_y`, layer 3q**
+
+| condition | target_frac@0.10 | target_frac@0.25 | image_mass | entropy |
+|---|---|---|---|---|
+| gold | 0.117 | 0.316 | 0.278 | 4.88 |
+
+| contrast | Δ target_frac@0.10 | Δ target_frac@0.25 | Δ image_mass |
+|---|---|---|---|
+
+**Free-running probe (gold condition, model's own answer teacher-forced; n = examples whose output parsed)**
+
+- `pre_x_pred`: n=120, target_frac@0.10=0.040, target_frac@0.25=0.208, image_mass=0.211
+- `pre_y_pred`: n=120, target_frac@0.10=0.086, target_frac@0.25=0.271, image_mass=0.288
+
+**Greedy decoding under each conditioning**
+
+| condition | hit@0.10 | hit@0.25 | mean dist | Δ hit@0.10 vs gold |
+|---|---|---|---|---|
+| gold | 0.258 | 0.542 | 0.411 | -- |
+
+Per gold class (target_frac@0.10 at pre_y if available else last_prompt / hit@0.10):
+
+| class | n | gold |
+|---|---|---|
+| click | 81 | 0.046 / 0.284 |
+| scroll | 22 | 0.036 / 0.364 |
+| type | 17 | 0.000 / 0.000 |
+
 ## D-hook (additive) — seed 42, n_train=1200, 120 probe examples, embedding norm 0.08, file `attn_aggregate_Dhook_seed42_n1200_v3.json`
 
 wrong map {'click': 'type', 'type': 'scroll', 'scroll': 'click'}; wrong2 map {'click': 'scroll', 'type': 'click', 'scroll': 'click'}. Chance target_frac@0.10 (area share) = 0.026.
