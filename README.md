@@ -112,7 +112,7 @@ RESPONSE:
 
 ## Status
 
-_Last updated: June 3, 2026._
+_Last updated: September 1, 2026._
 
 - [x] **Phase 0 — repo, deps.** uv-managed (`pyproject.toml` + `uv.lock`), Python 3.11 pinned. 29 tests passing.
 - [x] **Phase 1 — Qwen2-VL + LoRA smoke test.** Default base switched to Qwen2-VL-2B-Instruct ([COMPUTE.md](COMPUTE.md)). Verified on Modal L4.
@@ -124,6 +124,7 @@ _Last updated: June 3, 2026._
 - [x] **Phase 6 — full ablation + e2e pipeline + hypothesis verdict** ([`results/phase4/PHASE6_FINAL.md`](results/phase4/PHASE6_FINAL.md)). 5 variants (A/B/C/D-hook/D-token), 2 settings, 3 seeds. **Broad thesis supported** (action-type supervision helps grounding where action type is spatially informative; e2e pipeline with predicted types beats flat A, oracle gap ~0.02). **Specific architectural claim refuted** — the auxiliary loss (B) is the best conditioned variant; the literal hypothesized embedding (D-token, M-RoPE-correct, norm 2.2) improves over A on some secondary metrics but does not beat B/D-hook on headline grounding. Also: found+fixed a M-RoPE injection bug that caused an 8σ false-negative.
 - [x] **Phase 7 — mechanism + low-data strengthening** ([`results/phase4/PHASE7_RESULTS.md`](results/phase4/PHASE7_RESULTS.md)). Low-data matrix is complete for A/B/D-hook at n_train ∈ {300,500,800}, seeds 42/43/44; strict audit passes via `scripts/p7_result_audit.py`. D-hook is the most stable low-data conditioned mechanism. D-token causal-use test is complete over 3 seeds: gold action id beats wrong by +0.192 hit@0.10 and zero by +0.093, so the learned embedding is used, just not the winning mechanism.
 - [x] **Milestone 3** (May 29) — submitted. Slide-handoff doc: [`results/milestone3/MILESTONE3.md`](results/milestone3/MILESTONE3.md). Headline: zero-shot Qwen2-VL-2B has vision-delta = 0.000 on Mind2Web action-type; TF-IDF beats the 2B VLM by 15 macro-F1.
-- [ ] **Writeup + stretch** (final report, poster; optional 7B run).
+- [x] **Phase 8 — pre-submission strengthening for NeurIPS 2026 VLM4RWD workshop** ([`results/phase8/PHASE8_RESULTS.md`](results/phase8/PHASE8_RESULTS.md), [`neurips2026/SUBMISSION_NOTES.md`](neurips2026/SUBMISSION_NOTES.md)). Headline re-run at 5 seeds (1,250 paired units): B − A **+0.064\*\*\***, D-hook − A **+0.054\*\*\***, D-token − A +0.009 (ns) — the prepended-embedding refutation strengthens. Control now paired-bootstrapped (B/D-hook neutral, C harmful). Scaling curve at 3 seeds for every n: D-hook's advantage holds at five of six sizes, B's only near n=1200. Aggregate attention analysis: D-hook's embedding is redundant at inference (zero ≈ gold) while D-token's is used; localization happens at the y-predicting token. Qualitative figure re-rendered with outcome base rates.
+- [ ] **Workshop paper** (`neurips2026/main.tex`; skeleton + architecture figure + verified 45-entry bib in place).
 
-Cumulative Modal spend: **~$52 of $200 (26%).**
+Cumulative Modal spend: **~$85 of $200 (≈43%).**

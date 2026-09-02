@@ -194,9 +194,10 @@ Pattern: clone `_stage2_train_remote` or `_stage2_variantA_train_remote` and adj
 | Phase 5 | A vs D bug hunt | The initial 8σ "A beats D" result was a M-RoPE bug from the `inputs_embeds` injection path. D-hook fixes it by preserving `input_ids`; tap/swipe becomes a tie, all_with_coords becomes a real positive signal. | `results/phase4/PHASE5_CORRECTED.md` |
 | Phase 6 | Full ablation + e2e | **Broad thesis supported, specific embedding claim refuted.** all_with_coords: B≈D-hook > D-token≳C>A; B and D-hook beat A by paired bootstrap. taps_and_swipes control: no conditioned mechanism clearly beats A. E2E predicted types beat flat A with ~0.02 oracle gap. | `results/phase4/PHASE6_FINAL.md` |
 | Phase 7 | Mechanism + low-data strengthening | Low-data matrix complete for A/B/D-hook at n_train ∈ {300,500,800}, seeds 42/43/44; strict audit passes. D-hook is the most stable low-data mechanism. D-token causal-use test shows the learned embedding is used (gold − wrong +0.192 hit@0.10; gold − zero +0.093) but still not the winning mechanism. | `results/phase4/PHASE7_RESULTS.md`, `results/phase4/phase7_result_audit.json`, `results/phase4/causal_use_summary.json` |
+| Phase 8 (Sep 2026) | Pre-submission strengthening for VLM4RWD | 5-seed headline (B +0.064***, D-hook +0.054***, D-token ≈ A), paired-bootstrap control, 3-seed scaling at every n (D-hook robust across n, B not), 3-seed Mind2Web, aggregate attention analysis (D-hook embedding redundant at inference, D-token's used; localization at the y-predicting token), honest qualitative figure. | `results/phase8/PHASE8_RESULTS.md`, `results/phase8/ATTN_AGGREGATE.md`, `neurips2026/SUBMISSION_NOTES.md` |
 | Diagnostics | Attention viz + D-token + Dfrozen | Attention heatmaps exist under `results/phase4/attn_viz/`; D-token is M-RoPE-correct and still does not beat B/D-hook on headline grounding; Dfrozen confirmed the original slot path was the problem. | `results/phase4/attn_viz/`, `results/phase4/Dtoken_*`, `results/phase4/Dfrozen_*` |
 
-Cumulative Modal spend: **~$52 of $200**.
+Cumulative Modal spend: **~$85 of $200** (Phase 8 added ≈$33 for 37 L4 jobs).
 
 Paper framing to use now:
 - **Supported:** action-type supervision improves grounding when action type is spatially predictive (`all_with_coords`).

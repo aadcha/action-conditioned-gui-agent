@@ -158,6 +158,25 @@ ablation_headline_vs_control.png, scaling_curve_multiseed.png}`.
   D-hook 0.391; of 169 clicks: 18 rescued, 11 hurt, 45 both correct, 90 both
   missed. Figures: `figures/qualitative_v2_1x4.png` (main), `_1x6.png` (appendix).
 
+## Final Phase 8 status (Sep 1, 18:40 PDT) — all 37 jobs complete, ~37 GPU-h ≈ $33
+
+- **Scaling tail at 3 seeds changes one conclusion.** B − A on hit@0.10:
+  +0.067*** (300), +0.011 ns (500), −0.040** (800), +0.051*** (1200),
+  −0.012 ns (2500), +0.005 ns (5000). D-hook − A: +0.069***, +0.001 ns,
+  +0.048**, +0.045**, +0.037**, +0.043** (and positive/significant on hit@0.25
+  at all six sizes). So the auxiliary loss's advantage is real only around
+  n≈1200 and at n=300, whereas the additive hook helps consistently across
+  two orders of magnitude of data. Paper framing: "B ≈ D-hook at the headline
+  size; D-hook is the more robust mechanism across n" (replaces PHASE6's
+  "B is simplest/best" and the old single-seed 'advantage shrinks with data').
+- All other conclusions as in the interim sections above. Consolidated:
+  `results/phase8/PHASE8_RESULTS.md`, `ATTN_AGGREGATE.md`, LaTeX tables in
+  `neurips2026/tables/`, figures in `neurips2026/figures/` (headline-vs-control,
+  scaling_curve_multiseed, attn_aggregate, qualitative_v2_1x4/1x6, arch_diagram).
+- Remaining open question for the user: whether to re-run the D-token causal
+  evals with the click↔scroll wrong map (E5 v2 already shows the non-degenerate
+  map is equally harmful, so this is optional polish).
+
 ## Writing plan (post-approval)
 
 Port + tighten from `overleaf_submission/paper.tex` (byte-identical to root
