@@ -1717,10 +1717,14 @@ def _stage2_variantA_train_remote(
     coord_scale: int,
     only_taps: bool,
     data_mix: str = "taps_only",
+    drop_type_from_train: bool = False,
 ) -> dict:
     """Flat-baseline Stage 2 — plain Qwen2-VL-2B + LoRA, no action conditioning.
 
     `data_mix` controls eligible step types; mirror of `_stage2_train_remote`.
+    `drop_type_from_train` removes `type` events from the TRAINING slice only
+    (the validation slice is untouched), so the model is scored on the identical
+    examples as the headline runs but never sees the degenerate-target class.
     """
     import os
     import sys
@@ -1768,6 +1772,10 @@ def _stage2_variantA_train_remote(
 
     train_examples = examples_all[:n_train]
     val_examples = examples_all[n_train:n_train + n_val]
+    if drop_type_from_train:
+        from src.data.taxonomy import CANONICAL_ACTIONS as _CA
+        train_examples = [e for e in train_examples if e.action_type_id != _CA["type"]]
+        print(f"[A-train] dropped type events from TRAIN only -> n={len(train_examples)}")
     print(f"[A-train] data_mix={data_mix}  train n={len(train_examples)}  val n={len(val_examples)}")
     print(f"[A-train] train action dist: {Counter(e.action_type_id for e in train_examples)}")
 
@@ -1889,6 +1897,7 @@ def _stage2_variantA_train_remote(
         "aitw_split": aitw_split,
         "only_taps": only_taps,
         "data_mix": data_mix,
+        "drop_type_from_train": drop_type_from_train,
         "train_action_distribution": dict(Counter(e.action_type_id for e in train_examples)),
         "val_action_distribution": dict(Counter(e.action_type_id for e in val_examples)),
         "trainable_params": int(n_trainable),
@@ -1898,7 +1907,8 @@ def _stage2_variantA_train_remote(
     }
     cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    out_path = cache_dir / f"variantA_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}.json"
+    _nt = "_notype" if drop_type_from_train else ""
+    out_path = cache_dir / f"variantA_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}{_nt}.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[A-train] persisted result to {out_path}")
@@ -1917,12 +1927,14 @@ def train_stage2_variantA(
     coord_scale: int = 1000,
     only_taps: bool = True,
     data_mix: str = "taps_only",
+    drop_type_from_train: bool = False,
 ) -> None:
     """Train variant A (flat baseline, no action conditioning). Use `modal run --detach`."""
     if data_mix != "taps_only":
         only_taps = False
     result = _stage2_variantA_train_remote.remote(
         n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, only_taps, data_mix,
+        drop_type_from_train,
     )
     if result is not None and result.get("final_val_metrics"):
         import json
@@ -2146,6 +2158,7 @@ def _stage2_variantDhook_train_remote(
     data_mix: str,
     init_std: float,
     action_lr: float = 0.0,
+    drop_type_from_train: bool = False,
 ) -> dict:
     """Variant D-hook: additive action conditioning via embedding-layer hook.
 
@@ -2196,6 +2209,10 @@ def _stage2_variantDhook_train_remote(
             break
     train_examples = examples_all[:n_train]
     val_examples = examples_all[n_train:n_train + n_val]
+    if drop_type_from_train:
+        from src.data.taxonomy import CANONICAL_ACTIONS as _CA
+        train_examples = [e for e in train_examples if e.action_type_id != _CA["type"]]
+        print(f"[Dhook] dropped type events from TRAIN only -> n={len(train_examples)}")
     print(f"[Dhook] train n={len(train_examples)} val n={len(val_examples)}")
     print(f"[Dhook] train action dist: {Counter(e.action_type_id for e in train_examples)}")
 
@@ -2340,13 +2357,14 @@ def _stage2_variantDhook_train_remote(
         "n_train": len(train_examples), "n_val": len(val_examples),
         "epochs": epochs, "lr": lr, "batch_size": batch_size, "coord_scale": coord_scale,
         "seed": seed, "aitw_split": aitw_split, "data_mix": data_mix, "init_std": init_std,
-        "action_lr": action_lr,
+        "action_lr": action_lr, "drop_type_from_train": drop_type_from_train,
         "history": history, "final_val_metrics": history[-1] if history else None,
     }
     cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
     cache_dir.mkdir(parents=True, exist_ok=True)
     _alr_tag = f"_alr{action_lr}" if action_lr and action_lr > 0 else ""
-    out_path = cache_dir / f"Dhook_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_init{init_std}{_alr_tag}.json"
+    _nt = "_notype" if drop_type_from_train else ""
+    out_path = cache_dir / f"Dhook_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_init{init_std}{_alr_tag}{_nt}.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[Dhook] persisted result to {out_path}")
@@ -2366,13 +2384,16 @@ def train_stage2_Dhook(
     data_mix: str = "taps_and_swipes",
     init_std: float = 0.0,
     action_lr: float = 0.0,
+    drop_type_from_train: bool = False,
 ) -> None:
     """Variant D-hook (additive conditioning, true superset of A). Use --detach.
 
     --action-lr 1e-3 gives the action embedding its own (higher) learning rate.
+    --drop-type-from-train removes type events from the training slice only.
     """
     _stage2_variantDhook_train_remote.remote(
-        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, init_std, action_lr)
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, init_std, action_lr,
+        drop_type_from_train)
 
 
 # ---- Phase 5 variant D-text: action type as natural language in the prompt -
@@ -2562,6 +2583,7 @@ def train_stage2_Dtext(
 def _stage2_variantB_train_remote(
     n_train: int, n_val: int, epochs: int, lr: float, batch_size: int,
     seed: int, aitw_split: str, coord_scale: int, data_mix: str, lambda_aux: float,
+    drop_type_from_train: bool = False,
 ) -> dict:
     import os, sys, random, json as _json
     from collections import Counter
@@ -2599,6 +2621,10 @@ def _stage2_variantB_train_remote(
             break
     train_examples = examples_all[:n_train]
     val_examples = examples_all[n_train:n_train + n_val]
+    if drop_type_from_train:
+        from src.data.taxonomy import CANONICAL_ACTIONS as _CA
+        train_examples = [e for e in train_examples if e.action_type_id != _CA["type"]]
+        print(f"[B-train] dropped type events from TRAIN only -> n={len(train_examples)}")
     print(f"[B-train] train n={len(train_examples)} val n={len(val_examples)}")
     print(f"[B-train] train action dist: {Counter(e.action_type_id for e in train_examples)}")
 
@@ -2700,11 +2726,13 @@ def _stage2_variantB_train_remote(
         "variant": "B_aux_loss", "n_train": len(train_examples), "n_val": len(val_examples),
         "epochs": epochs, "lr": lr, "batch_size": batch_size, "coord_scale": coord_scale,
         "seed": seed, "aitw_split": aitw_split, "data_mix": data_mix, "lambda_aux": lambda_aux,
+        "drop_type_from_train": drop_type_from_train,
         "history": history, "final_val_metrics": history[-1] if history else None,
     }
     cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    out_path = cache_dir / f"variantB_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_aux{lambda_aux}.json"
+    _nt = "_notype" if drop_type_from_train else ""
+    out_path = cache_dir / f"variantB_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_aux{lambda_aux}{_nt}.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[B-train] persisted result to {out_path}")
@@ -2716,10 +2744,12 @@ def train_stage2_variantB(
     n_train: int = 1200, n_val: int = 250, epochs: int = 2, lr: float = 2e-5,
     batch_size: int = 1, seed: int = 42, aitw_split: str = "train",
     coord_scale: int = 1000, data_mix: str = "all_with_coords", lambda_aux: float = 1.0,
+    drop_type_from_train: bool = False,
 ) -> None:
     """Variant B (auxiliary action-type loss). Use --detach."""
     _stage2_variantB_train_remote.remote(
-        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, lambda_aux)
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, lambda_aux,
+        drop_type_from_train)
 
 
 # ---- Phase 6 variant C: hard routing ----------------------------------------
@@ -3433,7 +3463,7 @@ def _stage2_attn_aggregate_remote(
     from src.data.taxonomy import ID_TO_ACTION
     from src.train.stage2 import Stage2Example, coord_to_string, string_to_coord
 
-    assert variant in ("Dhook", "Dtoken"), variant
+    assert variant in ("A", "Dhook", "Dtoken"), variant
     torch.manual_seed(seed); random.seed(seed)
     _DATA_MIX_LABELS = {
         "taps_only": {"tap"},
@@ -3477,13 +3507,17 @@ def _stage2_attn_aggregate_remote(
     hidden = model.get_input_embeddings().embedding_dim
 
     action_embeddings = nn.Embedding(8, hidden).to(device=device, dtype=torch.bfloat16)
-    if variant == "Dhook":
+    if variant in ("A", "Dhook"):
         nn.init.zeros_(action_embeddings.weight)
     else:
         nn.init.normal_(action_embeddings.weight, mean=0.0, std=init_std)
     _holder = {"action_id": None}
 
-    if variant == "Dhook":
+    if variant == "A":
+        def _hook(module, args, output):
+            return output          # flat baseline: no conditioning, embeddings never used
+        PROMPT = "Goal: {goal}\nPredict the action coordinate."
+    elif variant == "Dhook":
         def _hook(module, args, output):
             aid = _holder["action_id"]
             return output if aid is None else output + action_embeddings(aid).unsqueeze(1).to(output.dtype)
@@ -3504,13 +3538,14 @@ def _stage2_attn_aggregate_remote(
         PROMPT = f"{SLOT} Goal: {{goal}}\nPredict the action coordinate."
     hook = model.get_input_embeddings().register_forward_hook(_hook)
 
-    def build(examples, include_labels):
+    def build(examples, include_labels, answer_override=None):
         msgs = []
         for ex in examples:
             m = [{"role": "user", "content": [{"type": "image", "image": ex.image},
                                               {"type": "text", "text": PROMPT.format(goal=ex.goal_info)}]}]
             if include_labels:
-                m.append({"role": "assistant", "content": [{"type": "text", "text": coord_to_string(ex.target_xy, coord_scale)}]})
+                ans = answer_override if answer_override is not None else coord_to_string(ex.target_xy, coord_scale)
+                m.append({"role": "assistant", "content": [{"type": "text", "text": ans}]})
             msgs.append(m)
         texts = [processor.apply_chat_template(m, tokenize=False, add_generation_prompt=(not include_labels)) for m in msgs]
         ii, vi = process_vision_info(msgs)
@@ -3569,6 +3604,8 @@ def _stage2_attn_aggregate_remote(
         wrong2_map[_ty] = _cl if _cl in distinct else wrong_map[_ty]
     cond_ids = {"gold": lambda a: a, "wrong": lambda a: wrong_map[a], "wrong2": lambda a: wrong2_map[a],
                 "zero": lambda a: a}
+    if variant == "A":
+        cond_ids = {"gold": lambda a: a}   # nothing to intervene on
     probe = val_examples[:n_examples]
     radii = (0.10, 0.25)
     model.eval()
@@ -3647,15 +3684,44 @@ def _stage2_attn_aggregate_remote(
             with torch.inference_mode():
                 gen = model.generate(**gen_inputs, max_new_tokens=16, do_sample=False,
                                      pad_token_id=processor.tokenizer.eos_token_id)
-            _holder["action_id"] = None
-            if saved is not None:
-                action_embeddings.weight.data.copy_(saved)
             new = gen[:, gen_inputs["input_ids"].shape[1]:]
             raw = processor.batch_decode(new, skip_special_tokens=True)[0]
             pred = string_to_coord(raw, scale=coord_scale)
             dist = math.sqrt(2.0) if pred is None else math.hypot(pred[0] - tx, pred[1] - ty)
             cstats.update({"pred_xy": list(pred) if pred else None, "dist": dist,
                            "hit_010": dist <= 0.10, "hit_025": dist <= 0.25})
+            # Free-running probe: teacher-force the model's OWN answer and re-read the
+            # x/y-predicting rows, so the y row never sees the gold x in its prefix.
+            if cond == "gold" and pred is not None:
+                inputs_pr, _ = build([ex], True, answer_override=raw.strip())
+                ids_pr = inputs_pr["input_ids"][0]; labels_pr = inputs_pr["labels"][0]
+                ap = (labels_pr != -100).nonzero(as_tuple=True)[0]
+                img_pos_pr = (ids_pr == img_tok).nonzero(as_tuple=True)[0]
+                if len(ap) and len(img_pos_pr) == n_img:
+                    a0 = int(ap[0].item())
+                    toks_pr = [tok.decode([int(t)]) for t in ids_pr[a0:]]
+                    fd = [i for i, t in enumerate(toks_pr) if any(ch.isdigit() for ch in t)]
+                    cm = [i for i, t in enumerate(toks_pr) if "," in t]
+                    yd = [i for i in fd if cm and i > cm[0]]
+                    pos_pr = {"pre_x_pred": a0 + fd[0] - 1 if fd else a0 - 1,
+                              "pre_y_pred": a0 + yd[0] - 1 if yd else a0 - 1}
+                    with torch.inference_mode():
+                        out2 = model(**{k_: v_ for k_, v_ in inputs_pr.items() if k_ != "labels"}, output_attentions=True)
+                    li = n_layers * 3 // 4
+                    for pname, ppos in pos_pr.items():
+                        row = out2.attentions[li][0].float().mean(0)[ppos]; img_attn = row[img_pos_pr]
+                        mass = float(img_attn.sum().item())
+                        st = {"image_mass": mass}
+                        for r in radii:
+                            tm = float(img_attn[masks[r]].sum().item())
+                            st[f"target_mass_{r:.2f}"] = tm
+                            st[f"target_frac_{r:.2f}"] = tm / mass if mass > 0 else 0.0
+                            st[f"target_area_frac_{r:.2f}"] = float(masks[r].float().mean().item())
+                        cstats["positions"][pname] = {"3q": st}
+                    del out2
+            _holder["action_id"] = None
+            if saved is not None:
+                action_embeddings.weight.data.copy_(saved)
             rec["conditions"][cond] = cstats
         records.append(rec)
         if len(renders) < n_render and rec["gold_action"] not in renders:
@@ -3695,6 +3761,14 @@ def _stage2_attn_aggregate_remote(
                          **{f"gold_minus_{o}": paired(col["gold"], col[o]) for o in others}}
             summary["by_position"][pname][lname] = sl
     summary["by_layer"] = summary["by_position"]["last_prompt"]
+    # free-running probe (gold condition only; examples whose gold-condition output parsed)
+    summary["pred_prefix"] = {}
+    for pname in ("pre_x_pred", "pre_y_pred"):
+        vals = [r["conditions"]["gold"]["positions"][pname]["3q"] for r in records
+                if pname in r["conditions"]["gold"]["positions"]]
+        if vals:
+            summary["pred_prefix"][pname] = {"n": len(vals),
+                                             **{m: float(np.mean([v[m] for v in vals])) for m in vals[0]}}
     for hm in ("hit_010", "hit_025", "dist"):
         col = {c: [float(r["conditions"][c][hm]) for r in records] for c in conds}
         summary["hits"][hm] = {"mean": {c: float(np.mean(v)) for c, v in col.items()},
@@ -3719,7 +3793,7 @@ def _stage2_attn_aggregate_remote(
     # ---- persist ----
     vdir = _Path(STAGE1_CACHE_PATH) / "attn_aggregate" / variant
     vdir.mkdir(parents=True, exist_ok=True)
-    tag = f"{variant}_seed{seed}_n{n_train}_v2"
+    tag = f"{variant}_seed{seed}_n{n_train}_v3"
     (vdir / f"attn_aggregate_{tag}.json").write_text(_json.dumps({"summary": summary, "records": records}, indent=1))
     for cls, (ex, rec, heats, (gh, gw)) in renders.items():
         img = ex.image.convert("RGB")
@@ -3753,9 +3827,10 @@ def attn_aggregate(
     seed: int = 42, data_mix: str = "all_with_coords", n_examples: int = 120, coord_scale: int = 1000,
     n_render: int = 3, init_std: float = 0.02,
 ) -> None:
-    """Aggregate attention analysis for Dhook | Dtoken at the headline config. Use --detach.
+    """Aggregate attention analysis for A | Dhook | Dtoken at the headline config. Use --detach.
 
     init_std only applies to Dtoken (Dhook is always zero-init, matching the headline runs).
+    Variant A gives the unconditioned reference row (gold condition only).
     Pull afterwards with `modal run modal_app.py::pull_attn_aggregate`.
     """
     _stage2_attn_aggregate_remote.remote(
@@ -3788,6 +3863,235 @@ def pull_attn_aggregate() -> None:
         dst.write_bytes(base64.b64decode(b64))
         print(f"[attn] pulled {dst}")
     print(f"[attn] {len(res)} files")
+
+
+# ---- Phase 8 full-power intervention study (Dhook | Dtoken) -----------------
+#
+# Trains the variant at the headline config and evaluates the SAME model on the
+# full validation slice under five conditionings:
+#   gold       true action id
+#   wrong      cyclic permutation of the classes present (click->type->scroll)
+#   wrong2     click<->scroll, type->click (never routes a groundable class to
+#              the degenerate-target class)
+#   zero       embedding table zeroed
+#   classmean  every row replaced by the mean of the rows of the classes present
+#              in validation: uninformative, but in-distribution norm (a fair
+#              "no information" condition for both mechanisms)
+# Also logs per-class embedding norms against the backbone's token-embedding
+# norm, per-class metrics and per-example distances for every condition.
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret],
+    timeout=14400,
+)
+def _stage2_intervention_remote(
+    variant: str, n_train: int, n_val: int, epochs: int, lr: float, seed: int,
+    data_mix: str, coord_scale: int, init_std: float,
+) -> dict:
+    import os, sys, random, json as _json
+    from collections import Counter
+    from pathlib import Path as _Path
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+
+    import torch
+    import torch.nn as nn
+    from peft import LoraConfig, get_peft_model
+    from qwen_vl_utils import process_vision_info
+    from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+    from src.data.aitw import iter_aitw_steps
+    from src.data.taxonomy import ID_TO_ACTION, CANONICAL_ACTIONS as _CA
+    from src.train.stage2 import Stage2Example, coord_to_string, string_to_coord, _metrics_from_predictions
+
+    assert variant in ("Dhook", "Dtoken"), variant
+    torch.manual_seed(seed); random.seed(seed)
+    _DATA_MIX_LABELS = {
+        "taps_only": {"tap"},
+        "taps_and_swipes": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right"},
+        "all_with_coords": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"},
+    }
+    allowed = _DATA_MIX_LABELS.get(data_mix, {"tap"})
+    examples_all = []
+    need = n_train + n_val
+    for step in iter_aitw_steps(split="train", n_max=max(need * 4, 1000), include_images=True):
+        if step.string_label not in allowed:
+            continue
+        examples_all.append(Stage2Example(
+            image=step.open_image(), goal_info=step.goal_info,
+            action_type_id=step.canonical_action_id,
+            target_xy=(step.touch_yx[1], step.touch_yx[0])))
+        if len(examples_all) >= need:
+            break
+    train_examples = examples_all[:n_train]
+    val_examples = examples_all[n_train:n_train + n_val]
+    print(f"[interv-{variant}] train n={len(train_examples)} val n={len(val_examples)} "
+          f"val dist={Counter(e.action_type_id for e in val_examples)}", flush=True)
+
+    base = Qwen2VLForConditionalGeneration.from_pretrained(
+        "Qwen/Qwen2-VL-2B-Instruct", torch_dtype=torch.bfloat16, device_map="auto")
+    processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")
+    SLOT = "<|action_slot|>"
+    slot_id = None
+    if variant == "Dtoken":
+        n_added = processor.tokenizer.add_special_tokens({"additional_special_tokens": [SLOT]})
+        if n_added:
+            base.resize_token_embeddings(len(processor.tokenizer))
+        slot_id = processor.tokenizer.convert_tokens_to_ids(SLOT)
+    model = get_peft_model(base, LoraConfig(r=16, lora_alpha=32,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], lora_dropout=0.05, task_type="CAUSAL_LM"))
+    hf_cache.commit()
+    device = next(model.parameters()).device
+    hidden = model.get_input_embeddings().embedding_dim
+    action_embeddings = nn.Embedding(8, hidden).to(device=device, dtype=torch.bfloat16)
+    if variant == "Dhook":
+        nn.init.zeros_(action_embeddings.weight)
+    else:
+        nn.init.normal_(action_embeddings.weight, mean=0.0, std=init_std)
+    _holder = {"action_id": None}
+    if variant == "Dhook":
+        def _hook(module, args, output):
+            aid = _holder["action_id"]
+            return output if aid is None else output + action_embeddings(aid).unsqueeze(1).to(output.dtype)
+        PROMPT = "Goal: {goal}\nPredict the action coordinate."
+    else:
+        def _hook(module, args, output):
+            aid = _holder["action_id"]
+            if aid is None:
+                return output
+            slot_mask = (args[0] == slot_id)
+            if not bool(slot_mask.any()):
+                return output
+            out = output.clone()
+            for bt in slot_mask.nonzero(as_tuple=False):
+                b, t = int(bt[0]), int(bt[1])
+                out[b, t] = action_embeddings(aid[b]).to(out.dtype)
+            return out
+        PROMPT = f"{SLOT} Goal: {{goal}}\nPredict the action coordinate."
+    hook = model.get_input_embeddings().register_forward_hook(_hook)
+
+    def build(examples, include_labels):
+        msgs = []
+        for ex in examples:
+            m = [{"role": "user", "content": [{"type": "image", "image": ex.image},
+                                              {"type": "text", "text": PROMPT.format(goal=ex.goal_info)}]}]
+            if include_labels:
+                m.append({"role": "assistant", "content": [{"type": "text", "text": coord_to_string(ex.target_xy, coord_scale)}]})
+            msgs.append(m)
+        texts = [processor.apply_chat_template(m, tokenize=False, add_generation_prompt=(not include_labels)) for m in msgs]
+        ii, vi = process_vision_info(msgs)
+        inputs = processor(text=texts, images=ii, videos=vi, padding=True, return_tensors="pt").to(device)
+        if include_labels:
+            labels = inputs["input_ids"].clone()
+            im_start = processor.tokenizer.convert_tokens_to_ids("<|im_start|>")
+            assistant_id = processor.tokenizer.convert_tokens_to_ids("assistant")
+            for b in range(labels.shape[0]):
+                row = inputs["input_ids"][b]; starts = (row == im_start).nonzero(as_tuple=True)[0].tolist(); cut = 0
+                for idx in reversed(starts):
+                    if idx + 1 < row.shape[0] and row[idx + 1].item() == assistant_id:
+                        cut = idx + 2
+                        if cut < row.shape[0]: cut += 1
+                        break
+                labels[b, :cut] = -100
+            inputs["labels"] = labels
+        aids = torch.tensor([e.action_type_id for e in examples], dtype=torch.long, device=device)
+        return inputs, aids
+
+    params = [p for p in model.parameters() if p.requires_grad] + list(action_embeddings.parameters())
+    opt = torch.optim.AdamW(params, lr=lr, weight_decay=0.01)
+    for epoch in range(1, epochs + 1):
+        rng = random.Random(seed + epoch); order = list(range(len(train_examples))); rng.shuffle(order)
+        model.train(); ep_loss = 0.0
+        for n, i in enumerate(order):
+            inputs, aids = build([train_examples[i]], True)
+            _holder["action_id"] = aids
+            loss = model(**inputs).loss
+            _holder["action_id"] = None
+            opt.zero_grad(); loss.backward()
+            torch.nn.utils.clip_grad_norm_(params, 1.0); opt.step()
+            ep_loss += float(loss.item())
+            if (n + 1) % 200 == 0:
+                print(f"[interv-{variant}]   epoch {epoch} step {n+1}/{len(order)} loss={loss.item():.4f}", flush=True)
+        print(f"[interv-{variant}] epoch {epoch} avg loss={ep_loss/max(len(order),1):.4f}", flush=True)
+
+    # ---- embedding norms ----
+    tok_w = model.get_input_embeddings().weight.detach()
+    tok_norm = float(tok_w[:20000].float().norm(dim=1).mean().item())
+    emb_norms = {ID_TO_ACTION[i]: float(action_embeddings.weight[i].float().norm().item()) for i in range(8)}
+    print(f"[interv-{variant}] token-embedding mean norm={tok_norm:.3f}  action rows={ {k: round(v, 4) for k, v in emb_norms.items()} }", flush=True)
+
+    # ---- conditions ----
+    distinct = sorted({e.action_type_id for e in val_examples})
+    wrong_map = {d: distinct[(i + 1) % len(distinct)] for i, d in enumerate(distinct)}
+    _cl, _sc, _ty = _CA["click"], _CA["scroll"], _CA["type"]
+    wrong2_map = {d: d for d in distinct}
+    if _cl in distinct and _sc in distinct:
+        wrong2_map[_cl], wrong2_map[_sc] = _sc, _cl
+    if _ty in distinct:
+        wrong2_map[_ty] = _cl if _cl in distinct else wrong_map[_ty]
+    cond_ids = {"gold": lambda a: a, "wrong": lambda a: wrong_map[a], "wrong2": lambda a: wrong2_map[a],
+                "zero": lambda a: a, "classmean": lambda a: a}
+
+    def run_eval(cond):
+        model.eval()
+        saved = action_embeddings.weight.data.clone()
+        if cond == "zero":
+            action_embeddings.weight.data.zero_()
+        elif cond == "classmean":
+            mean = saved[distinct].float().mean(0, keepdim=True).to(saved.dtype)
+            action_embeddings.weight.data[:] = mean
+        preds, targets, aids, raws = [], [], [], []
+        for ex in val_examples:
+            inputs, _ = build([ex], False)
+            _holder["action_id"] = torch.tensor([cond_ids[cond](ex.action_type_id)], device=device)
+            with torch.inference_mode():
+                gen = model.generate(**inputs, max_new_tokens=16, do_sample=False,
+                                     pad_token_id=processor.tokenizer.eos_token_id)
+            _holder["action_id"] = None
+            new = gen[:, inputs["input_ids"].shape[1]:]
+            raw = processor.batch_decode(new, skip_special_tokens=True)[0]
+            raws.append(raw); preds.append(string_to_coord(raw, scale=coord_scale))
+            targets.append(ex.target_xy); aids.append(ex.action_type_id)
+        action_embeddings.weight.data.copy_(saved)
+        m = _metrics_from_predictions(targets, preds, aids)
+        m["pred_xy"] = [list(p) if p else None for p in preds]
+        m["raw_outputs"] = raws[:10]
+        return m
+
+    results = {}
+    for cond in cond_ids:
+        results[cond] = run_eval(cond)
+        print(f"[interv-{variant}] {cond:<9} hit@0.10={results[cond]['hit_at_010']:.3f} hit@0.25={results[cond]['hit_at_025']:.3f} "
+              f"L2={results[cond]['mean_normalized_l2']:.3f} per_class={ {k: round(v['hit_at_010'], 3) for k, v in results[cond].get('per_class', {}).items()} }", flush=True)
+    hook.remove()
+
+    summary = {"variant": f"interv_{variant}", "n_train": n_train, "n_val": len(val_examples), "epochs": epochs,
+               "lr": lr, "seed": seed, "data_mix": data_mix, "init_std": init_std,
+               "val_action_ids": [e.action_type_id for e in val_examples],
+               "val_targets": [list(e.target_xy) for e in val_examples],
+               "wrong_map": {ID_TO_ACTION[k]: ID_TO_ACTION[v] for k, v in wrong_map.items()},
+               "wrong2_map": {ID_TO_ACTION[k]: ID_TO_ACTION[v] for k, v in wrong2_map.items()},
+               "token_embedding_mean_norm": tok_norm, "action_embedding_norms": emb_norms,
+               "conditions": results}
+    cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    out_path = cache_dir / f"interv_{variant}_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}.json"
+    out_path.write_text(_json.dumps(summary, indent=1))
+    stage1_cache.commit()
+    print(f"[interv-{variant}] persisted to {out_path}", flush=True)
+    return {k: {m: v[m] for m in ("hit_at_010", "hit_at_025", "mean_normalized_l2")} for k, v in results.items()}
+
+
+@app.local_entrypoint()
+def train_stage2_intervention(
+    variant: str = "Dhook", n_train: int = 1200, n_val: int = 250, epochs: int = 2, lr: float = 2e-5,
+    seed: int = 42, data_mix: str = "all_with_coords", coord_scale: int = 1000, init_std: float = 0.02,
+) -> None:
+    """Full-power intervention study for Dhook | Dtoken (gold/wrong/wrong2/zero/classmean). Use --detach."""
+    _stage2_intervention_remote.remote(variant, n_train, n_val, epochs, lr, seed, data_mix, coord_scale, init_std)
 
 
 # ---- Phase 6 variant D-token: M-RoPE-correct prepended action token ---------
