@@ -72,7 +72,8 @@ def tex_d(r: dict | None) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--pos", default="pre_x", help="probe position for the headline table/figure")
+    ap.add_argument("--pos", default="pre_y", help="probe position for the headline table/figure "
+                    "(pre_y = token whose next prediction is the y coordinate; the most localized position)")
     ap.add_argument("--layer", default="3q")
     a = ap.parse_args()
     data = load()
