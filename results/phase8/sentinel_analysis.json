@@ -1,0 +1,291 @@
+{
+  "n_click": 169,
+  "n_scroll": 46,
+  "variants": {
+    "A": {
+      "per_seed": [
+        {
+          "seed": 42,
+          "click_hit": 0.33727810650887574,
+          "click_sentinel_frac": 0.03550295857988166,
+          "click_hit_non_sentinel": 0.3496932515337423,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 43,
+          "click_hit": 0.28994082840236685,
+          "click_sentinel_frac": 0.005917159763313609,
+          "click_hit_non_sentinel": 0.2916666666666667,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 44,
+          "click_hit": 0.25443786982248523,
+          "click_sentinel_frac": 0.03550295857988166,
+          "click_hit_non_sentinel": 0.26380368098159507,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 45,
+          "click_hit": 0.21893491124260356,
+          "click_sentinel_frac": 0.005917159763313609,
+          "click_hit_non_sentinel": 0.22023809523809523,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 46,
+          "click_hit": 0.17751479289940827,
+          "click_sentinel_frac": 0.1301775147928994,
+          "click_hit_non_sentinel": 0.20408163265306123,
+          "scroll_sentinel_frac": 0.0
+        }
+      ],
+      "mean_std": {
+        "click_hit": [
+          0.25562130177514797,
+          0.061833611728346186
+        ],
+        "click_sentinel_frac": [
+          0.04260355029585799,
+          0.05114151582563763
+        ],
+        "click_hit_non_sentinel": [
+          0.2658966654146321,
+          0.05830125363031243
+        ],
+        "scroll_sentinel_frac": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "B": {
+      "per_seed": [
+        {
+          "seed": 42,
+          "click_hit": 0.38461538461538464,
+          "click_sentinel_frac": 0.01775147928994083,
+          "click_hit_non_sentinel": 0.39156626506024095,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 43,
+          "click_hit": 0.38461538461538464,
+          "click_sentinel_frac": 0.029585798816568046,
+          "click_hit_non_sentinel": 0.39634146341463417,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 44,
+          "click_hit": 0.34911242603550297,
+          "click_sentinel_frac": 0.01775147928994083,
+          "click_hit_non_sentinel": 0.35542168674698793,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 45,
+          "click_hit": 0.3431952662721893,
+          "click_sentinel_frac": 0.03550295857988166,
+          "click_hit_non_sentinel": 0.3558282208588957,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 46,
+          "click_hit": 0.3254437869822485,
+          "click_sentinel_frac": 0.01775147928994083,
+          "click_hit_non_sentinel": 0.3313253012048193,
+          "scroll_sentinel_frac": 0.0
+        }
+      ],
+      "mean_std": {
+        "click_hit": [
+          0.3573964497041421,
+          0.026329698770753848
+        ],
+        "click_sentinel_frac": [
+          0.023668639053254437,
+          0.008368127588006478
+        ],
+        "click_hit_non_sentinel": [
+          0.3660965874571156,
+          0.027349095982767337
+        ],
+        "scroll_sentinel_frac": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "C": {
+      "per_seed": [
+        {
+          "seed": 42,
+          "click_hit": 0.42011834319526625,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.42011834319526625,
+          "scroll_sentinel_frac": 0.21739130434782608
+        },
+        {
+          "seed": 43,
+          "click_hit": 0.3254437869822485,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.3254437869822485,
+          "scroll_sentinel_frac": 0.021739130434782608
+        },
+        {
+          "seed": 44,
+          "click_hit": 0.3609467455621302,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.3609467455621302,
+          "scroll_sentinel_frac": 0.021739130434782608
+        },
+        {
+          "seed": 45,
+          "click_hit": 0.2603550295857988,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.2603550295857988,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 46,
+          "click_hit": 0.38461538461538464,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.38461538461538464,
+          "scroll_sentinel_frac": 0.0
+        }
+      ],
+      "mean_std": {
+        "click_hit": [
+          0.3502958579881657,
+          0.06097833386029941
+        ],
+        "click_sentinel_frac": [
+          0.0,
+          0.0
+        ],
+        "click_hit_non_sentinel": [
+          0.3502958579881657,
+          0.06097833386029941
+        ],
+        "scroll_sentinel_frac": [
+          0.05217391304347826,
+          0.09299673754872799
+        ]
+      }
+    },
+    "Dhook": {
+      "per_seed": [
+        {
+          "seed": 42,
+          "click_hit": 0.38461538461538464,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.38461538461538464,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 43,
+          "click_hit": 0.2958579881656805,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.2958579881656805,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 44,
+          "click_hit": 0.3727810650887574,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.3727810650887574,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 45,
+          "click_hit": 0.3254437869822485,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.3254437869822485,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 46,
+          "click_hit": 0.22485207100591717,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.22485207100591717,
+          "scroll_sentinel_frac": 0.0
+        }
+      ],
+      "mean_std": {
+        "click_hit": [
+          0.3207100591715977,
+          0.06446717727794012
+        ],
+        "click_sentinel_frac": [
+          0.0,
+          0.0
+        ],
+        "click_hit_non_sentinel": [
+          0.3207100591715977,
+          0.06446717727794012
+        ],
+        "scroll_sentinel_frac": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "Dtoken": {
+      "per_seed": [
+        {
+          "seed": 42,
+          "click_hit": 0.33727810650887574,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.33727810650887574,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 43,
+          "click_hit": 0.3076923076923077,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.3076923076923077,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 44,
+          "click_hit": 0.3076923076923077,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.3076923076923077,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 45,
+          "click_hit": 0.17751479289940827,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.17751479289940827,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 46,
+          "click_hit": 0.21301775147928995,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.21301775147928995,
+          "scroll_sentinel_frac": 0.0
+        }
+      ],
+      "mean_std": {
+        "click_hit": [
+          0.2686390532544379,
+          0.06920800718207548
+        ],
+        "click_sentinel_frac": [
+          0.0,
+          0.0
+        ],
+        "click_hit_non_sentinel": [
+          0.2686390532544379,
+          0.06920800718207548
+        ],
+        "scroll_sentinel_frac": [
+          0.0,
+          0.0
+        ]
+      }
+    }
+  }
+}

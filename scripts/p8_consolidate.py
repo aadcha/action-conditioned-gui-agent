@@ -124,9 +124,32 @@ def paired(base: list[Run], other: list[Run], m: str) -> dict | None:
     b = pool_distances_across_seeds([os_[s].dist[:L] for s in seeds])
     r = paired_bootstrap(a, b, metric=m, n_boot=N_BOOT, seed=0)
     p_perm = permutation_test(a, b, metric=m, n_perm=N_BOOT, seed=0)
+    # Cluster bootstrap: the (seed, example) units sharing an example are correlated, so
+    # resample EXAMPLES (keeping every seed of a sampled example) instead of units.
+    va = np.stack([_metric_vals(bs[s].dist[:L], m) for s in seeds])   # [S, L]
+    vb = np.stack([_metric_vals(os_[s].dist[:L], m) for s in seeds])
+    diff_ex = (vb - va).mean(0)                                        # per-example mean over seeds
+    rng = np.random.default_rng(0)
+    idx = rng.integers(0, L, size=(N_BOOT, L))
+    boots = diff_ex[idx].mean(1)
+    cl_lo, cl_hi = np.percentile(boots, [2.5, 97.5])
+    obs = float(diff_ex.mean())
+    cl_p = float(min(1.0, 2 * ((boots <= 0).mean() if obs >= 0 else (boots >= 0).mean())))
+    # Seed-level paired test on per-seed means (n = number of shared seeds).
+    sa, sb = va.mean(1), vb.mean(1)
+    seed_p = float("nan")
+    if len(seeds) >= 3:
+        from scipy import stats
+        seed_p = float(stats.ttest_rel(sb, sa).pvalue)
     return {"delta": r.delta, "ci_low": r.ci_low, "ci_high": r.ci_high, "p_boot": r.p_value,
             "p_perm": p_perm, "n_units": int(a.shape[0]), "seeds": seeds,
-            "higher_is_better": r.higher_is_better}
+            "higher_is_better": r.higher_is_better,
+            "cluster_ci_low": float(cl_lo), "cluster_ci_high": float(cl_hi), "cluster_p": cl_p,
+            "seed_t_p": seed_p, "n_examples": int(L)}
+
+
+def _metric_vals(dist: np.ndarray, m: str) -> np.ndarray:
+    return dist if m == "mean_normalized_l2" else (dist <= RADII[m]).astype(float)
 
 
 def stars(p: float | None) -> str:
@@ -150,7 +173,12 @@ def tex_ms(c: dict, digits: int = 3) -> str:
 def fmt_delta(d: dict | None) -> str:
     if d is None:
         return "--"
-    return f"{d['delta']:+.3f} [{d['ci_low']:+.3f}, {d['ci_high']:+.3f}] {stars(d['p_boot'])}"
+    s = f"{d['delta']:+.3f} [{d['ci_low']:+.3f}, {d['ci_high']:+.3f}] {stars(d['p_boot'])}"
+    if "cluster_ci_low" in d:
+        s += f" / cluster [{d['cluster_ci_low']:+.3f}, {d['cluster_ci_high']:+.3f}] {stars(d['cluster_p'])}"
+        if not math.isnan(d.get("seed_t_p", float("nan"))):
+            s += f" / seed-t p={d['seed_t_p']:.3f}"
+    return s
 
 
 def tex_delta(d: dict | None) -> str:
