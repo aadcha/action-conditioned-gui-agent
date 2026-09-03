@@ -2415,6 +2415,7 @@ def train_stage2_Dhook(
 def _stage2_variantDtext_train_remote(
     n_train: int, n_val: int, epochs: int, lr: float, batch_size: int,
     seed: int, aitw_split: str, coord_scale: int, data_mix: str,
+    drop_type_from_train: bool = False,
 ) -> dict:
     import os, sys, random, json as _json
     from collections import Counter
@@ -2452,6 +2453,10 @@ def _stage2_variantDtext_train_remote(
             break
     train_examples = examples_all[:n_train]
     val_examples = examples_all[n_train:n_train + n_val]
+    if drop_type_from_train:
+        from src.data.taxonomy import CANONICAL_ACTIONS as _CA
+        train_examples = [e for e in train_examples if e.action_type_id != _CA["type"]]
+        print(f"[Dtext] dropped type events from TRAIN only -> n={len(train_examples)}")
     print(f"[Dtext] train n={len(train_examples)} val n={len(val_examples)}")
     print(f"[Dtext] train action dist: {Counter(e.action_type_id for e in train_examples)}")
 
@@ -2539,12 +2544,13 @@ def _stage2_variantDtext_train_remote(
         "variant": "D_text_prompt",
         "n_train": len(train_examples), "n_val": len(val_examples),
         "epochs": epochs, "lr": lr, "batch_size": batch_size, "coord_scale": coord_scale,
-        "seed": seed, "aitw_split": aitw_split, "data_mix": data_mix,
+        "seed": seed, "aitw_split": aitw_split, "data_mix": data_mix, "drop_type_from_train": drop_type_from_train,
         "history": history, "final_val_metrics": history[-1] if history else None,
     }
     cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    out_path = cache_dir / f"Dtext_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}.json"
+    _nt = "_notype" if drop_type_from_train else ""
+    out_path = cache_dir / f"Dtext_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}{_nt}.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[Dtext] persisted result to {out_path}")
@@ -2555,11 +2561,11 @@ def _stage2_variantDtext_train_remote(
 def train_stage2_Dtext(
     n_train: int = 1000, n_val: int = 200, epochs: int = 2, lr: float = 2e-5,
     batch_size: int = 1, seed: int = 42, aitw_split: str = "train",
-    coord_scale: int = 1000, data_mix: str = "taps_and_swipes",
+    coord_scale: int = 1000, data_mix: str = "taps_and_swipes", drop_type_from_train: bool = False,
 ) -> None:
     """Variant D-text (action word in prompt). Use --detach."""
     _stage2_variantDtext_train_remote.remote(
-        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix)
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, drop_type_from_train)
 
 
 # ---- Phase 6 variant B: auxiliary action-type loss --------------------------
@@ -2777,6 +2783,7 @@ def train_stage2_variantB(
 def _stage2_variantC_train_remote(
     n_train: int, n_val: int, epochs: int, lr: float, batch_size: int,
     seed: int, aitw_split: str, coord_scale: int, data_mix: str,
+    drop_type_from_train: bool = False,
 ) -> dict:
     import os, sys, random, json as _json
     from collections import Counter
@@ -2813,6 +2820,10 @@ def _stage2_variantC_train_remote(
             break
     train_examples = examples_all[:n_train]
     val_examples = examples_all[n_train:n_train + n_val]
+    if drop_type_from_train:
+        from src.data.taxonomy import CANONICAL_ACTIONS as _CA
+        train_examples = [e for e in train_examples if e.action_type_id != _CA["type"]]
+        print(f"[C-train] dropped type events from TRAIN only -> n={len(train_examples)}")
     print(f"[C-train] train n={len(train_examples)} val n={len(val_examples)}")
     print(f"[C-train] train action dist: {Counter(e.action_type_id for e in train_examples)}")
 
@@ -2914,12 +2925,13 @@ def _stage2_variantC_train_remote(
         "variant": "C_hard_routing", "n_train": len(train_examples), "n_val": len(val_examples),
         "epochs": epochs, "lr": lr, "batch_size": batch_size, "coord_scale": coord_scale,
         "seed": seed, "aitw_split": aitw_split, "data_mix": data_mix,
-        "routing": "gold_action_word_forced_at_decode",
+        "routing": "gold_action_word_forced_at_decode", "drop_type_from_train": drop_type_from_train,
         "history": history, "final_val_metrics": history[-1] if history else None,
     }
     cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    out_path = cache_dir / f"variantC_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}.json"
+    _nt = "_notype" if drop_type_from_train else ""
+    out_path = cache_dir / f"variantC_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}{_nt}.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[C-train] persisted result to {out_path}")
@@ -2930,11 +2942,11 @@ def _stage2_variantC_train_remote(
 def train_stage2_variantC(
     n_train: int = 1200, n_val: int = 250, epochs: int = 2, lr: float = 2e-5,
     batch_size: int = 1, seed: int = 42, aitw_split: str = "train",
-    coord_scale: int = 1000, data_mix: str = "all_with_coords",
+    coord_scale: int = 1000, data_mix: str = "all_with_coords", drop_type_from_train: bool = False,
 ) -> None:
     """Variant C (hard routing: forced action word at decode). Use --detach."""
     _stage2_variantC_train_remote.remote(
-        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix)
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, drop_type_from_train)
 
 
 # ---- Phase 6 end-to-end: Stage 1 predicted types -> Stage 2 conditioning ----
@@ -4095,6 +4107,59 @@ def train_stage2_intervention(
     _stage2_intervention_remote.remote(variant, n_train, n_val, epochs, lr, seed, data_mix, coord_scale, init_std)
 
 
+# ---- Phase 8 episode ids for validation slices (CPU-only, ~1 min) -----------
+#
+# Validation slices are consecutive filtered steps and therefore contain runs of
+# steps from the same episode. Dumps (index, ep_id, label) for every slice the
+# paper uses so the bootstrap can cluster by episode.
+
+
+@app.function(image=image, volumes={STAGE1_CACHE_PATH: stage1_cache}, secrets=[hf_secret], timeout=1800)
+def _dump_val_episodes_remote(configs: list) -> dict:
+    import os, sys, json as _json
+    from pathlib import Path as _Path
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+    from src.data.aitw import iter_aitw_steps
+    _DATA_MIX_LABELS = {
+        "taps_only": {"tap"},
+        "taps_and_swipes": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right"},
+        "all_with_coords": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"},
+    }
+    out = {}
+    for mix, n_train, n_val in configs:
+        allowed = _DATA_MIX_LABELS[mix]; need = n_train + n_val; kept = []
+        for step in iter_aitw_steps(split="train", n_max=max(need * 4, 1000), include_images=False):
+            if step.string_label not in allowed:
+                continue
+            kept.append({"ep_id": step.ep_id, "step_id": step.step_id, "label": step.string_label,
+                         "action_id": step.canonical_action_id})
+            if len(kept) >= need:
+                break
+        val = kept[n_train:n_train + n_val]
+        out[f"{mix}_n{n_train}"] = {"n_val": len(val), "val": val,
+                                    "n_episodes": len({v["ep_id"] for v in val}),
+                                    "train_last_ep": kept[n_train - 1]["ep_id"] if n_train <= len(kept) else None}
+        print(f"[episodes] {mix} n_train={n_train}: {len(val)} val steps from {out[f'{mix}_n{n_train}']['n_episodes']} episodes; "
+              f"boundary episode shared with train: {val[0]['ep_id'] == out[f'{mix}_n{n_train}']['train_last_ep'] if val else None}", flush=True)
+    d = _Path(STAGE1_CACHE_PATH) / "val_episodes"; d.mkdir(parents=True, exist_ok=True)
+    (d / "val_episodes.json").write_text(_json.dumps(out))
+    stage1_cache.commit()
+    return {k: {"n_val": v["n_val"], "n_episodes": v["n_episodes"]} for k, v in out.items()}
+
+
+@app.local_entrypoint()
+def dump_val_episodes() -> None:
+    """Dump episode ids for every validation slice used in the paper (CPU only)."""
+    import json
+    from pathlib import Path
+    configs = [("all_with_coords", n, 250) for n in (300, 500, 800, 1200, 2500, 5000)] + [("taps_and_swipes", 1000, 200)]
+    res = _dump_val_episodes_remote.remote(configs)
+    print(json.dumps(res, indent=1))
+    out = Path("results/phase8/val_episodes_summary.json"); out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(res, indent=1))
+
+
 # ---- Phase 6 variant D-token: M-RoPE-correct prepended action token ---------
 #
 # The hypothesis's ACTUAL architecture, done correctly. A dedicated
@@ -4120,7 +4185,7 @@ def train_stage2_intervention(
 def _stage2_variantDtoken_train_remote(
     n_train: int, n_val: int, epochs: int, lr: float, batch_size: int,
     seed: int, aitw_split: str, coord_scale: int, data_mix: str, init_std: float,
-    causal_eval: bool = False,
+    causal_eval: bool = False, action_lr: float = 0.0, drop_type_from_train: bool = False,
 ) -> dict:
     import os, sys, random, json as _json
     from collections import Counter
@@ -4158,6 +4223,10 @@ def _stage2_variantDtoken_train_remote(
             break
     train_examples = examples_all[:n_train]
     val_examples = examples_all[n_train:n_train + n_val]
+    if drop_type_from_train:
+        from src.data.taxonomy import CANONICAL_ACTIONS as _CA
+        train_examples = [e for e in train_examples if e.action_type_id != _CA["type"]]
+        print(f"[Dtoken] dropped type events from TRAIN only -> n={len(train_examples)}")
     print(f"[Dtoken] train n={len(train_examples)} val n={len(val_examples)}")
     print(f"[Dtoken] train action dist: {Counter(e.action_type_id for e in train_examples)}")
 
@@ -4265,9 +4334,18 @@ def _stage2_variantDtoken_train_remote(
         m = _metrics_from_predictions(targets, preds, aids); m["raw_outputs"] = raws[:10]
         return m
 
-    optimizer = torch.optim.AdamW(
-        [p for p in model.parameters() if p.requires_grad] + list(action_embeddings.parameters()),
-        lr=lr, weight_decay=0.01)
+    init_norms = {int(i): float(action_embeddings.weight[i].float().norm().item()) for i in range(8)}
+    init_weight = action_embeddings.weight.detach().clone()
+    if action_lr and action_lr > 0:
+        optimizer = torch.optim.AdamW([
+            {"params": [p for p in model.parameters() if p.requires_grad], "lr": lr},
+            {"params": list(action_embeddings.parameters()), "lr": action_lr},
+        ], weight_decay=0.01)
+        print(f"[Dtoken] separate param groups: base lr={lr}, action_emb lr={action_lr}")
+    else:
+        optimizer = torch.optim.AdamW(
+            [p for p in model.parameters() if p.requires_grad] + list(action_embeddings.parameters()),
+            lr=lr, weight_decay=0.01)
 
     history = []
     for epoch in range(1, epochs + 1):
@@ -4317,17 +4395,26 @@ def _stage2_variantDtoken_train_remote(
               f"(positive => embedding causally used at inference)")
 
     hook.remove()
+    trained_norms = {int(i): float(action_embeddings.weight[i].float().norm().item()) for i in range(8)}
+    displacement = {int(i): float((action_embeddings.weight[i].float() - init_weight[i].float()).norm().item()) for i in range(8)}
+    print(f"[Dtoken] row norms init/trained/displacement: " + ", ".join(
+        f"{i}:{init_norms[i]:.3f}/{trained_norms[i]:.3f}/{displacement[i]:.3f}" for i in (0, 2, 3)))
     summary = {
         "variant": "D_token_prepended", "n_train": len(train_examples), "n_val": len(val_examples),
         "epochs": epochs, "lr": lr, "batch_size": batch_size, "coord_scale": coord_scale,
         "seed": seed, "aitw_split": aitw_split, "data_mix": data_mix, "init_std": init_std,
+        "action_lr": action_lr, "drop_type_from_train": drop_type_from_train,
+        "action_row_norms_init": init_norms, "action_row_norms_trained": trained_norms,
+        "action_row_displacement": displacement,
         "history": history, "final_val_metrics": history[-1] if history else None,
         "causal_eval": causal,
     }
     cache_dir = _Path(STAGE1_CACHE_PATH) / "stage2_runs"
     cache_dir.mkdir(parents=True, exist_ok=True)
     _ctag = "_causal" if causal_eval else ""
-    out_path = cache_dir / f"Dtoken_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_init{init_std}{_ctag}.json"
+    _alr = f"_alr{action_lr}" if action_lr and action_lr > 0 else ""
+    _nt = "_notype" if drop_type_from_train else ""
+    out_path = cache_dir / f"Dtoken_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}_init{init_std}{_alr}{_nt}{_ctag}.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[Dtoken] persisted to {out_path}")
@@ -4339,16 +4426,18 @@ def train_stage2_Dtoken(
     n_train: int = 1200, n_val: int = 250, epochs: int = 2, lr: float = 2e-5,
     batch_size: int = 1, seed: int = 42, aitw_split: str = "train",
     coord_scale: int = 1000, data_mix: str = "all_with_coords", init_std: float = 0.02,
-    causal_eval: bool = False,
+    causal_eval: bool = False, action_lr: float = 0.0, drop_type_from_train: bool = False,
 ) -> None:
     """Variant D-token (M-RoPE-correct prepended action token). Use --detach.
 
     --causal-eval adds a post-training 3-way eval (gold / wrong / zero action
     embedding) that tests whether the learned embedding is causally used.
+    --action-lr gives the new embedding rows their own learning rate.
+    --drop-type-from-train removes type events from the training slice only.
     """
     _stage2_variantDtoken_train_remote.remote(
         n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix,
-        init_std, causal_eval)
+        init_std, causal_eval, action_lr, drop_type_from_train)
 
 
 # ---- Phase 6 Mind2Web grounding benchmark (proposal-named dataset) ----------
