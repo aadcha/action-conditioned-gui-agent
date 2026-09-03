@@ -1,18 +1,18 @@
 \begin{table}[h]
 \centering
 \small
-\caption{Conditioning advantage vs.\ training-set size (AITW \texttt{all\_with\_coords}, 3 seeds per cell). Intervals are 95\% cluster bootstraps over validation examples (all seeds of a sampled example kept together); stars from the same bootstrap. Absolute values are not comparable across rows because the validation slice moves with $n$; its click/scroll/type counts are given per row. The study is descriptive: 24 contrasts, no multiplicity correction.}
+\caption{Conditioning advantage vs.\ training-set size (AITW \texttt{all\_with\_coords}, 3 seeds per cell). Intervals are 95\% episode-cluster bootstraps (every step and seed of a sampled episode kept together); stars from the same bootstrap. Absolute values are not comparable across rows because the validation slice moves with $n$; its click/scroll/type counts are given per row. The study is descriptive: 24 contrasts, no multiplicity correction.}
 \label{tab:scaling}
 \resizebox{\linewidth}{!}{\begin{tabular}{rlccccc}
 \toprule
 $n_{\text{train}}$ & val mix (c/s/t) & A hit@0.10 & B $-$ A & D-hook $-$ A & B $-$ A (hit@0.25) & D-hook $-$ A (hit@0.25) \\
 \midrule
-300 & 170/33/47 & 0.139 $\pm$ 0.032 & +0.067 [+0.031, +0.103]$^{***}$ & +0.069 [+0.041, +0.099]$^{***}$ & -0.055 [-0.092, -0.019]$^{**}$ & +0.067 [+0.033, +0.101]$^{***}$ \\
-500 & 198/12/40 & 0.315 $\pm$ 0.059 & +0.011 [-0.019, +0.040] & +0.001 [-0.032, +0.033] & +0.004 [-0.027, +0.033] & +0.059 [+0.025, +0.092]$^{***}$ \\
-800 & 141/71/38 & 0.261 $\pm$ 0.020 & -0.040 [-0.073, -0.008]$^{*}$ & +0.048 [+0.009, +0.087]$^{*}$ & -0.039 [-0.069, -0.008]$^{*}$ & +0.064 [+0.025, +0.103]$^{***}$ \\
-1200 & 169/46/35 & 0.255 $\pm$ 0.026 & +0.051 [+0.021, +0.081]$^{***}$ & +0.045 [+0.015, +0.079]$^{**}$ & +0.071 [+0.036, +0.107]$^{***}$ & +0.055 [+0.017, +0.092]$^{**}$ \\
-2500 & 166/53/31 & 0.244 $\pm$ 0.037 & -0.012 [-0.039, +0.015] & +0.037 [+0.009, +0.067]$^{**}$ & -0.008 [-0.043, +0.028] & +0.104 [+0.067, +0.143]$^{***}$ \\
-5000 & 187/29/34 & 0.363 $\pm$ 0.009 & +0.005 [-0.025, +0.037] & +0.043 [+0.011, +0.076]$^{**}$ & -0.023 [-0.051, +0.005] & +0.032 [+0.001, +0.064]$^{*}$ \\
+300 & 170/33/47 & 0.139 $\pm$ 0.032 & +0.067 [+0.029, +0.102]$^{**}$ & +0.069 [+0.040, +0.098]$^{***}$ & -0.055 [-0.101, -0.011]$^{*}$ & +0.067 [+0.031, +0.102]$^{***}$ \\
+500 & 198/12/40 & 0.315 $\pm$ 0.059 & +0.011 [-0.020, +0.040] & +0.001 [-0.032, +0.033] & +0.004 [-0.028, +0.034] & +0.059 [+0.030, +0.085]$^{***}$ \\
+800 & 141/71/38 & 0.261 $\pm$ 0.020 & -0.040 [-0.077, -0.006]$^{*}$ & +0.048 [+0.010, +0.085]$^{*}$ & -0.039 [-0.081, +0.001] & +0.064 [+0.009, +0.111]$^{*}$ \\
+1200 & 169/46/35 & 0.255 $\pm$ 0.026 & +0.051 [+0.020, +0.081]$^{***}$ & +0.045 [+0.011, +0.085]$^{**}$ & +0.071 [+0.037, +0.103]$^{***}$ & +0.055 [+0.019, +0.090]$^{**}$ \\
+2500 & 166/53/31 & 0.244 $\pm$ 0.037 & -0.012 [-0.037, +0.010] & +0.037 [+0.015, +0.061]$^{**}$ & -0.008 [-0.046, +0.026] & +0.104 [+0.060, +0.144]$^{***}$ \\
+5000 & 187/29/34 & 0.363 $\pm$ 0.009 & +0.005 [-0.026, +0.036] & +0.043 [+0.006, +0.079]$^{*}$ & -0.023 [-0.055, +0.008] & +0.032 [-0.005, +0.069] \\
 \bottomrule
 \end{tabular}}
 \end{table}

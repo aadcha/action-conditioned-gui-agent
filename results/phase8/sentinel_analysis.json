@@ -286,6 +286,63 @@
           0.0
         ]
       }
+    },
+    "Dtext": {
+      "per_seed": [
+        {
+          "seed": 42,
+          "click_hit": 0.40236686390532544,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.40236686390532544,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 43,
+          "click_hit": 0.3136094674556213,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.3136094674556213,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 44,
+          "click_hit": 0.33136094674556216,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.33136094674556216,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 45,
+          "click_hit": 0.3254437869822485,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.3254437869822485,
+          "scroll_sentinel_frac": 0.0
+        },
+        {
+          "seed": 46,
+          "click_hit": 0.3668639053254438,
+          "click_sentinel_frac": 0.0,
+          "click_hit_non_sentinel": 0.3668639053254438,
+          "scroll_sentinel_frac": 0.0
+        }
+      ],
+      "mean_std": {
+        "click_hit": [
+          0.3479289940828402,
+          0.03633155368759467
+        ],
+        "click_sentinel_frac": [
+          0.0,
+          0.0
+        ],
+        "click_hit_non_sentinel": [
+          0.3479289940828402,
+          0.03633155368759467
+        ],
+        "scroll_sentinel_frac": [
+          0.0,
+          0.0
+        ]
+      }
     }
   }
 }

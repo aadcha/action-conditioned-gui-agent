@@ -36,14 +36,18 @@ def clamp(p, W, H):
     return None if p is None else (min(max(p[0], 0.0), 1.0) * W, min(max(p[1], 0.0), 1.0) * H)
 
 
-def render(panels: list[dict], meta: dict, out: Path, title: str) -> None:
+def render(panels: list[dict], meta: dict, out: Path, title: str, ncols: int | None = None) -> None:
     halo = [pe.withStroke(linewidth=3, foreground="white")]
     n = len(panels)
     imgs = [np.array(Image.open(DATA / p["file"]).convert("RGB")) for p in panels]
     aspect = max(im.shape[0] / im.shape[1] for im in imgs)  # H/W, portrait ~1.78
     pw = 2.1
-    fig, axes = plt.subplots(1, n, figsize=(pw * n, pw * aspect + 0.9))
-    axes = np.atleast_1d(axes)
+    ncols = ncols or n
+    nrows = int(np.ceil(n / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(pw * ncols, nrows * (pw * aspect + 0.55) + 0.9))
+    axes = np.atleast_1d(axes).ravel()
+    for ax in axes[n:]:
+        ax.axis("off")
     for ax, p, img in zip(axes, panels, imgs):
         H, W = img.shape[:2]
         ax.imshow(img); ax.set_xlim(0, W); ax.set_ylim(H, 0)
@@ -63,7 +67,8 @@ def render(panels: list[dict], meta: dict, out: Path, title: str) -> None:
         for h, l in zip(*ax.get_legend_handles_labels()):
             if l not in labels:
                 handles.append(h); labels.append(l)
-    fig.subplots_adjust(left=0.01, right=0.99, top=0.86, bottom=0.075, wspace=0.04)
+    fig.subplots_adjust(left=0.01, right=0.99, top=0.86 if nrows == 1 else 0.92,
+                        bottom=0.075 if nrows == 1 else 0.045, wspace=0.04, hspace=0.14)
     fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.005), ncol=4, fontsize=9, frameon=False)
     fig.suptitle(title, y=0.985, fontsize=10)
     fig.savefig(out, dpi=350, bbox_inches="tight"); plt.close(fig)
@@ -87,6 +92,7 @@ def main() -> None:
             f"{miss} both missed at r=0.10 (distances are normalized L2)")
     FIGS.mkdir(parents=True, exist_ok=True)
     render(panels, meta, FIGS / "qualitative_v2_1x6.png", base)
+    render(panels, meta, FIGS / "qualitative_v2_2x3.png", base, ncols=3)
     want = ["click: conditioning rescues", "click: conditioning hurts", "click: both correct", "scroll: conditioning helps"]
     sel = []
     for w in want:

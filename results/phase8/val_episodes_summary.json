@@ -1,0 +1,30 @@
+{
+ "all_with_coords_n300": {
+  "n_val": 250,
+  "n_episodes": 50
+ },
+ "all_with_coords_n500": {
+  "n_val": 250,
+  "n_episodes": 47
+ },
+ "all_with_coords_n800": {
+  "n_val": 250,
+  "n_episodes": 39
+ },
+ "all_with_coords_n1200": {
+  "n_val": 250,
+  "n_episodes": 42
+ },
+ "all_with_coords_n2500": {
+  "n_val": 250,
+  "n_episodes": 35
+ },
+ "all_with_coords_n5000": {
+  "n_val": 250,
+  "n_episodes": 43
+ },
+ "taps_and_swipes_n1000": {
+  "n_val": 200,
+  "n_episodes": 37
+ }
+}
