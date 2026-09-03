@@ -48,7 +48,7 @@ def main() -> None:
     out = {"n_click": int(is_click.sum()), "n_scroll": int(is_scroll.sum()), "variants": {}}
     print(f"validation slice: {is_click.sum()} clicks, {is_scroll.sum()} scrolls, {(action=='type').sum()} type")
     print(f"{'variant':<20} {'seed':>4} {'click hit':>9} {'sentinel%':>9} {'hit|non-sent':>12} {'scroll sentinel%':>16}")
-    for v in ("A", "B", "C", "Dhook", "Dtoken"):
+    for v in ("A", "B", "C", "Dhook", "Dtoken", "Dtext"):
         per_seed = []
         for s in HEADLINE_SEEDS:
             r = load_run(v, s, 1200, "all_with_coords")

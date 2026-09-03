@@ -1,7 +1,7 @@
-\begin{table}[t]
+\begin{table}[h]
 \centering
 \small
-\caption{D-token causal-use test: the same trained model evaluated with the gold action embedding, a wrong (cyclically permuted) one, and a zeroed one (5 seeds, paired bootstrap over pooled examples).}
+\caption{D-token causal-use test: the same trained model evaluated with the gold action embedding, a wrong (cyclically permuted) one, and a zeroed one (5 seeds; paired episode-cluster bootstrap intervals).}
 \label{tab:causal}
 \resizebox{\linewidth}{!}{\begin{tabular}{lcccc}
 \toprule
@@ -11,8 +11,8 @@ gold & 0.140 $\pm$ 0.059 & 0.236 $\pm$ 0.058 & 0.502 $\pm$ 0.045 & 0.386 $\pm$ 0
 wrong & 0.014 $\pm$ 0.004 & 0.079 $\pm$ 0.013 & 0.200 $\pm$ 0.027 & 0.728 $\pm$ 0.081 \\
 zero & 0.074 $\pm$ 0.055 & 0.167 $\pm$ 0.066 & 0.416 $\pm$ 0.103 & 0.489 $\pm$ 0.059 \\
 \midrule
-gold $-$ wrong & & +0.157 [+0.114, +0.201]$^{***}$ & +0.302 [+0.246, +0.356]$^{***}$ & -0.342 [-0.375, -0.309]$^{***}$ \\
-gold $-$ zero & & +0.069 [+0.038, +0.100]$^{***}$ & +0.086 [+0.056, +0.117]$^{***}$ & -0.103 [-0.121, -0.086]$^{***}$ \\
+gold $-$ wrong & & +0.157 [+0.120, +0.192]$^{***}$ & +0.302 [+0.258, +0.342]$^{***}$ & -0.342 [-0.366, -0.314]$^{***}$ \\
+gold $-$ zero & & +0.069 [+0.042, +0.096]$^{***}$ & +0.086 [+0.062, +0.109]$^{***}$ & -0.103 [-0.115, -0.091]$^{***}$ \\
 \bottomrule
 \end{tabular}}
 \end{table}

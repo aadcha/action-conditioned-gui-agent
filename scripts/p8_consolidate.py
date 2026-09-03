@@ -63,7 +63,7 @@ HEADLINE_SEEDS = [42, 43, 44, 45, 46]
 CURVE_SEEDS = [42, 43, 44]
 CURVE_NS = [300, 500, 800, 1200, 2500, 5000]
 METRICS = ["hit_at_005", "hit_at_010", "hit_at_025", "mean_normalized_l2"]
-RADII = {"hit_at_005": 0.05, "hit_at_010": 0.10, "hit_at_025": 0.25}
+RADII = {"hit_at_005": 0.05, "hit_at_010": 0.10, "hit_at_014": 0.14, "hit_at_025": 0.25}
 N_BOOT = 10000
 COLORS = {"A": "#3a6ea5", "B": "#2a9d4a", "C": "#e07b39", "Dhook": "#9d4edd", "Dtoken": "#c9184a", "Dtext": "#6c757d"}
 
@@ -117,8 +117,45 @@ def cell(runs: list[Run], m: str) -> dict:
             "n_seeds": len(vals), "seeds": [r.seed for r in runs], "values": vals}
 
 
-def paired(base: list[Run], other: list[Run], m: str) -> dict | None:
-    """other - base over pooled (seed, example) units; seeds matched by id."""
+_EPISODES_CACHE: dict = {}
+
+
+def slice_episodes(mix: str, n: int) -> tuple[list[str], str | None] | None:
+    """Episode id per validation index for a (mix, n_train) slice, plus the id of the
+    training-side boundary episode (None if the slice starts a fresh episode)."""
+    p = P8 / "val_episodes.json"
+    if not p.exists():
+        return None
+    if not _EPISODES_CACHE:
+        _EPISODES_CACHE.update(json.loads(p.read_text()))
+    key = f"{mix}_n{n}"
+    if key not in _EPISODES_CACHE:
+        return None
+    v = _EPISODES_CACHE[key]
+    eps = [x["ep_id"] for x in v["val"]]
+    return eps, (v.get("train_last_ep") if eps and eps[0] == v.get("train_last_ep") else None)
+
+
+def _episode_bootstrap(diff_ex: np.ndarray, eps: list[str], n_boot: int = N_BOOT, seed: int = 0) -> dict:
+    """Cluster bootstrap over EPISODES of a per-example difference vector."""
+    ids = {e: i for i, e in enumerate(dict.fromkeys(eps))}
+    idx = np.array([ids[e] for e in eps]); E = len(ids)
+    sums = np.bincount(idx, weights=diff_ex, minlength=E); cnts = np.bincount(idx, minlength=E).astype(float)
+    rng = np.random.default_rng(seed)
+    pick = rng.integers(0, E, size=(n_boot, E))
+    boots = sums[pick].sum(1) / cnts[pick].sum(1)
+    obs = float(diff_ex.mean())
+    lo, hi = np.percentile(boots, [2.5, 97.5])
+    p = float(min(1.0, 2 * ((boots <= 0).mean() if obs >= 0 else (boots >= 0).mean())))
+    return {"ci_low": float(lo), "ci_high": float(hi), "p": p, "n_episodes": int(E)}
+
+
+def paired(base: list[Run], other: list[Run], m: str, mix: str | None = None, n: int | None = None,
+           eps: list[str] | None = None) -> dict | None:
+    """other - base over pooled (seed, example) units; seeds matched by id.
+    `mix`/`n` name the validation slice when a run's own n_train is not the slice key (the _notype
+    runs record the post-filter count); `eps` gives the episode id of every retained example for
+    subset contrasts (e.g. clicks only), so the episode bootstrap clusters the right steps."""
     bs = {r.seed: r for r in base if r.dist is not None}
     os_ = {r.seed: r for r in other if r.dist is not None}
     seeds = sorted(set(bs) & set(os_))
@@ -146,11 +183,28 @@ def paired(base: list[Run], other: list[Run], m: str) -> dict | None:
     if len(seeds) >= 3:
         from scipy import stats
         seed_p = float(stats.ttest_rel(sb, sa).pvalue)
-    return {"delta": r.delta, "ci_low": r.ci_low, "ci_high": r.ci_high, "p_boot": r.p_value,
-            "p_perm": p_perm, "n_units": int(a.shape[0]), "seeds": seeds,
-            "higher_is_better": r.higher_is_better,
-            "cluster_ci_low": float(cl_lo), "cluster_ci_high": float(cl_hi), "cluster_p": cl_p,
-            "seed_t_p": seed_p, "n_examples": int(L)}
+    out = {"delta": r.delta, "ci_low": r.ci_low, "ci_high": r.ci_high, "p_boot": r.p_value,
+           "p_perm": p_perm, "n_units": int(a.shape[0]), "seeds": seeds,
+           "higher_is_better": r.higher_is_better,
+           "cluster_ci_low": float(cl_lo), "cluster_ci_high": float(cl_hi), "cluster_p": cl_p,
+           "seed_t_p": seed_p, "n_examples": int(L)}
+    # Episode-cluster bootstrap (steps of one episode are correlated) + boundary-episode check.
+    ref = next(iter(bs.values()))
+    ep = slice_episodes(mix or ref.mix, n or ref.n_train)
+    if eps is not None:
+        assert len(eps) == L, (len(eps), L)
+        ep = (list(eps), ep[1] if ep is not None else None)
+    if ep is not None and len(ep[0]) >= L:
+        eps, boundary = ep[0][:L], ep[1]
+        eb = _episode_bootstrap(diff_ex, eps)
+        out.update({"ep_ci_low": eb["ci_low"], "ep_ci_high": eb["ci_high"], "ep_p": eb["p"], "n_episodes": eb["n_episodes"]})
+        if boundary is not None:
+            keep = np.array([e != boundary for e in eps])
+            if keep.sum() > 10:
+                eb2 = _episode_bootstrap(diff_ex[keep], [e for e, k in zip(eps, keep) if k])
+                out.update({"nb_delta": float(diff_ex[keep].mean()), "nb_ci_low": eb2["ci_low"], "nb_ci_high": eb2["ci_high"],
+                            "nb_p": eb2["p"], "n_boundary_steps": int((~keep).sum())})
+    return out
 
 
 def _metric_vals(dist: np.ndarray, m: str) -> np.ndarray:
@@ -236,9 +290,13 @@ def fmt_delta(d: dict | None) -> str:
         return "--"
     s = f"{d['delta']:+.3f} [{d['ci_low']:+.3f}, {d['ci_high']:+.3f}] {stars(d['p_boot'])}"
     if "cluster_ci_low" in d:
-        s += f" / cluster [{d['cluster_ci_low']:+.3f}, {d['cluster_ci_high']:+.3f}] {stars(d['cluster_p'])}"
-        if not math.isnan(d.get("seed_t_p", float("nan"))):
-            s += f" / seed-t p={d['seed_t_p']:.3f}"
+        s += f" / ex-cluster [{d['cluster_ci_low']:+.3f}, {d['cluster_ci_high']:+.3f}] {stars(d['cluster_p'])}"
+    if "ep_ci_low" in d:
+        s += f" / EPISODE [{d['ep_ci_low']:+.3f}, {d['ep_ci_high']:+.3f}] {stars(d['ep_p'])} (E={d['n_episodes']})"
+    if "nb_delta" in d:
+        s += f" / no-boundary {d['nb_delta']:+.3f} [{d['nb_ci_low']:+.3f}, {d['nb_ci_high']:+.3f}] {stars(d['nb_p'])} (-{d['n_boundary_steps']} steps)"
+    if not math.isnan(d.get("seed_t_p", float("nan"))):
+        s += f" / seed-t p={d['seed_t_p']:.3f}"
     return s
 
 
@@ -254,8 +312,12 @@ def tex_delta(d: dict | None) -> str:
 
 
 def tex_delta_cluster(d: dict | None) -> str:
+    """Delta with the EPISODE-cluster interval when episode ids are known, else the example-cluster one."""
     if d is None:
         return "--"
+    if "ep_ci_low" in d:
+        s = stars(d["ep_p"]); s = "" if s == "ns" else f"$^{{{s}}}$"
+        return f"{d['delta']:+.3f} [{d['ep_ci_low']:+.3f}, {d['ep_ci_high']:+.3f}]{s}"
     s = stars(d["cluster_p"])
     s = "" if s == "ns" else f"$^{{{s}}}$"
     return f"{d['delta']:+.3f} [{d['cluster_ci_low']:+.3f}, {d['cluster_ci_high']:+.3f}]{s}"
@@ -273,11 +335,15 @@ def section_variants(mix: str, n: int, seeds: list[int], variants: list[str], ti
     out = {"mix": mix, "n_train": n, "seeds_requested": seeds, "cells": {}, "deltas_vs_A": {}, "deltas_vs_B": {},
            "parse_rates": {}, "no_per_example": []}
     for v in variants:
-        out["cells"][v] = {m: cell(runs[v], m) for m in METRICS}
+        out["cells"][v] = {m: cell(runs[v], m) for m in METRICS + ["hit_at_014"]}
         out["parse_rates"][v] = [r.parse_rate for r in runs[v]]
+        # parsed-only rerun of the hit rates (parse failures carry the sqrt(2) sentinel)
+        parsed = [Run(r.path, r.variant, r.seed, r.n_train, r.mix, r.fvm, r.dist[~np.isclose(r.dist, 2 ** 0.5)])
+                  for r in runs[v] if r.dist is not None]
+        out.setdefault("cells_parsed_only", {})[v] = {m: cell(parsed, m) for m in ("hit_at_010", "hit_at_025", "mean_normalized_l2")}
         out["no_per_example"] += [r.path.name for r in runs[v] if r.dist is None]
         if v != "A":
-            out["deltas_vs_A"][v] = {m: paired(runs["A"], runs[v], m) for m in METRICS}
+            out["deltas_vs_A"][v] = {m: paired(runs["A"], runs[v], m) for m in METRICS + ["hit_at_014"]}
         if v not in ("A", "B") and "B" in runs:
             out["deltas_vs_B"][v] = {m: paired(runs["B"], runs[v], m) for m in METRICS}
     out["per_class"] = {}
@@ -329,6 +395,14 @@ def md_variants(sec: dict) -> str:
               "| variant | " + " | ".join(classes) + " |", "|---|" + "---|" * len(classes)]
         for v, pcs in sec["per_class"].items():
             L.append(f"| {NAMES[v]} | " + " | ".join(fmt_ms(pcs[c]) if c in pcs else "--" for c in classes) + " |")
+    L += ["", "hit@0.14 (official AITW tap threshold) per variant and delta vs A:", ""]
+    for v, cells in sec["cells"].items():
+        d = sec["deltas_vs_A"].get(v, {}).get("hit_at_014")
+        L.append(f"- {NAMES[v]}: {fmt_ms(cells['hit_at_014'])}" + (f"; vs A {fmt_delta(d)}" if d else ""))
+    if sec.get("cells_parsed_only"):
+        L += ["", "Parsed outputs only (parse failures removed rather than scored as misses):", ""]
+        for v, c in sec["cells_parsed_only"].items():
+            L.append(f"- {NAMES[v]}: hit@0.10 {fmt_ms(c['hit_at_010'])}, hit@0.25 {fmt_ms(c['hit_at_025'])}, mean L2 {fmt_ms(c['mean_normalized_l2'])}")
     if sec["no_per_example"]:
         L += ["", "Runs WITHOUT per-example logging (fell back to summary metrics): " + ", ".join(sec["no_per_example"])]
     return "\n".join(L) + "\n"
@@ -337,7 +411,7 @@ def md_variants(sec: dict) -> str:
 def tex_variants(sec: dict, label: str, caption: str) -> str:
     L = ["\\begin{table}[t]", "\\centering", "\\small", f"\\caption{{{caption}}}", f"\\label{{{label}}}",
          "\\resizebox{\\linewidth}{!}{\\begin{tabular}{lcccccc}", "\\toprule",
-         "Variant & hit@0.05 & hit@0.10 & hit@0.25 & mean L2 $\\downarrow$ & $\\Delta$hit@0.10 vs.\\ A [cluster CI] & seed-level $p$ \\\\", "\\midrule"]
+         "Variant & hit@0.05 & hit@0.10 & hit@0.25 & mean L2 $\\downarrow$ & $\\Delta$hit@0.10 vs.\\ A [episode CI] & seed-level $p$ \\\\", "\\midrule"]
     for v, cells in sec["cells"].items():
         if cells["hit_at_010"]["n_seeds"] == 0:
             continue
@@ -383,7 +457,7 @@ def md_scaling(sec: dict) -> str:
 def tex_scaling(sec: dict) -> str:
     L = ["\\begin{table}[h]", "\\centering", "\\small",
          "\\caption{Conditioning advantage vs.\\ training-set size (AITW \\texttt{all\\_with\\_coords}, 3 seeds per cell). "
-         "Intervals are 95\\% cluster bootstraps over validation examples (all seeds of a sampled example kept together); "
+         "Intervals are 95\\% episode-cluster bootstraps (every step and seed of a sampled episode kept together); "
          "stars from the same bootstrap. Absolute values are not comparable across rows because the validation slice moves "
          "with $n$; its click/scroll/type counts are given per row. The study is descriptive: 24 contrasts, no multiplicity correction.}",
          "\\label{tab:scaling}",
@@ -413,7 +487,7 @@ def plot_scaling(sec: dict, out: Path) -> None:
                     d = sec["deltas"][n][v][m]
                     if d is None:
                         continue
-                    cl, ch = d.get("cluster_ci_low", d["ci_low"]), d.get("cluster_ci_high", d["ci_high"])
+                    cl = d.get("ep_ci_low", d.get("cluster_ci_low", d["ci_low"])); ch = d.get("ep_ci_high", d.get("cluster_ci_high", d["ci_high"]))
                     xs.append(n * (1 + off)); ys.append(d["delta"]); lo.append(d["delta"] - cl); hi.append(ch - d["delta"])
                 ax.errorbar(xs, ys, yerr=[lo, hi], marker="s" if v == "Dhook" else "o", ms=8, capsize=5, lw=2, ls="-",
                             color=COLORS[v], label=f"{NAMES[v]} − A")
@@ -525,9 +599,9 @@ def md_causal(sec: dict) -> str:
 
 
 def tex_causal(sec: dict) -> str:
-    L = ["\\begin{table}[t]", "\\centering", "\\small",
+    L = ["\\begin{table}[h]", "\\centering", "\\small",
          f"\\caption{{D-token causal-use test: the same trained model evaluated with the gold action embedding, a wrong "
-         f"(cyclically permuted) one, and a zeroed one ({len(sec['seeds'])} seeds, paired bootstrap over pooled examples).}}",
+         f"(cyclically permuted) one, and a zeroed one ({len(sec['seeds'])} seeds; paired episode-cluster bootstrap intervals).}}",
          "\\label{tab:causal}", "\\resizebox{\\linewidth}{!}{\\begin{tabular}{lcccc}", "\\toprule",
          "Conditioning & hit@0.05 & hit@0.10 & hit@0.25 & mean L2 $\\downarrow$ \\\\", "\\midrule"]
     for c in ("gold", "wrong", "zero"):
@@ -535,8 +609,8 @@ def tex_causal(sec: dict) -> str:
         L.append(f"{c} & " + " & ".join(tex_ms(cc[m]) for m in METRICS) + " \\\\")
     L.append("\\midrule")
     for k, ds in sec["paired"].items():
-        L.append(f"{k.replace('_minus_', ' $-$ ')} & & {tex_delta(ds['hit_at_010'])} & {tex_delta(ds['hit_at_025'])} & "
-                 f"{tex_delta(ds['mean_normalized_l2'])} \\\\")
+        L.append(f"{k.replace('_minus_', ' $-$ ')} & & {tex_delta_cluster(ds['hit_at_010'])} & {tex_delta_cluster(ds['hit_at_025'])} & "
+                 f"{tex_delta_cluster(ds['mean_normalized_l2'])} \\\\")
     L += ["\\bottomrule", "\\end{tabular}}", "\\end{table}"]
     return "\n".join(L) + "\n"
 
@@ -546,17 +620,25 @@ def _cls_masks(labels: list[str]) -> dict[str, np.ndarray]:
     return {c: np.array([l == c for l in labels]) for c in sorted(set(labels))}
 
 
+NOTYPE_VARIANTS = ("A", "B", "C", "Dhook", "Dtoken", "Dtext")
+
+
 def section_notype() -> dict:
     """Same training slice with type events removed from TRAINING only, scored on the
     identical headline validation slice. Tests whether the conditioning gain needs the
-    degenerate-target class to be present in training."""
+    degenerate-target class to be present in training. All six mechanisms, three seeds."""
     labels = slice_labels("all_with_coords", 1200)
     masks = _cls_masks(labels) if labels else {}
-    out = {"seeds": CURVE_SEEDS, "cells": {}, "deltas_vs_A": {}, "drop_effect": {}, "per_class": {}}
+    ep = slice_episodes("all_with_coords", 1200)
+    eps_all = ep[0] if ep else None
+    kw = {"mix": "all_with_coords", "n": 1200}
+    out = {"seeds": CURVE_SEEDS, "variants": [], "cells": {}, "deltas_vs_A": {}, "drop_effect": {}, "per_class": {}}
     runs = {}
-    for v in ("A", "B", "Dhook"):
+    for v in NOTYPE_VARIANTS:
         runs[(v, "with")] = [r for s in CURVE_SEEDS if (r := load_run(v, s, 1200, "all_with_coords"))]
         runs[(v, "without")] = [r for s in CURVE_SEEDS if (r := load_run(v, s, 1200, "all_with_coords", "_notype"))]
+        if runs[(v, "without")]:
+            out["variants"].append(v)
     for (v, cond), rs in runs.items():
         out["cells"][f"{v}_{cond}"] = {m: cell(rs, m) for m in METRICS}
         pc = {}
@@ -564,52 +646,63 @@ def section_notype() -> dict:
             vals = [float((r.dist[msk] <= 0.10).mean()) for r in rs if r.dist is not None and len(r.dist) == len(labels)]
             pc[c] = {"mean": float(np.mean(vals)) if vals else math.nan, "std": float(np.std(vals, ddof=1)) if len(vals) > 1 else 0.0, "n_seeds": len(vals)}
         out["per_class"][f"{v}_{cond}"] = pc
-    for v in ("B", "Dhook"):
-        out["deltas_vs_A"][f"{v}_without"] = {m: paired(runs[("A", "without")], runs[(v, "without")], m) for m in METRICS}
-    for v in ("A", "B", "Dhook"):
-        out["drop_effect"][v] = {m: paired(runs[(v, "with")], runs[(v, "without")], m) for m in METRICS}
-    # click-only paired contrasts (the class the gain lives in)
+    for v in out["variants"]:
+        if v != "A":
+            out["deltas_vs_A"][f"{v}_without"] = {m: paired(runs[("A", "without")], runs[(v, "without")], m, **kw) for m in METRICS}
+        out["drop_effect"][v] = {m: paired(runs[(v, "with")], runs[(v, "without")], m, **kw) for m in METRICS}
+    # click-only paired contrasts (the class the gain lives in), episode ids restricted to the clicks
     if masks:
         out["click_deltas"] = {}
+        ck = masks["click"]
+        eps_click = [e for e, k in zip(eps_all, ck) if k] if eps_all is not None else None
         def _sub(rs, msk):
             return [Run(r.path, r.variant, r.seed, r.n_train, r.mix, r.fvm, r.dist[msk]) for r in rs if r.dist is not None and len(r.dist) == len(labels)]
-        for v in ("B", "Dhook"):
+        for v in out["variants"]:
+            if v == "A":
+                continue
             for cond in ("with", "without"):
-                out["click_deltas"][f"{v}_{cond}"] = paired(_sub(runs[("A", cond)], masks["click"]), _sub(runs[(v, cond)], masks["click"]), "hit_at_010")
+                out["click_deltas"][f"{v}_{cond}"] = paired(_sub(runs[("A", cond)], ck), _sub(runs[(v, cond)], ck), "hit_at_010", eps=eps_click, **kw)
     return out
 
 
 def md_notype(sec: dict) -> str:
+    vs = sec["variants"]
     L = ["### Type events removed from training (same 250-example validation slice, seeds 42–44)", "",
          "| variant | training stream | hit@0.10 | hit@0.25 | mean L2 | click hit@0.10 | scroll hit@0.10 |", "|---|---|---|---|---|---|---|"]
-    for v in ("A", "B", "Dhook"):
+    nanc = {"mean": math.nan, "std": 0, "n_seeds": 0}
+    for v in vs:
         for cond in ("with", "without"):
             c = sec["cells"][f"{v}_{cond}"]; pc = sec["per_class"].get(f"{v}_{cond}", {})
             L.append(f"| {NAMES[v]} | {'with type' if cond == 'with' else 'type removed'} | {fmt_ms(c['hit_at_010'])} | {fmt_ms(c['hit_at_025'])} | "
-                     f"{fmt_ms(c['mean_normalized_l2'])} | {fmt_ms(pc.get('click', {'mean': math.nan, 'std': 0, 'n_seeds': 0}))} | "
-                     f"{fmt_ms(pc.get('scroll', {'mean': math.nan, 'std': 0, 'n_seeds': 0}))} |")
+                     f"{fmt_ms(c['mean_normalized_l2'])} | {fmt_ms(pc.get('click', nanc))} | {fmt_ms(pc.get('scroll', nanc))} |")
     L += ["", "Paired deltas within the type-removed condition (vs A trained without type):", "", "| contrast | hit@0.10 | hit@0.25 | mean L2 |", "|---|---|---|---|"]
-    for v in ("B", "Dhook"):
+    for v in vs:
+        if v == "A":
+            continue
         ds = sec["deltas_vs_A"][f"{v}_without"]
         L.append(f"| {NAMES[v]} − A (both without type) | " + " | ".join(fmt_delta(ds[m]) for m in ("hit_at_010", "hit_at_025", "mean_normalized_l2")) + " |")
     L += ["", "Effect of removing type events from training (without − with), per variant:", "", "| variant | hit@0.10 | hit@0.25 | mean L2 |", "|---|---|---|---|"]
-    for v in ("A", "B", "Dhook"):
+    for v in vs:
         ds = sec["drop_effect"][v]
         L.append(f"| {NAMES[v]} | " + " | ".join(fmt_delta(ds[m]) for m in ("hit_at_010", "hit_at_025", "mean_normalized_l2")) + " |")
     if sec.get("click_deltas"):
-        L += ["", "Click-only paired deltas vs A (hit@0.10):", "", "| contrast | with type | type removed |", "|---|---|---|"]
-        for v in ("B", "Dhook"):
+        L += ["", "Click-only paired deltas vs A (hit@0.10; episode bootstrap over the episodes that contain clicks):", "", "| contrast | with type | type removed |", "|---|---|---|"]
+        for v in vs:
+            if v == "A":
+                continue
             L.append(f"| {NAMES[v]} − A | {fmt_delta(sec['click_deltas'][f'{v}_with'])} | {fmt_delta(sec['click_deltas'][f'{v}_without'])} |")
     return "\n".join(L) + "\n"
 
 
 def tex_notype(sec: dict) -> str:
-    L = ["\\begin{table}[t]", "\\centering", "\\small",
+    nanc = {"mean": math.nan, "std": 0, "n_seeds": 0}
+    L = ["\\begin{table}[h]", "\\centering", "\\small",
          "\\caption{Removing \\emph{type} events from the training slice only, scored on the identical headline validation "
-         "slice (three seeds). Deltas are paired cluster bootstraps over examples; seed-level $p$ in parentheses.}",
+         "slice (three seeds). Deltas are paired episode-cluster bootstraps (every step and seed of a sampled episode kept "
+         "together); seed-level $p$ in parentheses.}",
          "\\label{tab:notype}", "\\resizebox{\\linewidth}{!}{\\begin{tabular}{llcccc}", "\\toprule",
          "Variant & Training stream & hit@0.10 & click hit@0.10 & scroll hit@0.10 & $\\Delta$hit@0.10 vs.\\ A (same stream) \\\\", "\\midrule"]
-    for v in ("A", "B", "Dhook"):
+    for v in sec["variants"]:
         for cond in ("with", "without"):
             c = sec["cells"][f"{v}_{cond}"]; pc = sec["per_class"].get(f"{v}_{cond}", {})
             if c["hit_at_010"]["n_seeds"] == 0:
@@ -618,8 +711,7 @@ def tex_notype(sec: dict) -> str:
             if v != "A":
                 d = (sec["deltas_vs_A"].get(f"{v}_without", {}).get("hit_at_010") if cond == "without" else None)
             L.append(f"{TEX_NAMES[v]} & {'with type' if cond == 'with' else 'type removed'} & {tex_ms(c['hit_at_010'])} & "
-                     f"{tex_ms(pc.get('click', {'mean': math.nan, 'std': 0, 'n_seeds': 0}))} & "
-                     f"{tex_ms(pc.get('scroll', {'mean': math.nan, 'std': 0, 'n_seeds': 0}))} & "
+                     f"{tex_ms(pc.get('click', nanc))} & {tex_ms(pc.get('scroll', nanc))} & "
                      f"{(tex_delta_cluster(d) + ' (' + tex_seed_p(d) + ')') if d else ''} \\\\")
     L += ["\\bottomrule", "\\end{tabular}}", "\\end{table}"]
     return "\n".join(L) + "\n"
@@ -692,11 +784,10 @@ def md_interv(sec: dict) -> str:
 
 def tex_interv(sec: dict) -> str:
     L = ["\\begin{table}[t]", "\\centering", "\\small",
-         "\\caption{Interventions on the trained conditioned models: the same model is decoded with the gold action "
-         "embedding, a wrong one (cyclic permutation; click$\\to$type), a wrong one that swaps only clicks and scrolls, "
-         "the table zeroed, and every row replaced by the class mean (uninformative, in-distribution norm). Five seeds "
-         "$\\times$ 250 examples; $\\Delta$ = gold $-$ condition with 95\\% cluster-bootstrap CI over examples and the "
-         "seed-level paired $p$. Flat A on the same examples is the reference row.}",
+         "\\caption{Interventions: the same trained model decoded with the gold action embedding, a wrong one (cyclic; "
+         "click$\\to$type), a wrong one swapping only clicks and scrolls, the table zeroed, and every row replaced by the class mean. "
+         "Five seeds $\\times$ 250 examples; $\\Delta$ = gold $-$ condition, 95\\% episode-cluster CI, seed-level paired $p$; "
+         "flat A on the same examples is the reference row.}",
          "\\label{tab:interv}", "\\resizebox{\\linewidth}{!}{\\begin{tabular}{llccccc}", "\\toprule",
          "Model & Conditioning & hit@0.10 & click hit@0.10 & scroll hit@0.10 & $\\Delta$ gold $-$ cond.\\ (hit@0.10) & seed $p$ \\\\", "\\midrule"]
     cond_name = {"gold": "gold type", "wrong": "wrong (cyclic)", "wrong2": "wrong (click$\\leftrightarrow$scroll)", "zero": "zeroed", "classmean": "class mean"}
@@ -715,6 +806,85 @@ def tex_interv(sec: dict) -> str:
     return "\n".join(L) + "\n"
 
 
+
+DTOKEN_LR = {"base": ("", "shared ($2\\times10^{-5}$)"), "alr0.0002": ("_alr0.0002", "$2\\times10^{-4}$ (10$\\times$)"),
+             "alr0.002": ("_alr0.002", "$2\\times10^{-3}$ (100$\\times$)")}
+
+
+def _row_stats(path: Path, rows: tuple[str, ...]) -> dict | None:
+    d = json.loads(path.read_text())
+    if "action_row_displacement" not in d:
+        return None
+    return {"disp": float(np.mean([d["action_row_displacement"][k] for k in rows])),
+            "init": float(np.mean([d["action_row_norms_init"][k] for k in rows])),
+            "trained": float(np.mean([d["action_row_norms_trained"][k] for k in rows]))}
+
+
+def section_dtoken_lr() -> dict:
+    """D-token with the action-embedding table trained at 1x / 10x / 100x the base learning rate
+    on the headline slice, plus how far the rows of the classes present moved from initialization."""
+    labels = slice_labels("all_with_coords", 1200); masks = _cls_masks(labels) if labels else {}
+    a_runs = [r for s in HEADLINE_SEEDS if (r := load_run("A", s, 1200, "all_with_coords"))]
+    b_runs = [r for s in HEADLINE_SEEDS if (r := load_run("B", s, 1200, "all_with_coords"))]
+    out = {"configs": {}, "seeds": {}, "cells": {}, "per_class": {}, "deltas_vs_A": {}, "deltas_vs_B": {}, "rows": {}}
+    for key, (suffix, desc) in DTOKEN_LR.items():
+        rs = [r for s in HEADLINE_SEEDS if (r := load_run("Dtoken", s, 1200, "all_with_coords", suffix))]
+        if not rs:
+            continue
+        out["configs"][key] = desc; out["seeds"][key] = [r.seed for r in rs]
+        out["cells"][key] = {m: cell(rs, m) for m in METRICS}
+        out["per_class"][key] = {c: cell([Run(r.path, r.variant, r.seed, r.n_train, r.mix, r.fvm, r.dist[msk])
+                                          for r in rs if r.dist is not None and len(r.dist) == len(labels)], "hit_at_010")
+                                 for c, msk in masks.items()}
+        out["deltas_vs_A"][key] = {m: paired(a_runs, rs, m) for m in ("hit_at_010", "hit_at_025")}
+        out["deltas_vs_B"][key] = {m: paired(b_runs, rs, m) for m in ("hit_at_010", "hit_at_025")}
+        st = [x for r in rs if (x := _row_stats(r.path, ("0", "2", "3")))]     # click, type, scroll rows
+        if st:
+            out["rows"][key] = {k: float(np.mean([x[k] for x in st])) for k in ("disp", "init", "trained")} | {"n_runs": len(st)}
+    # the headline D-token runs predate the displacement logging; the _notype runs share code path and LR
+    st = [x for s in CURVE_SEEDS if (r := load_run("Dtoken", s, 1200, "all_with_coords", "_notype")) and (x := _row_stats(r.path, ("0", "3")))]
+    if st:
+        out["rows"]["base_proxy_notype"] = {k: float(np.mean([x[k] for x in st])) for k in ("disp", "init", "trained")} | {"n_runs": len(st)}
+    return out
+
+
+def md_dtoken_lr(sec: dict) -> str:
+    if not sec["cells"]:
+        return "### D-token learning-rate sweep\n\n(no runs)\n"
+    L = ["### D-token action-table learning-rate sweep (all_with_coords, n_train=1200)", "",
+         "| table LR | seeds | hit@0.10 | hit@0.25 | click hit@0.10 | scroll hit@0.10 | Δ vs A (hit@0.10) | Δ vs B (hit@0.10) | row displacement / init norm / trained norm |",
+         "|---|---|---|---|---|---|---|---|---|"]
+    nanc = {"mean": math.nan, "std": 0, "n_seeds": 0}
+    for key, desc in sec["configs"].items():
+        c = sec["cells"][key]; pc = sec["per_class"].get(key, {}); rw = sec["rows"].get(key)
+        rtxt = f"{rw['disp']:.3f} / {rw['init']:.3f} / {rw['trained']:.3f} ({rw['n_runs']} runs)" if rw else "--"
+        L.append(f"| {desc} | {sec['seeds'][key]} | {fmt_ms(c['hit_at_010'])} | {fmt_ms(c['hit_at_025'])} | {fmt_ms(pc.get('click', nanc))} | "
+                 f"{fmt_ms(pc.get('scroll', nanc))} | {fmt_delta(sec['deltas_vs_A'][key]['hit_at_010'])} | {fmt_delta(sec['deltas_vs_B'][key]['hit_at_010'])} | {rtxt} |")
+    if "base_proxy_notype" in sec["rows"]:
+        rw = sec["rows"]["base_proxy_notype"]
+        L.append(f"\nBase-LR displacement measured on the _notype D-token runs (click and scroll rows, same LR and code path): "
+                 f"{rw['disp']:.3f} from init norm {rw['init']:.3f} ({rw['n_runs']} runs).")
+    return "\n".join(L) + "\n"
+
+
+def tex_dtoken_lr(sec: dict) -> str:
+    nanc = {"mean": math.nan, "std": 0, "n_seeds": 0}
+    L = ["\\begin{table}[h]", "\\centering", "\\small",
+         "\\caption{D-token with the action-embedding table trained at 1$\\times$, 10$\\times$, and 100$\\times$ the base learning rate "
+         "on the headline slice. Displacement is the mean distance the rows of the classes present (click, type, scroll) moved from "
+         "their $\\mathcal{N}(0, 0.02^2)$ initialization, whose norm is 0.78; the 1$\\times$ value comes from the type-removed runs, "
+         "which share the code path and learning rate. $\\Delta$ vs.\\ A uses the shared seeds with an episode-cluster interval.}",
+         "\\label{tab:dtoken_lr}", "\\resizebox{\\linewidth}{!}{\\begin{tabular}{lccccccc}", "\\toprule",
+         "Table LR & seeds & hit@0.10 & hit@0.25 & click hit@0.10 & $\\Delta$hit@0.10 vs.\\ A & seed $p$ & row displacement \\\\", "\\midrule"]
+    for key, desc in sec["configs"].items():
+        c = sec["cells"][key]; pc = sec["per_class"].get(key, {}); d = sec["deltas_vs_A"][key]["hit_at_010"]
+        rw = sec["rows"].get(key) or (sec["rows"].get("base_proxy_notype") if key == "base" else None)
+        L.append(f"{desc} & {len(sec['seeds'][key])} & {tex_ms(c['hit_at_010'])} & {tex_ms(c['hit_at_025'])} & {tex_ms(pc.get('click', nanc))} & "
+                 f"{tex_delta_cluster(d)} & {tex_seed_p(d)} & {(f'{rw[chr(100)+chr(105)+chr(115)+chr(112)]:.3f}') if rw else '--'} \\\\")
+    L += ["\\bottomrule", "\\end{tabular}}", "\\end{table}"]
+    return "\n".join(L) + "\n"
+
+
 def strip_runs(obj):
     if isinstance(obj, dict):
         return {k: strip_runs(v) for k, v in obj.items() if k != "_runs"}
@@ -729,7 +899,7 @@ def main() -> None:
     P8.mkdir(parents=True, exist_ok=True); TABLES.mkdir(parents=True, exist_ok=True)
     head = section_variants("all_with_coords", 1200, HEADLINE_SEEDS, ["A", "B", "C", "Dhook", "Dtoken", "Dtext"],
                             "Headline ablation (all_with_coords, n_train=1200, n_val=250)")
-    ctrl = section_variants("taps_and_swipes", 1000, CURVE_SEEDS, ["A", "B", "C", "Dhook"],
+    ctrl = section_variants("taps_and_swipes", 1000, CURVE_SEEDS, ["A", "B", "C", "Dhook", "Dtext"],
                             "Control (taps_and_swipes, n_train=1000, n_val=200)")
     scal = section_scaling()
     m2w = section_m2w()
@@ -737,25 +907,27 @@ def main() -> None:
     e2e = section_e2e()
     notype = section_notype()
     interv = section_interventions()
+    dlr = section_dtoken_lr()
 
     md = ["# Phase 8 results — pre-submission consolidation", "",
           "Generated by `scripts/p8_consolidate.py` from `results/phase4/*.json`. "
           "See `neurips2026/SUBMISSION_NOTES.md` for the experiment plan (E1–E6). "
-          "Each delta shows: pooled-unit bootstrap CI and stars / cluster bootstrap over examples (seeds kept together) CI and stars / "
+          "Each delta shows: pooled-unit bootstrap CI and stars / cluster bootstrap over examples (seeds kept together) / EPISODE cluster bootstrap (primary; steps and seeds of an episode kept together) / boundary-episode-excluded / "
           "seed-level paired t-test p (n = shared seeds).", "",
-          md_variants(head), md_variants(ctrl), md_notype(notype), md_scaling(scal), md_e2e(e2e), md_m2w(m2w), md_causal(caus), md_interv(interv)]
+          md_variants(head), md_variants(ctrl), md_notype(notype), md_dtoken_lr(dlr), md_scaling(scal), md_e2e(e2e), md_m2w(m2w), md_causal(caus), md_interv(interv)]
     (P8 / "PHASE8_RESULTS.md").write_text("\n".join(md))
     (P8 / "phase8_summary.json").write_text(json.dumps(strip_runs(
         {"headline": head, "control": ctrl, "notype": notype, "scaling": scal, "e2e": e2e, "m2w": m2w, "causal": caus,
-         "interventions": interv}), indent=2))
+         "interventions": interv, "dtoken_lr": dlr}), indent=2))
+    if dlr["cells"]:
+        (TABLES / "dtoken_lr.tex").write_text(tex_dtoken_lr(dlr))
     (TABLES / "notype.tex").write_text(tex_notype(notype))
     if interv["variants"]:
         (TABLES / "interv.tex").write_text(tex_interv(interv))
     (TABLES / "headline.tex").write_text(tex_variants(
         head, "tab:headline", "Stage 2 grounding on AITW \\texttt{all\\_with\\_coords} (n$_{\\text{train}}$=1200, n$_{\\text{val}}$=250, "
-        f"{head['cells']['A']['hit_at_010']['n_seeds']} seeds). Mean $\\pm$ std over seeds; $\\Delta$ vs.\\ A with a 95\\% cluster-bootstrap CI over "
-        "validation examples (all seeds of an example kept together; stars from the same bootstrap, $^{*}p<.05$, $^{**}p<.01$, $^{***}p<.001$) "
-        "and the seed-level paired $t$-test $p$."))
+        f"{head['cells']['A']['hit_at_010']['n_seeds']} seeds). Mean $\\pm$ std over seeds; $\\Delta$ vs.\\ A with a 95\\% episode-cluster bootstrap CI "
+        "(stars from the same bootstrap, $^{*}p<.05$, $^{**}p<.01$, $^{***}p<.001$) and the seed-level paired $t$-test $p$."))
     (TABLES / "control.tex").write_text(tex_variants(
         ctrl, "tab:control", "Control: AITW \\texttt{taps\\_and\\_swipes} (n$_{\\text{train}}$=1000, n$_{\\text{val}}$=200, "
         f"{ctrl['cells']['A']['hit_at_010']['n_seeds']} seeds), a training stream without the degenerate class. Same statistics as Table~\\ref{{tab:headline}}."))

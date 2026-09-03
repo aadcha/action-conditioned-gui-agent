@@ -1,18 +1,18 @@
 \begin{table}[t]
 \centering
 \small
-\caption{Stage 2 grounding on AITW \texttt{all\_with\_coords} (n$_{\text{train}}$=1200, n$_{\text{val}}$=250, 5 seeds). Mean $\pm$ std over seeds; $\Delta$ vs.\ A with a 95\% cluster-bootstrap CI over validation examples (all seeds of an example kept together; stars from the same bootstrap, $^{*}p<.05$, $^{**}p<.01$, $^{***}p<.001$) and the seed-level paired $t$-test $p$.}
+\caption{Stage 2 grounding on AITW \texttt{all\_with\_coords} (n$_{\text{train}}$=1200, n$_{\text{val}}$=250, 5 seeds). Mean $\pm$ std over seeds; $\Delta$ vs.\ A with a 95\% episode-cluster bootstrap CI (stars from the same bootstrap, $^{*}p<.05$, $^{**}p<.01$, $^{***}p<.001$) and the seed-level paired $t$-test $p$.}
 \label{tab:headline}
 \resizebox{\linewidth}{!}{\begin{tabular}{lcccccc}
 \toprule
-Variant & hit@0.05 & hit@0.10 & hit@0.25 & mean L2 $\downarrow$ & $\Delta$hit@0.10 vs.\ A [cluster CI] & seed-level $p$ \\
+Variant & hit@0.05 & hit@0.10 & hit@0.25 & mean L2 $\downarrow$ & $\Delta$hit@0.10 vs.\ A [episode CI] & seed-level $p$ \\
 \midrule
 A: flat & 0.130 $\pm$ 0.039 & 0.229 $\pm$ 0.043 & 0.499 $\pm$ 0.029 & 0.406 $\pm$ 0.028 &  &  \\
-B: aux.\ loss & 0.178 $\pm$ 0.025 & 0.293 $\pm$ 0.021 & 0.582 $\pm$ 0.026 & 0.365 $\pm$ 0.004 & +0.064 [+0.036, +0.093]$^{***}$ & 0.004 \\
-C: hard routing & 0.170 $\pm$ 0.022 & 0.264 $\pm$ 0.045 & 0.538 $\pm$ 0.059 & 0.421 $\pm$ 0.016 & +0.035 [+0.001, +0.069]$^{*}$ & 0.189 \\
-D-hook: additive & 0.170 $\pm$ 0.042 & 0.282 $\pm$ 0.041 & 0.563 $\pm$ 0.016 & 0.370 $\pm$ 0.010 & +0.054 [+0.022, +0.086]$^{***}$ & 0.028 \\
-D-token: prepended & 0.144 $\pm$ 0.056 & 0.238 $\pm$ 0.049 & 0.504 $\pm$ 0.055 & 0.386 $\pm$ 0.021 & +0.009 [-0.015, +0.034] & 0.465 \\
-D-text: word in prompt & 0.186 $\pm$ 0.022 & 0.302 $\pm$ 0.028 & 0.568 $\pm$ 0.033 & 0.364 $\pm$ 0.008 & +0.073 [+0.033, +0.113]$^{***}$ & 0.018 \\
+B: aux.\ loss & 0.178 $\pm$ 0.025 & 0.293 $\pm$ 0.021 & 0.582 $\pm$ 0.026 & 0.365 $\pm$ 0.004 & +0.064 [+0.037, +0.092]$^{***}$ & 0.004 \\
+C: hard routing & 0.170 $\pm$ 0.022 & 0.264 $\pm$ 0.045 & 0.538 $\pm$ 0.059 & 0.421 $\pm$ 0.016 & +0.035 [-0.002, +0.072] & 0.189 \\
+D-hook: additive & 0.170 $\pm$ 0.042 & 0.282 $\pm$ 0.041 & 0.563 $\pm$ 0.016 & 0.370 $\pm$ 0.010 & +0.054 [+0.022, +0.090]$^{***}$ & 0.028 \\
+D-token: prepended & 0.144 $\pm$ 0.056 & 0.238 $\pm$ 0.049 & 0.504 $\pm$ 0.055 & 0.386 $\pm$ 0.021 & +0.009 [-0.019, +0.036] & 0.465 \\
+D-text: word in prompt & 0.186 $\pm$ 0.022 & 0.302 $\pm$ 0.028 & 0.568 $\pm$ 0.033 & 0.364 $\pm$ 0.008 & +0.073 [+0.030, +0.117]$^{**}$ & 0.018 \\
 \bottomrule
 \end{tabular}}
 \end{table}

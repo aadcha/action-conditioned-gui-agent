@@ -1,0 +1,15 @@
+\begin{table}[h]
+\centering
+\small
+\caption{D-token with the action-embedding table trained at 1$\times$, 10$\times$, and 100$\times$ the base learning rate on the headline slice. Displacement is the mean distance the rows of the classes present (click, type, scroll) moved from their $\mathcal{N}(0, 0.02^2)$ initialization, whose norm is 0.78; the 1$\times$ value comes from the type-removed runs, which share the code path and learning rate. $\Delta$ vs.\ A uses the shared seeds with an episode-cluster interval.}
+\label{tab:dtoken_lr}
+\resizebox{\linewidth}{!}{\begin{tabular}{lccccccc}
+\toprule
+Table LR & seeds & hit@0.10 & hit@0.25 & click hit@0.10 & $\Delta$hit@0.10 vs.\ A & seed $p$ & row displacement \\
+\midrule
+shared ($2\times10^{-5}$) & 5 & 0.238 $\pm$ 0.049 & 0.504 $\pm$ 0.055 & 0.269 $\pm$ 0.069 & +0.009 [-0.019, +0.036] & 0.465 & 0.016 \\
+$2\times10^{-4}$ (10$\times$) & 1 & 0.260 & 0.528 & 0.278 & +0.004 [-0.042, +0.052] & -- & 0.264 \\
+$2\times10^{-3}$ (100$\times$) & 2 & 0.280 $\pm$ 0.045 & 0.546 $\pm$ 0.031 & 0.320 $\pm$ 0.042 & +0.026 [-0.017, +0.070] & -- & 1.887 \\
+\bottomrule
+\end{tabular}}
+\end{table}

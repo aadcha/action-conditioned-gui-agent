@@ -1,70 +1,56 @@
-% Architecture figure: two-stage factorization + the five Stage-2 conditioning
+% Architecture figure: two-stage factorization + the six Stage-2 conditioning
 % mechanisms. \input from main.tex inside a figure environment.
 % Requires: \usepackage{tikz} with libraries arrows.meta, positioning, fit, calc.
+% Natural width is about 13.5 cm so that \resizebox{\linewidth} scales it by ~1.
 \begin{tikzpicture}[
   font=\footnotesize,
-  >={Stealth[length=2mm]},
-  box/.style={draw, rounded corners=2pt, align=center, inner sep=3pt, minimum height=6mm},
-  inp/.style={box, fill=gray!12, minimum width=1.7cm},
-  model/.style={box, fill=blue!10, thick},
-  head/.style={box, fill=orange!18},
-  outp/.style={box, fill=green!14},
-  mech/.style={box, fill=purple!8, text width=2.45cm, minimum height=13mm},
-  bad/.style={box, fill=red!8, text width=2.45cm, minimum height=13mm, densely dashed},
+  >={Stealth[length=1.8mm]},
+  box/.style={draw, rounded corners=2pt, align=center, inner sep=2.5pt, minimum height=7mm},
+  inp/.style={box, fill=gray!12, text width=1.55cm},
+  model/.style={box, fill=blue!10, thick, text width=2.25cm},
+  head/.style={box, fill=orange!18, text width=1.35cm},
+  outp/.style={box, fill=green!14, text width=1.6cm},
+  mech/.style={box, fill=purple!8, text width=1.95cm, minimum height=11mm, font=\scriptsize},
   lbl/.style={font=\scriptsize\itshape, text=black!65},
   cond/.style={->, thick, purple!70!black},
+  node distance=3mm,
 ]
-  % ---------------- inputs ----------------
-  \node[inp] (shot) {screenshot};
-  \node[inp, below=2mm of shot] (goal) {goal text};
-  \coordinate (bus) at ($(shot.east)!0.5!(goal.east) + (3mm,0)$);
-
-  % ---------------- Stage 1 (what) ----------------
-  \node[model, right=7mm of bus, text width=2.35cm, anchor=west]
-    (vlm1) {Qwen2-VL-2B\\ \textit{frozen}; mean-pooled\\ last hidden state};
-  \node[head, right=4mm of vlm1, text width=1.65cm] (mlp) {Stage-1 MLP\\ (3 layers)};
-  \node[outp, right=4mm of mlp, text width=1.8cm] (atype)
-    {action type $\hat a$\\ \{click, scroll,\\ type, \dots\}};
-
-  % ---------------- Stage 2 (where) ----------------
-  \node[model, right=28mm of atype, text width=2.35cm]
-    (vlm2) {Qwen2-VL-2B\\ + LoRA on q,k,v,o\\ \textit{0.2\% trainable}};
-  \node[outp, right=4mm of vlm2, text width=1.9cm] (coord) {coordinate string\\ ``(x, y)'', 0--999 grid};
-
-  % stage brackets / labels
-  \node[draw, densely dotted, rounded corners, inner sep=4pt, fit=(vlm1)(mlp)(atype),
-        label={[lbl]above left:{Stage 1: \textbf{what} (action type)}}] (s1) {};
-  \node[draw, densely dotted, rounded corners, inner sep=4pt, fit=(vlm2)(coord),
-        label={[lbl]above right:{Stage 2: \textbf{where} (grounding)}}] (s2) {};
-
-  % ---------------- arrows ----------------
-  \draw (shot.east) -- ++(3mm,0) -- (bus);
-  \draw (goal.east) -- ++(3mm,0) -- (bus);
-  \draw[->] (bus) -- (vlm1.west);
+  % ---------------- pipeline row ----------------
+  \node[inp] (shot) {screenshot\\ + goal};
+  \node[model, right=4mm of shot] (vlm1) {Qwen2-VL-2B\\ \textit{frozen}, mean-pooled};
+  \node[head, right=of vlm1] (mlp) {MLP\\ (3 layers)};
+  \node[outp, right=of mlp] (atype) {action type\\ $\hat a$};
+  \node[model, right=10mm of atype] (vlm2) {Qwen2-VL-2B\\ + LoRA on q,k,v,o};
+  \node[outp, right=of vlm2] (coord) {\texttt{(x, y)}\\ 0--999 grid};
+  \node[draw, densely dotted, rounded corners, inner sep=3pt, fit=(vlm1)(mlp)(atype),
+        label={[lbl]below:{Stage 1: \textbf{what} (action type)}}] (s1) {};
+  \node[draw, densely dotted, rounded corners, inner sep=3pt, fit=(vlm2)(coord),
+        label={[lbl]below:{Stage 2: \textbf{where} (grounding)}}] (s2) {};
+  \draw[->] (shot) -- (vlm1);
   \draw[->] (vlm1) -- (mlp);
   \draw[->] (mlp) -- (atype);
   \draw[->] (vlm2) -- (coord);
-  % same inputs also feed Stage 2: route the bus under Stage 1
-  \draw[->] (bus) -- ++(0,-13mm) -| ([xshift=-5mm]vlm2.west) -- (vlm2.west);
-  \node[lbl, anchor=north] at ($(bus)+(38mm,-13mm)$) {same screenshot + goal};
-  % action type feeds Stage 2 through one of the mechanisms below
-  \draw[cond] (atype.east) -- node[above=1pt, font=\scriptsize, text=purple!70!black, align=center]
-    {gold type, or\\ Stage-1 $\hat a$ at test} (s2.west |- atype.east);
+  \draw[cond] (atype) -- node[above, font=\scriptsize, text=purple!70!black, align=center]
+    {gold type, or\\ $\hat a$ at test} (vlm2);
+  % the same inputs feed Stage 2, routed over the top
+  \draw[->] (shot.north) -- ++(0,6mm) -| (vlm2.north);
+  \node[lbl, anchor=south] at ($(shot.north)!0.5!(vlm2.north) + (0,6mm)$) {same screenshot + goal};
 
-  % ---------------- mechanisms ----------------
-  \node[mech, anchor=north] (Dh) at ($(vlm2.south) + (0,-22mm)$)
-    {\textbf{D-hook} additive\\[1pt] learned $e_a$ added to\\ every token embedding\\ (zero-init $\supset$ A)};
-  \node[mech, left=2mm of Dh] (C)
-    {\textbf{C} hard routing\\[1pt] emit ``\texttt{click (x,y)}'';\\ force the type word\\ at decode time};
+  % ---------------- mechanism row ----------------
+  \coordinate (mid) at ($(shot.west)!0.5!(coord.east)$);
+  \node[mech, anchor=north east] (C) at ($(mid) + (-1mm,-13mm)$)
+    {\textbf{C} hard routing\\ emit \texttt{click (x, y)};\\ word forced at test};
+  \node[mech, anchor=north west] (Dh) at ($(mid) + (1mm,-13mm)$)
+    {\textbf{D-hook} additive\\ $E[a]$ added to text\\ embeddings; zero init};
   \node[mech, left=2mm of C] (B)
-    {\textbf{B} aux.\ loss\\[1pt] linear head on pooled\\ hidden $\to$ CE on type\\ (training only)};
+    {\textbf{B} aux.\ loss\\ linear head on pooled\\ state; training only};
   \node[mech, left=2mm of B] (A)
-    {\textbf{A} flat\\[1pt] no conditioning\\ (baseline)};
+    {\textbf{A} flat\\ no type\\ (baseline)};
   \node[mech, right=2mm of Dh] (Dt)
-    {\textbf{D-token} prepended\\[1pt] \texttt{<|action\_slot|>} in\\ \texttt{input\_ids}; embedding\\ replaced by $e_a$ (M-RoPE ok)};
-  \node[bad, right=2mm of Dt] (Ds)
-    {\textbf{D-slot} (retracted)\\[1pt] slot replaced via\\ \texttt{inputs\_embeds}:\\ bypasses M-RoPE};
-  \node[draw, densely dotted, rounded corners, inner sep=3pt, fit=(A)(B)(C)(Dh)(Dt)(Ds),
-        label={[lbl]above left:{how the action type enters Stage 2 (matched data, compute, LoRA, decoding)}}] (fitbox) {};
+    {\textbf{D-token} prepended\\ \texttt{<|action\_slot|>}\\ $\to E[a]$; random init};
+  \node[mech, right=2mm of Dt] (Dx)
+    {\textbf{D-text} prompt word\\ \texttt{Action: click.}\\ no new parameters};
+  \node[draw, densely dotted, rounded corners, inner sep=3pt, fit=(A)(B)(C)(Dh)(Dt)(Dx),
+        label={[lbl]below:{how the type enters Stage 2 (same data, optimizer, adapters, decoding)}}] (fitbox) {};
   \draw[cond] (fitbox.north -| vlm2.south) -- (vlm2.south);
 \end{tikzpicture}

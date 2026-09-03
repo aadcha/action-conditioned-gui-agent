@@ -1,25 +1,25 @@
 \begin{table}[t]
 \centering
 \small
-\caption{Interventions on the trained conditioned models: the same model is decoded with the gold action embedding, a wrong one (cyclic permutation; click$\to$type), a wrong one that swaps only clicks and scrolls, the table zeroed, and every row replaced by the class mean (uninformative, in-distribution norm). Five seeds $\times$ 250 examples; $\Delta$ = gold $-$ condition with 95\% cluster-bootstrap CI over examples and the seed-level paired $p$. Flat A on the same examples is the reference row.}
+\caption{Interventions: the same trained model decoded with the gold action embedding, a wrong one (cyclic; click$\to$type), a wrong one swapping only clicks and scrolls, the table zeroed, and every row replaced by the class mean. Five seeds $\times$ 250 examples; $\Delta$ = gold $-$ condition, 95\% episode-cluster CI, seed-level paired $p$; flat A on the same examples is the reference row.}
 \label{tab:interv}
 \resizebox{\linewidth}{!}{\begin{tabular}{llccccc}
 \toprule
 Model & Conditioning & hit@0.10 & click hit@0.10 & scroll hit@0.10 & $\Delta$ gold $-$ cond.\ (hit@0.10) & seed $p$ \\
 \midrule
 D-hook: additive & gold type & 0.275 $\pm$ 0.040 & 0.310 $\pm$ 0.060 & 0.357 $\pm$ 0.052 &  &  \\
- & wrong (cyclic) & 0.054 $\pm$ 0.009 & 0.006 $\pm$ 0.000 & 0.270 $\pm$ 0.050 & +0.222 [+0.174, +0.270]$^{***}$ & 0.000 \\
- & wrong (click$\leftrightarrow$scroll) & 0.099 $\pm$ 0.056 & 0.073 $\pm$ 0.087 & 0.270 $\pm$ 0.050 & +0.176 [+0.133, +0.221]$^{***}$ & 0.003 \\
- & zeroed & 0.248 $\pm$ 0.032 & 0.288 $\pm$ 0.053 & 0.291 $\pm$ 0.050 & +0.027 [-0.006, +0.060] & 0.224 \\
- & class mean & 0.206 $\pm$ 0.058 & 0.217 $\pm$ 0.099 & 0.322 $\pm$ 0.064 & +0.070 [+0.034, +0.106]$^{***}$ & 0.133 \\
- & flat A, same examples & 0.229 $\pm$ 0.043 & 0.256 & 0.304 & +0.046 [+0.017, +0.077]$^{**}$ & 0.032 \\
+ & wrong (cyclic) & 0.054 $\pm$ 0.009 & 0.006 $\pm$ 0.000 & 0.270 $\pm$ 0.050 & +0.222 [+0.182, +0.263]$^{***}$ & 0.000 \\
+ & wrong (click$\leftrightarrow$scroll) & 0.099 $\pm$ 0.056 & 0.073 $\pm$ 0.087 & 0.270 $\pm$ 0.050 & +0.176 [+0.134, +0.221]$^{***}$ & 0.003 \\
+ & zeroed & 0.248 $\pm$ 0.032 & 0.288 $\pm$ 0.053 & 0.291 $\pm$ 0.050 & +0.027 [-0.006, +0.065] & 0.224 \\
+ & class mean & 0.206 $\pm$ 0.058 & 0.217 $\pm$ 0.099 & 0.322 $\pm$ 0.064 & +0.070 [+0.034, +0.109]$^{***}$ & 0.133 \\
+ & flat A, same examples & 0.229 $\pm$ 0.043 & 0.256 & 0.304 & +0.046 [+0.016, +0.081]$^{**}$ & 0.032 \\
 \midrule
 D-token: prepended & gold type & 0.242 $\pm$ 0.054 & 0.272 $\pm$ 0.079 & 0.313 $\pm$ 0.099 &  &  \\
- & wrong (cyclic) & 0.079 $\pm$ 0.012 & 0.036 $\pm$ 0.019 & 0.300 $\pm$ 0.054 & +0.162 [+0.120, +0.205]$^{***}$ & 0.001 \\
- & wrong (click$\leftrightarrow$scroll) & 0.155 $\pm$ 0.043 & 0.148 $\pm$ 0.063 & 0.300 $\pm$ 0.054 & +0.086 [+0.043, +0.130]$^{***}$ & 0.073 \\
- & zeroed & 0.162 $\pm$ 0.072 & 0.160 $\pm$ 0.112 & 0.291 $\pm$ 0.033 & +0.080 [+0.050, +0.112]$^{***}$ & 0.120 \\
- & class mean & 0.169 $\pm$ 0.043 & 0.169 $\pm$ 0.067 & 0.296 $\pm$ 0.025 & +0.073 [+0.040, +0.107]$^{***}$ & 0.091 \\
- & flat A, same examples & 0.229 $\pm$ 0.043 & 0.256 & 0.304 & +0.013 [-0.010, +0.037] & 0.374 \\
+ & wrong (cyclic) & 0.079 $\pm$ 0.012 & 0.036 $\pm$ 0.019 & 0.300 $\pm$ 0.054 & +0.162 [+0.127, +0.197]$^{***}$ & 0.001 \\
+ & wrong (click$\leftrightarrow$scroll) & 0.155 $\pm$ 0.043 & 0.148 $\pm$ 0.063 & 0.300 $\pm$ 0.054 & +0.086 [+0.050, +0.125]$^{***}$ & 0.073 \\
+ & zeroed & 0.162 $\pm$ 0.072 & 0.160 $\pm$ 0.112 & 0.291 $\pm$ 0.033 & +0.080 [+0.054, +0.107]$^{***}$ & 0.120 \\
+ & class mean & 0.169 $\pm$ 0.043 & 0.169 $\pm$ 0.067 & 0.296 $\pm$ 0.025 & +0.073 [+0.046, +0.100]$^{***}$ & 0.091 \\
+ & flat A, same examples & 0.229 $\pm$ 0.043 & 0.256 & 0.304 & +0.013 [-0.013, +0.039] & 0.374 \\
 \bottomrule
 \end{tabular}}
 \end{table}
