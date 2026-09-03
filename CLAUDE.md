@@ -194,17 +194,17 @@ Pattern: clone `_stage2_train_remote` or `_stage2_variantA_train_remote` and adj
 | Phase 5 | A vs D bug hunt | The initial 8σ "A beats D" result was a M-RoPE bug from the `inputs_embeds` injection path. D-hook fixes it by preserving `input_ids`; tap/swipe becomes a tie, all_with_coords becomes a real positive signal. | `results/phase4/PHASE5_CORRECTED.md` |
 | Phase 6 | Full ablation + e2e | **Broad thesis supported, specific embedding claim refuted.** all_with_coords: B≈D-hook > D-token≳C>A; B and D-hook beat A by paired bootstrap. taps_and_swipes control: no conditioned mechanism clearly beats A. E2E predicted types beat flat A with ~0.02 oracle gap. | `results/phase4/PHASE6_FINAL.md` |
 | Phase 7 | Mechanism + low-data strengthening | Low-data matrix complete for A/B/D-hook at n_train ∈ {300,500,800}, seeds 42/43/44; strict audit passes. D-hook is the most stable low-data mechanism. D-token causal-use test shows the learned embedding is used (gold − wrong +0.192 hit@0.10; gold − zero +0.093) but still not the winning mechanism. | `results/phase4/PHASE7_RESULTS.md`, `results/phase4/phase7_result_audit.json`, `results/phase4/causal_use_summary.json` |
-| Phase 8 (Sep 2026) | Pre-submission strengthening for VLM4RWD | 5-seed headline (B +0.064***, D-hook +0.054***, D-token ≈ A), paired-bootstrap control, 3-seed scaling at every n (D-hook robust across n, B not), 3-seed Mind2Web, aggregate attention analysis (D-hook embedding redundant at inference, D-token's used; localization at the y-predicting token), honest qualitative figure. | `results/phase8/PHASE8_RESULTS.md`, `results/phase8/ATTN_AGGREGATE.md`, `neurips2026/SUBMISSION_NOTES.md` |
+| Phase 8 (Sep 2026) | Pre-submission strengthening for VLM4RWD, two mock panels, two revisions | 5-seed headline with episode-cluster bootstrap + seed-level t (B +0.064***, D-hook +0.054***, D-text +0.073**, C and D-token ns); the gain is protection from the (0,0) sentinel class our serializer creates (removing it lifts flat A 0.255→0.297, after which no mechanism is established to beat it; taps-and-swipes control null); end-to-end margin with predicted types null (+0.016); wrong/zero/class-mean interventions (both embeddings read; zeroed D-hook within a point of A, zeroed D-token 7 points below); D-token failure is a schedule effect (rows move 0.016 at the shared LR; 10x table LR → 0.295, level with B); inputs_embeds M-RoPE fallback documented. | `results/phase8/PHASE8_RESULTS.md`, `neurips2026/SUBMISSION_NOTES.md`, `neurips2026/mock_review_2/` |
 | Diagnostics | Attention viz + D-token + Dfrozen | Attention heatmaps exist under `results/phase4/attn_viz/`; D-token is M-RoPE-correct and still does not beat B/D-hook on headline grounding; Dfrozen confirmed the original slot path was the problem. | `results/phase4/attn_viz/`, `results/phase4/Dtoken_*`, `results/phase4/Dfrozen_*` |
 
-Cumulative Modal spend: **~$85 of $200** (Phase 8 added ≈$33 for 37 L4 jobs).
+Cumulative Modal spend: **~$145 of $200** (Phase 8 ≈$33 for 37 L4 jobs; the two submission revisions of Sep 2 ≈$60 for about 70 more: no-type retraining, interventions, attention probes, D-token LR sweep, D-text control and interventions).
 
-Paper framing to use now:
-- **Supported:** action-type supervision improves grounding when action type is spatially predictive (`all_with_coords`).
-- **Refuted:** the literal learned prepended action embedding is not the winning mechanism; auxiliary loss B captures the benefit more simply.
-- **Mechanism:** D-token is causally used at inference (wrong/zero action embeddings hurt), so the embedding-path refutation is "used but not best", not "ignored."
+Paper framing to use now (revision 2, Sep 2 2026):
+- **Ranking:** on the mixed stream B, D-hook, and D-text beat flat A by 5–7 hit@0.10 points (five seeds, episode-cluster bootstrap, seed-level t); C and D-token do not.
+- **Diagnosis, not spatial prior:** the gain is protection from the (0,0) sentinel class that our serializer creates for AITW type events (A's clicks are pulled toward the origin); retraining without the class lifts A by four points and no mechanism is then established to beat it; taps-and-swipes control is null (D-text mildly harmful).
+- **Deployment:** with Stage-1 predicted types the pipeline's margin over A is not established (+0.016); a wrong type collapses every conditioned-at-inference model, D-hook most.
+- **D-token:** the failure is a schedule effect (rows barely move at the shared LR); trained 10x faster it is level with B/D-hook and no better. Do not call the architecture refuted.
 - **Mechanistic caution:** naive `inputs_embeds` injection bypasses Qwen2-VL's M-RoPE position computation and can create a false negative.
-- **Control:** when action type is not spatially informative (`taps_and_swipes`), conditioning is neutral to mildly harmful.
 
 ---
 

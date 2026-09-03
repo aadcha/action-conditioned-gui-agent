@@ -255,3 +255,56 @@ grounding-as-evidence-localization + training-paradigms-for-grounded-VLAs +
 M-RoPE pitfall as deployment failure analysis. Expand related work.
 8-page budget is roomy vs the CVPR 2-column source; appendix gets per-seed
 tables, attn viz, reproduction details.
+
+## Revision 2 (Sep 2 2026, evening): after mock panel 2
+
+Panel 2 (`mock_review_2/`, fresh context, four reviewers + AC) returned accept-poster conditional on a
+reframing. Everything below was done under the user's standing authorization.
+
+### What changed in the paper
+- Title/abstract/intro/5.1 heading/conclusion reframed: headline = mechanism ranking (B, D-hook, D-text beat
+  flat A by 5-7 hit@0.10 points; C and D-token do not) plus the clean-stream null; the (0,0) sentinel class is
+  presented as a diagnosis of our own serializer, not a spatial prior; the end-to-end null (+0.016,
+  [-0.017, +0.052]) and the wrong-type collapse are stated as the deployment findings.
+- Every interval is now an episode-cluster bootstrap (42 episodes in the headline slice, 37 in the control;
+  `results/phase8/val_episodes.json`). Only one star changes vs. example clustering: hard routing's headline
+  gain (+0.035, [-0.002, +0.072]) is no longer established. Dropping the boundary episode shared with training
+  (4 steps at the headline size) changes no estimate by more than 0.003. A subset bug in the click-only
+  contrasts (episode ids taken from the first 169 steps instead of the click steps) was fixed.
+- Equality wording replaced by intervals/bounds: zeroed D-hook is within one point of A ([-0.006, +0.044]);
+  clean-stream advantages are bounded at about four points; the class-mean and zero contrasts carry their
+  seed-level p.
+- D-hook description corrected: the hook adds E[a] to text positions only (image placeholders are overwritten
+  by the visual features afterwards). B's pooled state includes the teacher-forced answer tokens (stated).
+- hit@0.14 (AITW tap threshold) added; C's per-class parse failures (click 1.4%, scroll 13.9%) and parsed-only
+  rates (scroll 0.172) tabulated; origin-bias analysis on the logged seed (A's click predictions sit 0.10 of the
+  screen width left of target on average, 7.1% within 0.10 of the origin; D-hook -0.016 and 0.6%).
+- Five-seed extension and D-text addition disclosed as post-hoc; split (stored-order slices, no history)
+  stated as a limitation; LiMAC clause fixed; CoCo-Agent's own ablation acknowledged; TinyClick, AutoGLM,
+  Hi-Agent, I-MRoPE, prefill-determines-grounding, MolmoPoint, Ferret-UI Lite cited (all verified via arXiv API).
+- Figures: compact TikZ pipeline (legible at print size), 2x3 qualitative grid; scaling figure moved to the
+  appendix (descriptive; cross-size claim dropped). Empty appendix headings fixed with [h] floats and
+  \FloatBarrier. Body ends on page 8.
+
+### New runs (21, ~L4 x 40 min each)
+- D-token action-table LR sweep, 3 seeds each: shared 2e-5 (headline, 5 seeds) 0.238; 10x 0.295 +-0.041
+  (vs A +0.040 [+0.005, +0.076]*, seed p 0.16; vs B -0.011 ns); 100x 0.283 +-0.032 (vs A +0.028
+  [-0.008, +0.065] ns, seed p 0.02). Row displacement from the N(0, 0.02^2) init (norm 0.78): 0.016 at the
+  shared LR (measured on the no-type runs), 0.276 at 10x, 1.874 at 100x. Conclusion: the D-token refutation is
+  of the schedule, not the architecture; a trained token is level with B/D-hook and no better.
+- No-type retraining extended to C, D-token, D-text (3 seeds): on the clean stream A 0.297, B 0.319
+  (+0.021 [0.000, +0.043] ns), D-hook 0.305 (+0.008), C 0.269 (-0.028), D-token 0.273 (-0.024
+  [-0.040, -0.008]** but seed p 0.40), D-text 0.283 (-0.015); removing the class costs D-text 2.4 points
+  (5.3 at hit@0.25***) and its click margin turns negative (-0.047 [-0.082, -0.012]).
+- D-text control (taps_and_swipes, 3 seeds): 0.335 vs A 0.382, -0.033 [-0.063, -0.004]*, seed p 0.13.
+- D-text wrong-word / no-word interventions (3 seeds, `interv_Dtext_*.json`): see Appendix table
+  `tables/interv_dtext.tex` (launched 19:2x PDT; results appended below when in).
+
+### Script changes
+- `scripts/p8_consolidate.py`: `paired()` takes explicit slice key (`mix`, `n`) and episode list (`eps`);
+  six-mechanism no-type section; D-text in the control; `section_dtoken_lr` + `tables/dtoken_lr.tex`;
+  interventions read a D-text file (gold/wrong/wrong2/none) into `tables/interv_dtext.tex`; captions say
+  episode-cluster; scaling plot uses episode intervals.
+- `modal_app.py`: `train_stage2_Dtext --interventions` decodes the trained model under gold / wrong /
+  wrong2 / none and persists `interv_Dtext_seed{s}_n1200_ep2_lr2e-05_mix-all_with_coords.json`.
+- `scripts/p8_qual_render.py`: `ncols` grid option (2x3 figure). `scripts/p8_sentinel_analysis.py`: D-text.
