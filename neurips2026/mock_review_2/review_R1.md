@@ -1,0 +1,43 @@
+**Summary**
+The paper asks what supervising the action type does for the "where" half of a GUI agent, using Qwen2-VL-2B + LoRA trained to emit a coordinate string on AITW. A flat baseline (A) is compared with five ways of delivering the type (auxiliary loss B, hard routing C, additive embedding D-hook, prepended token D-token, type-as-word D-text) under matched data, compute and decoding, with five seeds and a cluster bootstrap over validation examples. On a stream that mixes clicks, scrolls and type events whose target is clamped to (0,0), B, D-hook and D-text gain +0.05 to +0.07 hit@0.10; on a taps-and-swipes stream nothing helps, and once type events are removed from training the baseline rises and no mechanism beats it. Interventions (wrong/zeroed/class-mean embeddings) show both learned embeddings are used at inference, with D-hook degrading to baseline and D-token below it; the authors also document an `inputs_embeds` M-RoPE failure that had produced a false negative.
+
+**Strengths**
+- Matched-compute design, five seeds, paired cluster bootstrap plus seed-level tests, effect sizes with CIs: far more careful than typical GUI-agent ablations.
+- Honest reporting: the hypothesized mechanism is refuted, the false nine-point `inputs_embeds` result is retracted and explained, an underpowered attention claim is walked back.
+- The wrong/zero/class-mean intervention protocol is a reusable faithfulness test for conditioning signals.
+- The M-RoPE/`input_ids` warning (Sec. 6.2, App. F) is practically useful for anyone injecting soft prompts into Qwen2-VL.
+
+**Weaknesses**
+1. The headline positive result is an artifact of the authors' own target encoding (lines 105-111, 198-217, Table 7). AITW type events have no target; the serializer clamps (−1,−1) to (0,0) and the coordinate loss is trained on it. Native single-stream agents, which A claims to reduce (line 126), never ask the model to emit a coordinate for a type action, so the "degenerate class" does not exist in the setting being modeled: A is a strawman, and Table 7 shows that removing the artifact recovers everything (A 0.255→0.297; B, D-hook not established over it). The evidence supports "type conditioning does not help grounding in this regime", yet the abstract (lines 8-12) and line 43 lead with "two results hold"/"support type supervision". The title's "decoupling" is also not what wins: B needs no type at inference and D-text is a prompt string.
+2. The task and evaluation set do not resemble grounding as the field measures it. No action history is given (Sec. 3.3, App. A) although AITW goals are episode-level, so the step is underdetermined; the scroll target is the touch point, not a scroll's semantic target; validation is "the next 250 steps" spanning "a few dozen episodes" that may share the boundary episode with training (lines 486-489), from a mirror in stored order rather than the official episode split. Absolute numbers (A hit@0.10 0.23-0.30; Mind2Web hit@bbox 0.10, Table 6) sit at a non-functional operating point, whereas 3B models reach 85-92% on ScreenSpot-v2 (ZonUI-3B, Ferret-UI Lite). Mechanism conclusions drawn where the model mostly fails may not transfer.
+3. The bootstrap clusters examples, not episodes (lines 172-175). Consecutive steps share app, layout and often target, so CIs and stars are likely too narrow. With 24 uncorrected contrasts and seed-level n=3, the scaling stars are weak, and the validation slice changes with n (Table 8), which the authors admit makes the curve uninterpretable across sizes; a fixed held-out set would have cost nothing.
+4. D-text, the zero-parameter mechanism with the best mean (+0.073, Table 1), is absent from Tables 2-4, the control, the end-to-end test and the scaling study; the abstract's "6 to 10 points" on clicks (line 10) is unsupported for D-text, whose click number is never reported.
+5. The deployment-relevant result is null and under-reported: with Stage-1 predictions D-hook's margin over A is +0.016 with CI covering zero (lines 229-233); the abstract omits this. Stage-1 "0.843 accuracy" is on a slice whose majority class is 67.6%; B and D-text are not run end-to-end.
+6. The D-token refutation is confounded. The reported row norm 0.78 (line 255) equals the N(0, 0.02²) initialization norm for d=1536 (0.02·√1536 = 0.78), suggesting the new embedding barely moved at lr 2e-5 over 2,400 batch-1 steps: the "learned token" is effectively a fixed random class code. Its collapse under zeroing then says little about prepended tokens as a mechanism. Section 7 concedes the untuned schedule but the paper still frames this as a refutation.
+7. Related work. LiMAC is mischaracterized (lines 81-84): its AcT selects click targets contrastively over UI-tree elements, and the LoRA-tuned Qwen2-VL-2B/Florence-2 only generates text for input-text/open-app; the VLM never grounds. Missing and relevant: Hi-Agent (2510.14388, planner/executor on AitW), "Improving GUI Grounding with Explicit Position-to-Coordinate Mapping" (2510.03230, I-MRoPE/RULER, directly relevant to Sec. 6.2), "What Happens Before Decoding? Prefill Determines GUI Grounding" (2605.12549, relevant to App. G), MolmoPoint (2603.28069, grounding tokens vs. D-token), Ferret-UI Lite (2509.26539). AndroidControl is cited but unused although it is the natural dataset (step-level instructions, official splits, type actions without coordinates). I found no paper preempting the specific matched-mechanism comparison; CoCo-Agent, LiMAC, UI-R1 and GUI-Libra are correctly positioned as adjacent.
+8. Presentation: Appendix C, D, E and H are headings with no body or with their tables floated elsewhere (lines 513-518, 553); Figure 1 is unreadable at print size; exact prompts and the coordinate string format are not shown.
+
+**Questions for the authors**
+1. hit@0.10 with CIs on the 215 groundable examples using an episode-clustered bootstrap? How many episodes per slice?
+2. Did D-token's embedding rows move from initialization (‖E_trained − E_init‖)? Results with a 10-100× larger LR on the embedding table only?
+3. Why not mask the coordinate loss for type events (or emit a null token) as the primary design and treat the clamped stream as an ablation?
+4. D-text per class, on taps_and_swipes, and end-to-end?
+5. Does adding the previous k actions to the prompt change the ordering of mechanisms?
+6. Zero-shot Qwen2-VL-2B hit@0.10 on the same slices, as a no-training reference?
+
+**Limitations**
+Section 7 is unusually candid (scale, seeds, untuned D-token, no ScreenSpot, descriptive scaling). Missing: that the degenerate class is a modeling choice rather than a property of AITW; the absence of history; episode-level correlation and the non-standard split; the possibility that the D-token embedding never trained.
+
+**Ratings**
+Soundness: 2. Presentation: 2. Contribution: 2. Overall: 4. Confidence: 4.
+
+**Recommendation**: Reject (borderline; the study is careful and honest but, as framed, its positive claim is an artifact and its setup is too far from GUI grounding as practiced).
+
+**What would change my score**
+1. Make the artifact-free stream primary (mask coordinate loss for non-spatial actions), report all six mechanisms on it with five seeds, and retitle/reframe around what that shows, even if it is a null.
+2. Use an episode-level split with action history (AndroidControl or official AITW splits), a fixed held-out set across n, and episode-clustered bootstraps.
+3. Carry D-text through every table, add B and D-text end-to-end.
+4. Verify or fix D-token's embedding training before calling it refuted.
+5. Report one standard grounding benchmark (ScreenSpot-v2 or AndroidControl) so the operating point is comparable; fix the appendix; add the missing citations.
+
+Sources: [LiMAC (arXiv 2410.17883)](https://arxiv.org/html/2410.17883), [CoCo-Agent](https://arxiv.org/abs/2402.11941), [GUI-Libra](https://arxiv.org/abs/2602.22190), [transformers issue #35463](https://github.com/huggingface/transformers/issues/35463), [Explicit Position-to-Coordinate Mapping](https://arxiv.org/abs/2510.03230), [Hi-Agent](https://arxiv.org/abs/2510.14388), [Ferret-UI Lite](https://arxiv.org/abs/2509.26539), [ZonUI-3B](https://arxiv.org/html/2506.23491), [Prefill Determines GUI Grounding](https://arxiv.org/pdf/2605.12549), [MolmoPoint](https://arxiv.org/pdf/2603.28069), [AITW README](https://github.com/google-research/google-research/blob/master/android_in_the_wild/README.md)
