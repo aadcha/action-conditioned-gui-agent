@@ -1,0 +1,17 @@
+\begin{table}[h]
+\centering
+\small
+\caption{Interventions on D-text: the same trained model decoded with the gold action word, a wrong word (cyclic; click$\to$type), a wrong word swapping only clicks and scrolls, and no action word (3 seeds $\times$ 250 examples; $\Delta$ = gold $-$ condition, 95\% episode-cluster CI, seed-level paired $p$; flat A on the same examples is the reference row).}
+\label{tab:interv_dtext}
+\resizebox{\linewidth}{!}{\begin{tabular}{lccccc}
+\toprule
+Conditioning & hit@0.10 & click hit@0.10 & scroll hit@0.10 & $\Delta$ gold $-$ cond.\ (hit@0.10) & seed $p$ \\
+\midrule
+gold word & 0.312 $\pm$ 0.045 & 0.357 $\pm$ 0.056 & 0.384 $\pm$ 0.045 &  &  \\
+wrong word (cyclic) & 0.076 $\pm$ 0.011 & 0.028 $\pm$ 0.003 & 0.312 $\pm$ 0.050 & +0.236 [+0.183, +0.289]$^{***}$ & 0.017 \\
+wrong word (click$\leftrightarrow$scroll) & 0.085 $\pm$ 0.006 & 0.041 $\pm$ 0.006 & 0.312 $\pm$ 0.050 & +0.227 [+0.174, +0.281]$^{***}$ & 0.014 \\
+no action word & 0.205 $\pm$ 0.067 & 0.217 $\pm$ 0.102 & 0.319 $\pm$ 0.055 & +0.107 [+0.063, +0.152]$^{***}$ & 0.241 \\
+flat A, same examples & 0.229 $\pm$ 0.043 & 0.256 & 0.304 & +0.057 [+0.018, +0.099]$^{**}$ & 0.083 \\
+\bottomrule
+\end{tabular}}
+\end{table}

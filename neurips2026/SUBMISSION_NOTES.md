@@ -308,3 +308,12 @@ reframing. Everything below was done under the user's standing authorization.
 - `modal_app.py`: `train_stage2_Dtext --interventions` decodes the trained model under gold / wrong /
   wrong2 / none and persists `interv_Dtext_seed{s}_n1200_ep2_lr2e-05_mix-all_with_coords.json`.
 - `scripts/p8_qual_render.py`: `ncols` grid option (2x3 figure). `scripts/p8_sentinel_analysis.py`: D-text.
+- D-text interventions (3 seeds, landed 20:05 PDT): gold 0.312, wrong word (cyclic) 0.076 (gold − wrong +0.236
+  [+0.183, +0.289]***, seed p 0.017), wrong word (click<->scroll) 0.085 (+0.227 [+0.174, +0.281]***, seed p 0.014),
+  no word 0.205 (+0.107 [+0.063, +0.152]***, seed p 0.24); no word − A −0.049 [−0.079, −0.018] (seed p 0.44).
+  The prompt word is read at inference and, like the prepended token, leaves a model below the flat baseline when
+  the signal is removed; D-hook remains the most brittle under a wrong type (0.054/0.099 vs D-token 0.079/0.155 and
+  D-text 0.076/0.085). In the paper: Section 6.1 and Appendix F (`tables/interv_dtext.tex`).
+
+Final state (Sep 2, 20:10 PDT): `neurips2026/main.pdf`, 18 pages, body ends at the foot of page 8; no em dashes,
+no unresolved references, no overfull boxes, no placeholders. Modal spend for revision 2: 21 runs, about $20.
