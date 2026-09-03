@@ -722,10 +722,12 @@ def section_interventions() -> dict:
     (five seeds x 250 examples), with flat A on the same examples as the reference row."""
     conds = ("gold", "wrong", "wrong2", "zero", "classmean")
     out = {"variants": {}, "conds": list(conds)}
+    VARIANT_CONDS = {"Dhook": conds, "Dtoken": conds, "Dtext": ("gold", "wrong", "wrong2", "none")}
     labels = slice_labels("all_with_coords", 1200)
     masks = _cls_masks(labels) if labels else {}
     a_runs = [r for s in HEADLINE_SEEDS if (r := load_run("A", s, 1200, "all_with_coords"))]
-    for v in ("Dhook", "Dtoken"):
+    for v in ("Dhook", "Dtoken", "Dtext"):
+        conds = VARIANT_CONDS[v]
         per_cond_runs = {c: [] for c in conds}
         norms, tok_norms, seeds = [], [], []
         for s in HEADLINE_SEEDS:
@@ -733,13 +735,14 @@ def section_interventions() -> dict:
             if not p.exists():
                 continue
             d = json.loads(p.read_text()); seeds.append(s)
-            norms.append(d["action_embedding_norms"]); tok_norms.append(d["token_embedding_mean_norm"])
+            if "action_embedding_norms" in d:
+                norms.append(d["action_embedding_norms"]); tok_norms.append(d["token_embedding_mean_norm"])
             for c in conds:
                 dist = np.asarray(d["conditions"][c]["per_example_dist"], float)
                 per_cond_runs[c].append(Run(p, f"{v}:{c}", s, 1200, "all_with_coords", d["conditions"][c], dist))
         if not seeds:
             continue
-        vs = {"seeds": seeds, "cells": {}, "per_class": {}, "gold_minus": {}, "A": {}, "norms": {}}
+        vs = {"seeds": seeds, "conds": list(conds), "cells": {}, "per_class": {}, "gold_minus": {}, "A": {}, "norms": {}}
         for c in conds:
             vs["cells"][c] = {m: cell(per_cond_runs[c], m) for m in METRICS}
             vs["per_class"][c] = {}
@@ -750,12 +753,13 @@ def section_interventions() -> dict:
                 vs["gold_minus"][c] = {m: paired(per_cond_runs[c], per_cond_runs["gold"], m) for m in METRICS}
         vs["A"]["cells"] = {m: cell(a_runs, m) for m in METRICS}
         vs["A"]["gold_minus_A"] = {m: paired(a_runs, per_cond_runs["gold"], m) for m in METRICS}
-        vs["A"]["zero_minus_A"] = {m: paired(a_runs, per_cond_runs["zero"], m) for m in METRICS}
+        _off = "zero" if "zero" in per_cond_runs else "none"
+        vs["A"]["zero_minus_A"] = {m: paired(a_runs, per_cond_runs[_off], m) for m in METRICS}
         vs["A"]["per_class"] = {cls: {"mean": float(np.mean([float((r.dist[msk] <= 0.10).mean()) for r in a_runs if r.dist is not None]))}
                                 for cls, msk in masks.items()}
         keys = sorted({k for n_ in norms for k in n_})
         vs["norms"] = {k: float(np.mean([n_[k] for n_ in norms])) for k in keys}
-        vs["token_embedding_mean_norm"] = float(np.mean(tok_norms))
+        vs["token_embedding_mean_norm"] = float(np.mean(tok_norms)) if tok_norms else math.nan
         out["variants"][v] = vs
     return out
 
@@ -769,7 +773,7 @@ def md_interv(sec: dict) -> str:
               ", ".join(f"{k} {val:.3f}" for k, val in vs["norms"].items() if k in ("click", "scroll", "type")) +
               f"; backbone token-embedding mean norm {vs['token_embedding_mean_norm']:.3f}", "",
               "| condition | hit@0.05 | hit@0.10 | hit@0.25 | mean L2 | click hit@0.10 | scroll hit@0.10 | gold − condition (hit@0.10) |", "|---|---|---|---|---|---|---|---|"]
-        for c in sec["conds"]:
+        for c in vs.get("conds", sec["conds"]):
             cc = vs["cells"][c]; pc = vs["per_class"][c]
             L.append(f"| {c} | {fmt_ms(cc['hit_at_005'])} | {fmt_ms(cc['hit_at_010'])} | {fmt_ms(cc['hit_at_025'])} | {fmt_ms(cc['mean_normalized_l2'])} | "
                      f"{fmt_ms(pc.get('click', {'mean': math.nan, 'std': 0, 'n_seeds': 0}))} | {fmt_ms(pc.get('scroll', {'mean': math.nan, 'std': 0, 'n_seeds': 0}))} | "
@@ -777,7 +781,7 @@ def md_interv(sec: dict) -> str:
         A = vs["A"]
         L.append(f"| flat A (same examples) | {fmt_ms(A['cells']['hit_at_005'])} | {fmt_ms(A['cells']['hit_at_010'])} | {fmt_ms(A['cells']['hit_at_025'])} | "
                  f"{fmt_ms(A['cells']['mean_normalized_l2'])} | {A['per_class'].get('click', {}).get('mean', math.nan):.3f} | {A['per_class'].get('scroll', {}).get('mean', math.nan):.3f} | "
-                 f"gold − A: {fmt_delta(A['gold_minus_A']['hit_at_010'])}; zero − A: {fmt_delta(A['zero_minus_A']['hit_at_010'])} |")
+                 f"gold − A: {fmt_delta(A['gold_minus_A']['hit_at_010'])}; {'none' if v == 'Dtext' else 'zero'} − A: {fmt_delta(A['zero_minus_A']['hit_at_010'])} |")
         L.append("")
     return "\n".join(L) + "\n"
 
@@ -790,9 +794,11 @@ def tex_interv(sec: dict) -> str:
          "flat A on the same examples is the reference row.}",
          "\\label{tab:interv}", "\\resizebox{\\linewidth}{!}{\\begin{tabular}{llccccc}", "\\toprule",
          "Model & Conditioning & hit@0.10 & click hit@0.10 & scroll hit@0.10 & $\\Delta$ gold $-$ cond.\\ (hit@0.10) & seed $p$ \\\\", "\\midrule"]
-    cond_name = {"gold": "gold type", "wrong": "wrong (cyclic)", "wrong2": "wrong (click$\\leftrightarrow$scroll)", "zero": "zeroed", "classmean": "class mean"}
+    cond_name = {"gold": "gold type", "wrong": "wrong (cyclic)", "wrong2": "wrong (click$\\leftrightarrow$scroll)", "zero": "zeroed", "classmean": "class mean", "none": "no action word"}
     for v, vs in sec["variants"].items():
-        for i, c in enumerate(sec["conds"]):
+        if v == "Dtext":
+            continue
+        for i, c in enumerate(vs.get("conds", sec["conds"])):
             cc = vs["cells"][c]; pc = vs["per_class"][c]; d = vs["gold_minus"].get(c, {}).get("hit_at_010")
             L.append(f"{TEX_NAMES[v] if i == 0 else ''} & {cond_name[c]} & {tex_ms(cc['hit_at_010'])} & "
                      f"{tex_ms(pc.get('click', {'mean': math.nan, 'std': 0, 'n_seeds': 0}))} & {tex_ms(pc.get('scroll', {'mean': math.nan, 'std': 0, 'n_seeds': 0}))} & "
@@ -885,6 +891,29 @@ def tex_dtoken_lr(sec: dict) -> str:
     return "\n".join(L) + "\n"
 
 
+def tex_interv_dtext(sec: dict) -> str:
+    vs = sec["variants"].get("Dtext")
+    if not vs:
+        return ""
+    nanc = {"mean": math.nan, "std": 0, "n_seeds": 0}
+    cond_name = {"gold": "gold word", "wrong": "wrong word (cyclic)", "wrong2": "wrong word (click$\\leftrightarrow$scroll)", "none": "no action word"}
+    L = ["\\begin{table}[h]", "\\centering", "\\small",
+         f"\\caption{{Interventions on D-text: the same trained model decoded with the gold action word, a wrong word (cyclic; "
+         f"click$\\to$type), a wrong word swapping only clicks and scrolls, and no action word ({len(vs['seeds'])} seeds $\\times$ 250 examples; "
+         "$\\Delta$ = gold $-$ condition, 95\\% episode-cluster CI, seed-level paired $p$; flat A on the same examples is the reference row).}",
+         "\\label{tab:interv_dtext}", "\\resizebox{\\linewidth}{!}{\\begin{tabular}{lccccc}", "\\toprule",
+         "Conditioning & hit@0.10 & click hit@0.10 & scroll hit@0.10 & $\\Delta$ gold $-$ cond.\\ (hit@0.10) & seed $p$ \\\\", "\\midrule"]
+    for c in vs["conds"]:
+        cc = vs["cells"][c]; pc = vs["per_class"][c]; d = vs["gold_minus"].get(c, {}).get("hit_at_010")
+        L.append(f"{cond_name[c]} & {tex_ms(cc['hit_at_010'])} & {tex_ms(pc.get('click', nanc))} & {tex_ms(pc.get('scroll', nanc))} & "
+                 f"{tex_delta_cluster(d) if d else ''} & {tex_seed_p(d) if d else ''} \\\\")
+    A = vs["A"]; d = A["gold_minus_A"]["hit_at_010"]
+    L.append(f"flat A, same examples & {tex_ms(A['cells']['hit_at_010'])} & {A['per_class'].get('click', {}).get('mean', math.nan):.3f} & "
+             f"{A['per_class'].get('scroll', {}).get('mean', math.nan):.3f} & {tex_delta_cluster(d)} & {tex_seed_p(d)} \\\\")
+    L += ["\\bottomrule", "\\end{tabular}}", "\\end{table}"]
+    return "\n".join(L) + "\n"
+
+
 def strip_runs(obj):
     if isinstance(obj, dict):
         return {k: strip_runs(v) for k, v in obj.items() if k != "_runs"}
@@ -924,6 +953,8 @@ def main() -> None:
     (TABLES / "notype.tex").write_text(tex_notype(notype))
     if interv["variants"]:
         (TABLES / "interv.tex").write_text(tex_interv(interv))
+        if "Dtext" in interv["variants"]:
+            (TABLES / "interv_dtext.tex").write_text(tex_interv_dtext(interv))
     (TABLES / "headline.tex").write_text(tex_variants(
         head, "tab:headline", "Stage 2 grounding on AITW \\texttt{all\\_with\\_coords} (n$_{\\text{train}}$=1200, n$_{\\text{val}}$=250, "
         f"{head['cells']['A']['hit_at_010']['n_seeds']} seeds). Mean $\\pm$ std over seeds; $\\Delta$ vs.\\ A with a 95\\% episode-cluster bootstrap CI "

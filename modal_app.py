@@ -2415,7 +2415,7 @@ def train_stage2_Dhook(
 def _stage2_variantDtext_train_remote(
     n_train: int, n_val: int, epochs: int, lr: float, batch_size: int,
     seed: int, aitw_split: str, coord_scale: int, data_mix: str,
-    drop_type_from_train: bool = False,
+    drop_type_from_train: bool = False, interventions: bool = False,
 ) -> dict:
     import os, sys, random, json as _json
     from collections import Counter
@@ -2469,8 +2469,13 @@ def _stage2_variantDtext_train_remote(
     device = next(model.parameters()).device
 
     # The action word the model conditions on. ID_TO_ACTION gives canonical names.
+    # `_cond` lets the intervention study swap the word (wrong maps) or drop it ("none").
+    _cond = {"map": None, "none": False}
     def prompt_for(ex):
-        word = ID_TO_ACTION[ex.action_type_id]  # click / scroll / type / ...
+        if _cond["none"]:
+            return f"Goal: {ex.goal_info}\nPredict the action coordinate."
+        aid = ex.action_type_id if _cond["map"] is None else _cond["map"][ex.action_type_id]
+        word = ID_TO_ACTION[aid]  # click / scroll / type / ...
         return f"Action: {word}. Goal: {ex.goal_info}\nPredict the action coordinate."
 
     def build(examples, include_labels):
@@ -2551,6 +2556,36 @@ def _stage2_variantDtext_train_remote(
     cache_dir.mkdir(parents=True, exist_ok=True)
     _nt = "_notype" if drop_type_from_train else ""
     out_path = cache_dir / f"Dtext_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}{_nt}.json"
+    if interventions:
+        # Wrong-word / no-word interventions on the trained model, same protocol and maps as
+        # _stage2_intervention_remote (gold / wrong = cyclic / wrong2 = click<->scroll, type->click / none).
+        from src.data.taxonomy import CANONICAL_ACTIONS as _CA
+        distinct = sorted({e.action_type_id for e in val_examples})
+        wrong_map = {d: distinct[(i + 1) % len(distinct)] for i, d in enumerate(distinct)}
+        _cl, _sc, _ty = _CA["click"], _CA["scroll"], _CA["type"]
+        wrong2_map = {d: d for d in distinct}
+        if _cl in distinct and _sc in distinct:
+            wrong2_map[_cl], wrong2_map[_sc] = _sc, _cl
+        if _ty in distinct:
+            wrong2_map[_ty] = _cl if _cl in distinct else wrong_map[_ty]
+        results = {}
+        for cond, cmap, none in (("gold", None, False), ("wrong", wrong_map, False), ("wrong2", wrong2_map, False), ("none", None, True)):
+            _cond["map"], _cond["none"] = cmap, none
+            results[cond] = evaluate(val_examples)
+            print(f"[Dtext] interv {cond:<6} hit@0.10={results[cond]['hit_at_010']:.3f} hit@0.25={results[cond]['hit_at_025']:.3f} "
+                  f"L2={results[cond]['mean_normalized_l2']:.3f}", flush=True)
+        _cond["map"], _cond["none"] = None, False
+        interv = {"variant": "interv_Dtext", "n_train": len(train_examples), "n_val": len(val_examples), "epochs": epochs,
+                  "lr": lr, "seed": seed, "data_mix": data_mix,
+                  "val_action_ids": [e.action_type_id for e in val_examples],
+                  "val_targets": [list(e.target_xy) for e in val_examples],
+                  "wrong_map": {ID_TO_ACTION[k]: ID_TO_ACTION[v] for k, v in wrong_map.items()},
+                  "wrong2_map": {ID_TO_ACTION[k]: ID_TO_ACTION[v] for k, v in wrong2_map.items()},
+                  "conditions": results}
+        interv_path = cache_dir / f"interv_Dtext_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}.json"
+        interv_path.write_text(_json.dumps(interv, indent=1))
+        summary["interventions"] = {k: {m: v[m] for m in ("hit_at_010", "hit_at_025", "mean_normalized_l2")} for k, v in results.items()}
+        out_path = cache_dir / f"Dtext_seed{seed}_n{n_train}_ep{epochs}_lr{lr}_mix-{data_mix}{_nt}_interv.json"
     out_path.write_text(_json.dumps(summary, indent=2))
     stage1_cache.commit()
     print(f"[Dtext] persisted result to {out_path}")
@@ -2562,10 +2597,13 @@ def train_stage2_Dtext(
     n_train: int = 1000, n_val: int = 200, epochs: int = 2, lr: float = 2e-5,
     batch_size: int = 1, seed: int = 42, aitw_split: str = "train",
     coord_scale: int = 1000, data_mix: str = "taps_and_swipes", drop_type_from_train: bool = False,
+    interventions: bool = False,
 ) -> None:
-    """Variant D-text (action word in prompt). Use --detach."""
+    """Variant D-text (action word in prompt). --interventions adds gold/wrong/wrong2/none decoding
+    of the trained model (persisted as interv_Dtext_*.json). Use --detach."""
     _stage2_variantDtext_train_remote.remote(
-        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, drop_type_from_train)
+        n_train, n_val, epochs, lr, batch_size, seed, aitw_split, coord_scale, data_mix, drop_type_from_train,
+        interventions)
 
 
 # ---- Phase 6 variant B: auxiliary action-type loss --------------------------
