@@ -632,13 +632,15 @@ def section_notype() -> dict:
     ep = slice_episodes("all_with_coords", 1200)
     eps_all = ep[0] if ep else None
     kw = {"mix": "all_with_coords", "n": 1200}
-    out = {"seeds": CURVE_SEEDS, "variants": [], "cells": {}, "deltas_vs_A": {}, "drop_effect": {}, "per_class": {}}
+    out = {"seeds": HEADLINE_SEEDS, "variants": [], "seed_counts": {}, "cells": {}, "deltas_vs_A": {}, "drop_effect": {}, "per_class": {}}
     runs = {}
     for v in NOTYPE_VARIANTS:
-        runs[(v, "with")] = [r for s in CURVE_SEEDS if (r := load_run(v, s, 1200, "all_with_coords"))]
-        runs[(v, "without")] = [r for s in CURVE_SEEDS if (r := load_run(v, s, 1200, "all_with_coords", "_notype"))]
+        runs[(v, "with")] = [r for s in HEADLINE_SEEDS if (r := load_run(v, s, 1200, "all_with_coords"))]
+        runs[(v, "without")] = [r for s in HEADLINE_SEEDS if (r := load_run(v, s, 1200, "all_with_coords", "_notype"))]
         if runs[(v, "without")]:
             out["variants"].append(v)
+            # paired contrasts run on the seeds the two conditions share
+            out["seed_counts"][v] = len({r.seed for r in runs[(v, "with")]} & {r.seed for r in runs[(v, "without")]})
     for (v, cond), rs in runs.items():
         out["cells"][f"{v}_{cond}"] = {m: cell(rs, m) for m in METRICS}
         pc = {}
@@ -667,7 +669,11 @@ def section_notype() -> dict:
 
 def md_notype(sec: dict) -> str:
     vs = sec["variants"]
-    L = ["### Type events removed from training (same 250-example validation slice, seeds 42–44)", "",
+    sc = sec.get("seed_counts", {})
+    _sr = (f"{min(sc.values())}–{max(sc.values())} seeds" if sc and min(sc.values()) != max(sc.values())
+           else f"{max(sc.values())} seeds" if sc else "3 seeds")
+    L = [f"### Type events removed from training (same 250-example validation slice, {_sr}; per-variant: " +
+         ", ".join(f"{NAMES[v]} {sc.get(v, 0)}" for v in sec["variants"]) + ")", "",
          "| variant | training stream | hit@0.10 | hit@0.25 | mean L2 | click hit@0.10 | scroll hit@0.10 |", "|---|---|---|---|---|---|---|"]
     nanc = {"mean": math.nan, "std": 0, "n_seeds": 0}
     for v in vs:
@@ -696,12 +702,15 @@ def md_notype(sec: dict) -> str:
 
 def tex_notype(sec: dict) -> str:
     nanc = {"mean": math.nan, "std": 0, "n_seeds": 0}
+    sc = sec.get("seed_counts", {})
+    _sr = (f"{min(sc.values())} to {max(sc.values())} seeds" if sc and min(sc.values()) != max(sc.values())
+           else f"{max(sc.values())} seeds" if sc else "three seeds")
     L = ["\\begin{table}[h]", "\\centering", "\\small",
-         "\\caption{Removing \\emph{type} events from the training slice only, scored on the identical headline validation "
-         "slice (three seeds). Deltas are paired episode-cluster bootstraps (every step and seed of a sampled episode kept "
-         "together); seed-level $p$ in parentheses.}",
-         "\\label{tab:notype}", "\\resizebox{\\linewidth}{!}{\\begin{tabular}{llcccc}", "\\toprule",
-         "Variant & Training stream & hit@0.10 & click hit@0.10 & scroll hit@0.10 & $\\Delta$hit@0.10 vs.\\ A (same stream) \\\\", "\\midrule"]
+         f"\\caption{{Removing \\emph{{type}} events from the training slice only, scored on the identical headline validation "
+         f"slice ({_sr}; each contrast uses the seeds its two conditions share, given per row). Deltas are paired episode-cluster "
+         f"bootstraps (every step and seed of a sampled episode kept together); seed-level $p$ in parentheses.}}",
+         "\\label{tab:notype}", "\\resizebox{\\linewidth}{!}{\\begin{tabular}{llccccc}", "\\toprule",
+         "Variant & Training stream & seeds & hit@0.10 & click hit@0.10 & scroll hit@0.10 & $\\Delta$hit@0.10 vs.\\ A (same stream) \\\\", "\\midrule"]
     for v in sec["variants"]:
         for cond in ("with", "without"):
             c = sec["cells"][f"{v}_{cond}"]; pc = sec["per_class"].get(f"{v}_{cond}", {})
@@ -710,7 +719,7 @@ def tex_notype(sec: dict) -> str:
             d = None
             if v != "A":
                 d = (sec["deltas_vs_A"].get(f"{v}_without", {}).get("hit_at_010") if cond == "without" else None)
-            L.append(f"{TEX_NAMES[v]} & {'with type' if cond == 'with' else 'type removed'} & {tex_ms(c['hit_at_010'])} & "
+            L.append(f"{TEX_NAMES[v]} & {'with type' if cond == 'with' else 'type removed'} & {c['hit_at_010']['n_seeds']} & {tex_ms(c['hit_at_010'])} & "
                      f"{tex_ms(pc.get('click', nanc))} & {tex_ms(pc.get('scroll', nanc))} & "
                      f"{(tex_delta_cluster(d) + ' (' + tex_seed_p(d) + ')') if d else ''} \\\\")
     L += ["\\bottomrule", "\\end{tabular}}", "\\end{table}"]

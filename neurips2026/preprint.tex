@@ -1,9 +1,11 @@
+% GENERATED FILE -- do not edit. Produced by make_preprint.py from main.tex.
+% Run `make preprint` after editing main.tex.
 \documentclass{article}
 
 % VLM4RWD 2026 (2nd Workshop on Grounded and Faithful Vision-Language Models
 % for Real-World Deployment), NeurIPS 2026, Sydney. Double-blind, 8 pages
 % excluding references/appendices, non-archival. Camera-ready: add `final`.
-\usepackage[dblblindworkshop]{neurips_2026}
+\usepackage[preprint]{neurips_2026}
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -30,7 +32,15 @@
 
 \title{Decoupling What from Where: How Should a Small GUI Grounding Model Receive the Action Type?}
 
-\author{Anonymous Author(s)}
+\author{%
+  Aadi Chauhan\thanks{Equal contribution.} \\
+  Stanford University \\
+  \texttt{aadic@stanford.edu} \\
+  \And
+  Arthur Ilyasov\footnotemark[1] \\
+  Stanford University \\
+  \texttt{ailyasov@stanford.edu} \\
+}
 
 \begin{document}
 
@@ -182,10 +192,6 @@ The study is small: one 2B backbone, LoRA adapters, validation slices of 200 to 
 \section{Conclusion}
 \label{sec:conclusion}
 An auxiliary loss, an additive embedding, and a word in the prompt each help a small grounding model on a stream our serialization gave a degenerate class; none is established to help once that class is removed or on taps and swipes, and the prepended token we set out to validate helps only when its table is trained faster than the shared schedule, and then no better than the simpler mechanisms. Both learned embeddings are read at inference: zeroed, the additive model stays within a point of the baseline and the prepended one falls seven points below, and a wrong type collapses both, so the classifier is the risk; with an 84\% one the pipeline's margin over a flat model is not established. The practical lessons: audit what a serialization does to every class before supervising a coordinate on it, prefer the prompt word or the auxiliary loss over new parameters, perturb the conditioning to test whether it is read, and keep \texttt{input\_ids} on the path whenever conditioning touches the embeddings.
-
-\begin{ack}
-Acknowledgments are omitted for review.
-\end{ack}
 
 \bibliographystyle{plainnat}
 \bibliography{references}

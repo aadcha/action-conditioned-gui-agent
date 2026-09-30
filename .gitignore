@@ -39,3 +39,8 @@ env/
 # Jupyter
 .ipynb_checkpoints/
 results/phase4/qual_data/
+neurips2026/preprint.aux
+neurips2026/preprint.bbl
+neurips2026/preprint.blg
+neurips2026/preprint.log
+neurips2026/preprint.out
