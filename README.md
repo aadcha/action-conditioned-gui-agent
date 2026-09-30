@@ -112,7 +112,7 @@ RESPONSE:
 
 ## Status
 
-_Last updated: September 1, 2026._
+_Last updated: September 29, 2026._
 
 - [x] **Phase 0 — repo, deps.** uv-managed (`pyproject.toml` + `uv.lock`), Python 3.11 pinned. 29 tests passing.
 - [x] **Phase 1 — Qwen2-VL + LoRA smoke test.** Default base switched to Qwen2-VL-2B-Instruct ([COMPUTE.md](COMPUTE.md)). Verified on Modal L4.
@@ -124,7 +124,36 @@ _Last updated: September 1, 2026._
 - [x] **Phase 6 — full ablation + e2e pipeline + hypothesis verdict** ([`results/phase4/PHASE6_FINAL.md`](results/phase4/PHASE6_FINAL.md)). 5 variants (A/B/C/D-hook/D-token), 2 settings, 3 seeds. **Broad thesis supported** (action-type supervision helps grounding where action type is spatially informative; e2e pipeline with predicted types beats flat A, oracle gap ~0.02). **Specific architectural claim refuted** — the auxiliary loss (B) is the best conditioned variant; the literal hypothesized embedding (D-token, M-RoPE-correct, norm 2.2) improves over A on some secondary metrics but does not beat B/D-hook on headline grounding. Also: found+fixed a M-RoPE injection bug that caused an 8σ false-negative.
 - [x] **Phase 7 — mechanism + low-data strengthening** ([`results/phase4/PHASE7_RESULTS.md`](results/phase4/PHASE7_RESULTS.md)). Low-data matrix is complete for A/B/D-hook at n_train ∈ {300,500,800}, seeds 42/43/44; strict audit passes via `scripts/p7_result_audit.py`. D-hook is the most stable low-data conditioned mechanism. D-token causal-use test is complete over 3 seeds: gold action id beats wrong by +0.192 hit@0.10 and zero by +0.093, so the learned embedding is used, just not the winning mechanism.
 - [x] **Milestone 3** (May 29) — submitted. Slide-handoff doc: [`results/milestone3/MILESTONE3.md`](results/milestone3/MILESTONE3.md). Headline: zero-shot Qwen2-VL-2B has vision-delta = 0.000 on Mind2Web action-type; TF-IDF beats the 2B VLM by 15 macro-F1.
-- [x] **Phase 8 — pre-submission strengthening for NeurIPS 2026 VLM4RWD workshop, two mock panels, two revisions** ([`results/phase8/PHASE8_RESULTS.md`](results/phase8/PHASE8_RESULTS.md), [`neurips2026/SUBMISSION_NOTES.md`](neurips2026/SUBMISSION_NOTES.md)). Headline at 5 seeds with an episode-cluster bootstrap and seed-level paired t: B − A **+0.064\*\*\***, D-hook − A **+0.054\*\*\***, D-text − A **+0.073\*\***, C and D-token ns. The gain is protection from the (0,0) sentinel class our serializer creates for AITW type events: retraining without it lifts flat A 0.255→0.297 and no mechanism is then established to beat it; the taps-and-swipes control is null. End-to-end margin with predicted types is null (+0.016). Interventions: both learned embeddings are read at inference; zeroed D-hook stays within a point of A, zeroed D-token falls 7 points below. D-token's failure is a schedule effect (rows move 0.016 at the shared LR; a 10x table LR gives 0.295, level with B). `inputs_embeds` M-RoPE fallback documented against the transformers source.
-- [x] **Workshop paper** (`neurips2026/main.tex`, revision 2 after two double-blind mock panels in `neurips2026/mock_review*/`; body ends on page 8, 55-entry verified bib). Deadline Sep 5 2026, 8:59 PM PDT.
+- [x] **Phase 8 — pre-submission strengthening for NeurIPS 2026 VLM4RWD workshop, two mock panels, two revisions** ([`results/phase8/PHASE8_RESULTS.md`](results/phase8/PHASE8_RESULTS.md), [`neurips2026/SUBMISSION_NOTES.md`](neurips2026/SUBMISSION_NOTES.md)). Headline at 5 seeds with an episode-cluster bootstrap and seed-level paired t: B − A **+0.064\*\*\***, D-hook − A **+0.054\*\*\***, D-text − A **+0.073\*\***, C and D-token ns. The gain is protection from the (0,0) sentinel class our serializer creates for AITW type events: retraining without it lifts flat A 0.229→0.296 (5 seeds, +0.067 [+0.044, +0.091]) and no mechanism then beats it on hit@0.10 (B −A +0.002 [−0.014, +0.018]), though B still shortens the average miss (−0.023 [−0.030, −0.016], seed p 0.02); the taps-and-swipes control is null. End-to-end margin with predicted types is null (+0.016). Interventions: both learned embeddings are read at inference; zeroed D-hook stays within a point of A, zeroed D-token falls 7 points below. D-token's failure is a schedule effect (rows move 0.016 at the shared LR; a 10x table LR gives 0.295, level with B). `inputs_embeds` M-RoPE fallback documented against the transformers source.
+- [x] **Workshop paper** — submitted to the NeurIPS 2026 VLM4RWD workshop (Sep 5), **rejected** Sep 29. Two reviews, both rated 5 (one Borderline, one Accept); the decision came from the program chairs, not the reviews. Reviewer feedback is folded into [`neurips2026/STRENGTHENING_PLAN.md`](neurips2026/STRENGTHENING_PLAN.md). Submitted PDF and source are preserved at commit `c3b122a`.
+- [ ] **Preprint** (`neurips2026/preprint.pdf`, `make preprint`). Corrects two errors the reviewers caught and reports the five-seed clean stream.
+- [ ] **Next: ICLR 2027 workshops** (list announced Nov 29 2026, paper deadlines Jan–Feb 2027). The binding limitation is that validation uses 250 of roughly 6,800 available steps, 42 of roughly 1,025 available episodes; see the plan.
 
-Cumulative Modal spend: **~$85 of $200 (≈43%).**
+## Reproducing the paper
+
+Every number in the paper comes from run JSONs in `results/phase4/`, each carrying
+a `per_example_dist` array over the shared validation slice.
+
+```bash
+uv run modal run modal_app.py::list_stage2_runs   # pull run JSONs from the Modal volume
+uv run python scripts/p8_consolidate.py           # rebuild every table, figure and PHASE8_RESULTS.md
+cd neurips2026 && make                            # the double-blind paper
+cd neurips2026 && make preprint                   # the de-anonymized preprint
+```
+
+| paper element | produced by |
+|---|---|
+| Tables 1, 3 (headline, control) | `section_variants` in `scripts/p8_consolidate.py` |
+| Table 4 (interventions) | `section_interventions`, from `results/phase4/interv_*.json` |
+| Table 7 (type events removed) | `section_notype`, from the `*_notype.json` runs |
+| Table 9 (D-token learning-rate sweep) | `section_dtoken_lr`, from the `*_alr*.json` runs |
+| Figure 2, Table 8 (scaling) | `section_scaling` |
+| episode-cluster bootstrap | `_episode_bootstrap`, clusters from `results/phase8/val_episodes.json` |
+| per-class labels | `results/phase8/qualitative_v2/render.json` |
+
+Statistics live in [`src/eval/bootstrap.py`](src/eval/bootstrap.py) and the `paired()`
+helper in `scripts/p8_consolidate.py`, which reports a pooled-unit interval, an
+example-cluster interval, the episode-cluster interval used in the paper, a
+boundary-episode-excluded variant, and a seed-level paired t-test.
+
+Cumulative Modal spend: **~$145 of $200 (≈73%).**

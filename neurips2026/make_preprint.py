@@ -33,6 +33,10 @@ SUBSTITUTIONS = [
     ("\\usepackage[dblblindworkshop]{neurips_2026}", "\\usepackage[preprint]{neurips_2026}"),
     ("\\author{Anonymous Author(s)}", AUTHOR_BLOCK),
     ("\\begin{ack}\nAcknowledgments are omitted for review.\n\\end{ack}\n\n", ""),
+    # main.tex keeps the anonymous promise; the preprint can name the repo
+    ("Code, split indices, prompts, and per-example logs will be released with the camera-ready.",
+     "Code, split indices, prompts, and the per-example logs behind every table are available at "
+     "\\url{https://github.com/aadcha/action-conditioned-gui-agent}."),
 ]
 
 
