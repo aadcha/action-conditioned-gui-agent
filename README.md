@@ -1,142 +1,65 @@
 # Action-Type-Conditioned Grounding for GUI Agents
 
-CS 231N, Spring 2026 — Aadi Chauhan, Arthur Ilyasov.
+Code, data and paper source for *Decoupling What from Where: How Should a Small
+GUI Grounding Model Receive the Action Type?*
 
-Current GUI agents (UI-TARS, OS-Atlas, SeeClick, ShowUI) decode *what action* and *where to act* in one entangled stream. The documented failure mode is committing to the wrong action type (scrolling past a visible target instead of clicking) then grounding coherently but wrongly within that incorrect type. Errors compound on long-horizon tasks.
+A GUI agent has to decide which action to take and where on the screen to take
+it. Native agent models emit both in one autoregressive stream. This repository
+factors them apart and asks how the grounding half should receive the action
+type: a frozen Qwen2-VL-2B feeding an MLP predicts the type, and a LoRA-tuned
+Qwen2-VL-2B grounds the action to a coordinate string conditioned on it.
 
-This project studies whether factoring those decisions helps on Qwen2-VL:
+Six ways of supplying the type are compared under matched data, compute,
+adapters and decoding: a flat baseline, an auxiliary classification loss, a
+hard-routed action word, an additive learned embedding, a prepended learned
+token, and the type written into the prompt.
 
-1. **Stage 1 — Action-Type Classifier**: frozen VLM → MLP → 8-way softmax over `{click, double_click, type, scroll, drag, hotkey, wait, finished}`.
-2. **Stage 2 — Grounding with action-type supervision**: compare flat decoding against auxiliary-loss, hard-routing, additive-hook, and M-RoPE-correct prepended-token conditioning mechanisms.
-
-**Default base is Qwen2-VL-2B-Instruct.** Ablations run on 2B; a single 7B run on the winning variant remains a stretch goal. See [COMPUTE.md](COMPUTE.md) for the historical compute-budget rationale.
-
-Historical motivation, hypotheses, evaluation plan, and build plan are in [reference/PROJECT_OVERVIEW.md](reference/PROJECT_OVERVIEW.md) and [reference/roadmap.md](reference/roadmap.md). Current empirical verdict: [results/phase4/PHASE6_FINAL.md](results/phase4/PHASE6_FINAL.md) and [results/phase4/PHASE7_RESULTS.md](results/phase4/PHASE7_RESULTS.md).
-
----
+The paper is in `neurips2026/`. Build it with `make`, or `make preprint` for the
+de-anonymized version.
 
 ## Setup
 
-### Local (Mac or Linux laptop)
-
 ```bash
 uv sync --extra dev
-uv run pytest tests/test_imports.py
+uv run pytest tests/
 ```
 
-The 2B base is small enough (~4.4 GB in bf16) that the smoke test *can* run on a 24 GB Mac via MPS. It's slow (~minutes to load + generate) but useful for end-to-end debugging without burning credits:
-
-```bash
-uv run python scripts/smoke_test.py
-```
-
-If it OOMs on Mac, drop `dtype` to `float16` in `configs/smoke_test.yaml` or just iterate on Modal instead.
-
-### Cloud (Modal — primary)
+Training runs on Modal:
 
 ```bash
 uv sync --extra modal
-modal token new                          # one-time
-modal run modal_app.py::smoke            # ~5 min, ~$0.07 on L4
+modal token new
+modal run modal_app.py::smoke          # about 5 minutes on an L4
 ```
 
-The first run downloads Qwen2-VL-2B (~4.4 GB) into a Modal Volume; subsequent cold starts skip the download. To run the same smoke test on the 7B base:
+The first run pulls Qwen2-VL-2B (4.4 GB) into a Modal Volume; later cold starts
+skip the download.
 
-```bash
-modal run modal_app.py::smoke --config configs/smoke_test_7b.yaml
-```
-
-### Cloud (GCP — optional overflow)
-
-The completed Phase 6/7 runs used Modal. GCP spot A100s remain optional overflow for a future 7B or larger-scale run; see [COMPUTE.md](COMPUTE.md) for the historical cost plan.
-
----
-
-## Smoke test (local)
-
-Confirms Qwen2-VL loads, the LoRA adapter attaches, and a forward + generate runs end-to-end.
+The 2B base is small enough to load on a 24 GB Mac via MPS, which is slow but
+useful for debugging without spending credits:
 
 ```bash
 uv run python scripts/smoke_test.py
 ```
 
-No flags needed — uses `configs/smoke_test.yaml` and synthesizes a placeholder UI screenshot. To use a real screenshot:
+This confirms the model loads, the LoRA adapter attaches, and a forward plus
+generate completes. It synthesizes a placeholder screenshot unless given
+`--image path/to/screenshot.png`. If it runs out of memory, set `dtype` to
+`float16` in `configs/smoke_test.yaml`.
 
-```bash
-uv run python scripts/smoke_test.py --image path/to/screenshot.png
-```
-
-**Expected output (Qwen2-VL-2B):**
-
-```
-[smoke] using synthesized 512x512 UI screenshot
-[smoke] loading Qwen/Qwen2-VL-2B-Instruct (dtype=bfloat16)...
-trainable params: ~5M || all params: ~2.2B || trainable%: ~0.23
-[smoke] generating...
-============================================================
-PROMPT:
-  Where should I click to submit this form? Respond with click(x, y).
-RESPONSE:
-  click(256, 406)        # or any string — the synthetic image isn't a real benchmark
-============================================================
-[smoke] OK
-```
-
-**Multi-GPU gotcha (only relevant on real cloud GPUs):** `device_map="auto"` can split layers across GPUs in ways that interact badly with LoRA. If the model fits on a single GPU, edit `configs/smoke_test.yaml` to set `device_map: {"": 0}`. Use FSDP/DeepSpeed via `accelerate` if both GPUs are required.
-
----
-
-## Repo layout
-
-```
-.
-├── README.md
-├── pyproject.toml          # uv-managed deps
-├── configs/                # YAML per experiment
-├── data/                   # raw/ and processed/ (gitignored)
-├── src/
-│   ├── models/             # base.py (loader), conditioned_grounding (Phase 4)
-│   ├── data/               # taxonomy, unified dataset, sampler (Phase 2)
-│   ├── train/              # training loops (Phases 3-4)
-│   ├── eval/               # eval harness (Phase 5)
-│   └── utils/              # seeding, logging
-├── scripts/                # CLI entry points
-├── notebooks/              # exploration only — no project logic
-├── tests/                  # smoke tests, runnable without a GPU
-├── modal_app.py            # Modal cloud entry points (smoke; training later)
-├── COMPUTE.md              # cloud-credit budget, per-workload cost estimates
-└── reference/              # historical spec, proposal, and lit-review docs
-```
-
----
-
-## Status
-
-_Last updated: September 29, 2026._
-
-- [x] **Phase 0 — repo, deps.** uv-managed (`pyproject.toml` + `uv.lock`), Python 3.11 pinned. 29 tests passing.
-- [x] **Phase 1 — Qwen2-VL + LoRA smoke test.** Default base switched to Qwen2-VL-2B-Instruct ([COMPUTE.md](COMPUTE.md)). Verified on Modal L4.
-- [x] **Phase 2 — Stage 1 classifier on Mind2Web** (text + vision features). 3-seed result: vision_text macro-F1 = **0.605 ± 0.016** vs majority floor 0.472; vision delta +0.009. Sanity check (vision_zeroed) collapses to majority. [`results/phase2/PHASE2_RESULTS.md`](results/phase2/PHASE2_RESULTS.md).
-- [x] **Phase 3 — Stage 1 classifier on AITW** (the multi-class story). 3-seed result: vision_text macro-F1 = **0.555 ± 0.036**, text_only 0.141 ± 0.032, vision_zeroed 0.110. **Vision delta = +0.414 ± 0.052 macro-F1** (40× larger than Mind2Web). [`results/phase3/PHASE3_RESULTS.md`](results/phase3/PHASE3_RESULTS.md).
-- [x] **Phase 4 — Stage 2 conditioned grounding architecture.** `src/models/stage2_grounding.py` works end-to-end on Modal. First training (n=500 taps × 2 epochs): hit@0.10 = 0.380, hit@0.25 = 0.650 (~12× random). [`results/phase4/PHASE4_RESULTS.md`](results/phase4/PHASE4_RESULTS.md).
-- [x] **Phase 5 — A vs D ablation** (see [`results/phase4/PHASE5_CORRECTED.md`](results/phase4/PHASE5_CORRECTED.md)). The first "8σ A beats D negative result" was a **M-RoPE bug** in D's `inputs_embeds` injection (found via `scripts/p5_debug_stage2.py`). Fixed with **D-hook** (additive conditioning, full `input_ids` path). Corrected result: D-hook **ties A** on tap/swipe (action type uninformative) and **significantly beats A on `all_with_coords`** (the signal is click-vs-scroll/type disambiguation; AITW `type` coordinates are degenerate). **Paired bootstrap** (750 paired units): hit@0.10 +0.045 (95% CI [+0.017,+0.073], p=0.002), hit@0.25 +0.055 (p<0.001), mean L2 −0.027 (p<0.001) — all 4 metrics significant.
-- [x] **Phase 4.4 — grounding eval harness** ([`src/eval/bootstrap.py`](src/eval/bootstrap.py)): paired bootstrap + permutation test, per-example distance logging, 95% CIs. 29 tests pass.
-- [x] **Phase 6 — full ablation + e2e pipeline + hypothesis verdict** ([`results/phase4/PHASE6_FINAL.md`](results/phase4/PHASE6_FINAL.md)). 5 variants (A/B/C/D-hook/D-token), 2 settings, 3 seeds. **Broad thesis supported** (action-type supervision helps grounding where action type is spatially informative; e2e pipeline with predicted types beats flat A, oracle gap ~0.02). **Specific architectural claim refuted** — the auxiliary loss (B) is the best conditioned variant; the literal hypothesized embedding (D-token, M-RoPE-correct, norm 2.2) improves over A on some secondary metrics but does not beat B/D-hook on headline grounding. Also: found+fixed a M-RoPE injection bug that caused an 8σ false-negative.
-- [x] **Phase 7 — mechanism + low-data strengthening** ([`results/phase4/PHASE7_RESULTS.md`](results/phase4/PHASE7_RESULTS.md)). Low-data matrix is complete for A/B/D-hook at n_train ∈ {300,500,800}, seeds 42/43/44; strict audit passes via `scripts/p7_result_audit.py`. D-hook is the most stable low-data conditioned mechanism. D-token causal-use test is complete over 3 seeds: gold action id beats wrong by +0.192 hit@0.10 and zero by +0.093, so the learned embedding is used, just not the winning mechanism.
-- [x] **Milestone 3** (May 29) — submitted. Slide-handoff doc: [`results/milestone3/MILESTONE3.md`](results/milestone3/MILESTONE3.md). Headline: zero-shot Qwen2-VL-2B has vision-delta = 0.000 on Mind2Web action-type; TF-IDF beats the 2B VLM by 15 macro-F1.
-- [x] **Phase 8 — pre-submission strengthening** ([`results/phase8/PHASE8_RESULTS.md`](results/phase8/PHASE8_RESULTS.md)). Headline at 5 seeds with an episode-cluster bootstrap and seed-level paired t: B − A **+0.064\*\*\***, D-hook − A **+0.054\*\*\***, D-text − A **+0.073\*\***, C and D-token ns. The gain is protection from the (0,0) sentinel class our serializer creates for AITW type events: retraining without it lifts flat A 0.229→0.296 (5 seeds, +0.067 [+0.044, +0.091]) and no mechanism then beats it on hit@0.10 (B −A +0.002 [−0.014, +0.018]), though B still shortens the average miss (−0.023 [−0.030, −0.016], seed p 0.02); the taps-and-swipes control is null. End-to-end margin with predicted types is null (+0.016). Interventions: both learned embeddings are read at inference; zeroed D-hook stays within a point of A, zeroed D-token falls 7 points below. D-token's failure is a schedule effect (rows move 0.016 at the shared LR; a 10x table LR gives 0.295, level with B). `inputs_embeds` M-RoPE fallback documented against the transformers source.
-- [x] **Paper** — `neurips2026/`. Build the double-blind version with `make`, the preprint with `make preprint`.
+On multi-GPU machines, `device_map="auto"` can split layers in ways that
+interact badly with LoRA. If the model fits on one GPU, set
+`device_map: {"": 0}` in the config.
 
 ## Reproducing the paper
 
-Every number in the paper comes from run JSONs in `results/phase4/`, each carrying
-a `per_example_dist` array over the shared validation slice.
+Every number comes from run JSONs in `results/phase4/`, each carrying a
+`per_example_dist` array over the shared validation slice.
 
 ```bash
 uv run modal run modal_app.py::list_stage2_runs   # pull run JSONs from the Modal volume
 uv run python scripts/p8_consolidate.py           # rebuild every table, figure and PHASE8_RESULTS.md
-cd neurips2026 && make                            # the double-blind paper
-cd neurips2026 && make preprint                   # the de-anonymized preprint
+cd neurips2026 && make                            # the paper
 ```
 
 | paper element | produced by |
@@ -149,8 +72,28 @@ cd neurips2026 && make preprint                   # the de-anonymized preprint
 | episode-cluster bootstrap | `_episode_bootstrap`, clusters from `results/phase8/val_episodes.json` |
 | per-class labels | `results/phase8/qualitative_v2/render.json` |
 
-Statistics live in [`src/eval/bootstrap.py`](src/eval/bootstrap.py) and the `paired()`
-helper in `scripts/p8_consolidate.py`, which reports a pooled-unit interval, an
+Statistics live in `src/eval/bootstrap.py` and the `paired()` helper in
+`scripts/p8_consolidate.py`, which reports a pooled-unit interval, an
 example-cluster interval, the episode-cluster interval used in the paper, a
 boundary-episode-excluded variant, and a seed-level paired t-test.
 
+Consolidated results, including every contrast the paper does not have room
+for, are in `results/phase8/PHASE8_RESULTS.md`.
+
+## Repo layout
+
+```
+src/models/      Qwen2-VL + LoRA loaders, the Stage-2 grounding model
+src/data/        canonical action taxonomy, AITW and Mind2Web loaders
+src/train/       training loops, coordinate serialization, grounding eval
+src/eval/        paired bootstrap and permutation tests
+modal_app.py     every Modal entry point; one remote plus one local entrypoint per experiment
+scripts/         consolidation, figures, analysis
+results/         run JSONs and per-phase writeups
+neurips2026/     paper source, tables, figures
+tests/           29 tests, no GPU required
+```
+
+AITW screenshots in the `cjfcsjt/AITW_General` mirror are stored as raw RGB
+bytes with no image header. `src/data/aitw._decode_aitw_image_bytes` handles the
+seven observed resolutions; `PIL.Image.open` on the raw buffer will fail.
