@@ -44,3 +44,13 @@ neurips2026/preprint.bbl
 neurips2026/preprint.blg
 neurips2026/preprint.log
 neurips2026/preprint.out
+
+# Internal working notes: agent instructions, session logs, submission diaries,
+# mock review panels, venue strategy. Kept locally, never published.
+CLAUDE.md
+AGENTS.md
+SESSION_LOG.md
+neurips2026/SUBMISSION_NOTES.md
+neurips2026/STRENGTHENING_PLAN.md
+neurips2026/mock_review/
+neurips2026/mock_review_2/
