@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -30,15 +31,27 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 P9 = ROOT / "results" / "phase9"
-RUNS = P9 / "bigval"
-TABLES = ROOT / "aaai27" / "tables"
+RUNS = Path(os.environ.get("P9_RUNS", P9 / "bigval"))          # override only to dry-run on smoke output
+CTRL = P9 / "bigval_control"
+LEGACY = ROOT / "results" / "phase4"
+TABLES = Path(os.environ.get("P9_TABLES", ROOT / "aaai27" / "tables"))
+# taps_and_swipes control (n_train=1000, n_val=200, seeds 42-44): the Phase-8 runs, decoded one at a time
+CTRL_SEEDS = (42, 43, 44)
+CTRL_LEGACY = {"A": "variantA_seed{s}_n1000_ep2_lr2e-05_mix-taps_and_swipes.json",
+               "B": "variantB_seed{s}_n1000_ep2_lr2e-05_mix-taps_and_swipes_aux1.0.json",
+               "C": "variantC_seed{s}_n1000_ep2_lr2e-05_mix-taps_and_swipes.json",
+               "Dhook": "Dhook_seed{s}_n1000_ep2_lr2e-05_mix-taps_and_swipes_init0.0.json",
+               "Dtext": "Dtext_seed{s}_n1000_ep2_lr2e-05_mix-taps_and_swipes.json"}
+# the retracted D-slot runs: the same prepended-token variant, injected through inputs_embeds (no per-example log)
+DSLOT = "train_seed{s}_n1000_ep2_lr2e-05_mix-taps_and_swipes.json"
 N_BOOT = 10000
 RADII = {"hit_at_005": 0.05, "hit_at_010": 0.10, "hit_at_014": 0.14, "hit_at_025": 0.25}
 METRICS = list(RADII) + ["mean_l2"]
 CLICK, TYPE, SCROLL = 0, 2, 3          # canonical action ids (src/data/taxonomy.py)
 NAMES = {"A": "A: flat", "B": "B: aux.\\ loss", "Bprompt": "B$'$: aux.\\ loss, prompt-pooled",
          "C": "C: hard routing", "Dhook": "D-hook: additive", "Dhook10x": "D-hook, table LR $\\times$10",
-         "Dtoken10x": "D-token: prepended, table LR $\\times$10", "Dtext": "D-text: prompt word"}
+         "Dtoken": "D-token: prepended", "Dtoken10x": "D-token: prepended, table LR $\\times$10",
+         "Dtext": "D-text: prompt word", "Dslot": "D-slot: prepended, via \\texttt{inputs\\_embeds}"}
 PLAIN = {k: v.replace("\\ ", " ").replace("$'$", "'").replace("$\\times$", "x") for k, v in NAMES.items()}
 
 
@@ -75,9 +88,14 @@ def check_alignment(runs: dict) -> dict:
     meta = ref["val_meta"]
     labels = np.array([m["action_id"] for m in meta])
     eps = [m["ep_id"] for m in meta]
+    prev = json.loads((ROOT / "results" / "phase8" / "val_episodes.json").read_text())["all_with_coords_n1200"]["val"]
+    prev_keys = {(x["ep_id"], x["step_id"]) for x in prev}
+    fresh = np.array([(m["ep_id"], m["step_id"]) not in prev_keys for m in meta])
     return {"n": len(meta), "episodes": eps, "labels": labels, "n_episodes": len(set(eps)),
             "n_click": int((labels == CLICK).sum()), "n_scroll": int((labels == SCROLL).sum()),
-            "n_type": int((labels == TYPE).sum())}
+            "n_type": int((labels == TYPE).sum()), "fresh": fresh,
+            "n_fresh": int(fresh.sum()), "n_overlap": int((~fresh).sum()),
+            "n_fresh_episodes": len({e for e, f in zip(eps, fresh) if f})}
 
 
 def per_example(r: dict, metric: str, which: str = "gold") -> np.ndarray:
@@ -143,8 +161,8 @@ def tex_d(d: dict | None, digits: int = 3) -> str:
     if not d:
         return "--"
     s = stars(d)
-    s = f"$^{{{s}}}$" if s else ""
-    return f"{d['delta']:+.{digits}f} [{d['ci_low']:+.{digits}f}, {d['ci_high']:+.{digits}f}]{s}"
+    s = f"^{{{s}}}" if s else ""
+    return f"${d['delta']:+.{digits}f}$ $[{d['ci_low']:+.{digits}f}, {d['ci_high']:+.{digits}f}]{s}$"
 
 
 def tex_p(d: dict | None) -> str:
@@ -172,11 +190,15 @@ def main() -> None:
     allm = np.ones_like(spatial, dtype=bool)
     click, scroll = labels == CLICK, labels == SCROLL
     mixed, clean = runs.get("mixed", {}), runs.get("clean", {})
-    S: dict = {"slice": {k: v for k, v in sl.items() if k not in ("episodes", "labels")}}
+    fresh = spatial & sl["fresh"]          # spatial steps that were never in the earlier 250-step slice
+    S: dict = {"slice": {k: v for k, v in sl.items() if k not in ("episodes", "labels", "fresh")}}
+    S["slice"]["n_fresh_spatial"] = int(fresh.sum())
     md = ["# Phase 9: large held-out validation slice", "",
           f"Slice: {sl['n']} steps from {sl['n_episodes']} episodes ({sl['n_click']} clicks, "
           f"{sl['n_scroll']} scrolls, {sl['n_type']} type events); no episode is shared with training.", "",
-          "Primary metrics use the click and scroll steps only; type targets are off-screen and unhittable.", ""]
+          "Primary metrics use the click and scroll steps only; type targets are off-screen and unhittable.",
+          f"{sl['n_overlap']} steps are the earlier 250-step slice (minus its boundary episode); "
+          f"{int(fresh.sum())} spatial steps from {sl['n_fresh_episodes']} episodes are new ('fresh' columns).", ""]
 
     # 1. mechanism ranking on the mixed stream
     order = [v for v in ("A", "B", "Bprompt", "C", "Dhook", "Dhook10x", "Dtoken10x", "Dtext") if v in mixed]
@@ -194,6 +216,7 @@ def main() -> None:
             rec["vsA_all"] = {m: contrast(mixed["A"], mixed[v], m, allm, eps) for m in METRICS}
             rec["vsA_click"] = contrast(mixed["A"], mixed[v], "hit_at_010", click, eps)
             rec["vsA_scroll"] = contrast(mixed["A"], mixed[v], "hit_at_010", scroll, eps)
+            rec["vsA_fresh"] = {m: contrast(mixed["A"], mixed[v], m, fresh, eps) for m in ("hit_at_010", "mean_l2")}
         if v not in ("A", "B") and "B" in mixed:
             rec["vsB"] = {m: contrast(mixed["B"], mixed[v], m, spatial, eps) for m in ("hit_at_010", "mean_l2")}
         S["mixed"][v] = rec
@@ -201,6 +224,10 @@ def main() -> None:
         md.append(f"| {PLAIN[v]} | {rec['hit_at_010']['n']} | {rec['hit_at_010']['mean']:.3f} | {rec['hit_at_025']['mean']:.3f} | "
                   f"{rec['mean_l2']['mean']:.3f} | {md_d(va.get('hit_at_010'))} | {md_d(va.get('hit_at_014'))} | "
                   f"{md_d(va.get('mean_l2'))} | {md_d(rec.get('vsA_all', {}).get('hit_at_010'))} |")
+    md += ["", "Fresh steps only (never in the earlier slice), Δhit@0.10 vs A:", ""]
+    for v in order:
+        if "vsA_fresh" in S["mixed"][v]:
+            md.append(f"- {PLAIN[v]}: {md_d(S['mixed'][v]['vsA_fresh']['hit_at_010'])}")
     md += ["", "Per class, hit@0.10:", ""]
     for v in order:
         r = S["mixed"][v]
@@ -229,8 +256,10 @@ def main() -> None:
             if v != "A" and "A" in clean:
                 rec["vsA"] = {m: contrast(clean["A"], clean[v], m, spatial, eps) for m in METRICS}
                 rec["vsA_click"] = contrast(clean["A"], clean[v], "hit_at_010", click, eps)
+                rec["vsA_fresh"] = {m: contrast(clean["A"], clean[v], m, fresh, eps) for m in ("hit_at_010", "mean_l2")}
             if v in mixed:
                 rec["removal"] = {m: contrast(mixed[v], clean[v], m, spatial, eps) for m in METRICS}
+                rec["removal_fresh"] = {m: contrast(mixed[v], clean[v], m, fresh, eps) for m in ("hit_at_010", "mean_l2")}
             S["clean"][v] = rec
             va, rm = rec.get("vsA", {}), rec.get("removal", {})
             md.append(f"| {PLAIN[v]} | {rec['hit_at_010']['n']} | {rec['hit_at_010']['mean']:.3f} | {rec['mean_l2']['mean']:.3f} | "
@@ -310,6 +339,10 @@ def main() -> None:
         if v in S["mixed"]:
             claim(f"{PLAIN[v]} beats A on the mixed stream (hit@0.10)", S["mixed"][v].get("vsA", {}).get("hit_at_010"),
                   f"{NAMES[v]} beats A, mixed stream")
+    for v in ("B", "Dhook", "Dtext"):
+        if v in S["mixed"] and S["mixed"][v].get("vsA_fresh"):
+            claim(f"{PLAIN[v]} beats A on the mixed stream, fresh steps only (hit@0.10)", S["mixed"][v]["vsA_fresh"]["hit_at_010"],
+                  f"{NAMES[v]} beats A, mixed, new steps only")
     if "A" in S["clean"]:
         claim("Removing type events from training improves A (hit@0.10)", S["clean"]["A"].get("removal", {}).get("hit_at_010"),
               "Removing type events improves A")
@@ -324,6 +357,12 @@ def main() -> None:
     if "Bprompt_minus_B" in S:
         claim("Prompt-pooled aux loss differs from answer-pooled (hit@0.10)", S["Bprompt_minus_B"]["hit_at_010"],
               "Prompt-pooled B$'$ differs from B")
+    # 8. control stream: D-token on the fixed path, paired with the legacy control runs
+    md += control_section(S)
+    if "Dtoken" in S.get("control", {}):
+        claim("D-token (shared LR) beats A on taps_and_swipes (hit@0.10)", S["control"]["Dtoken"]["vsA"]["hit_at_010"],
+              "D-token beats A, taps-and-swipes control")
+
     S["claims"] = claims
     md += ["", "## Claims", "", "| claim | Δ | 95% CI | boot p | seed p | established |", "|---|---|---|---|---|---|"]
     for c in claims:
@@ -333,7 +372,175 @@ def main() -> None:
     (P9 / "PHASE9_RESULTS.md").write_text("\n".join(md) + "\n")
     (P9 / "phase9_summary.json").write_text(json.dumps(S, indent=1, default=float))
     write_tables(S, sl)
+    write_macros(S, sl)
     print("\n".join(md))
+
+
+# ---------------------------------------------------------------- control stream
+def control_section(S: dict) -> list[str]:
+    """taps_and_swipes control. The legacy A/B/C/D-hook/D-text runs and the new fixed-path D-token runs are
+    scored on the same 200 steps (asserted), so contrasts are paired per example; the retracted D-slot runs
+    logged only aggregates, so the same-variant comparison with them is seed-level."""
+    v_ep = json.loads((ROOT / "results" / "phase8" / "val_episodes.json").read_text())["taps_and_swipes_n1000"]["val"]
+    eps = [x["ep_id"] for x in v_ep]
+    keys = [(x["ep_id"], x["step_id"]) for x in v_ep]
+    runs: dict = {}
+    for v, t in CTRL_LEGACY.items():
+        by = {}
+        for s in CTRL_SEEDS:
+            p = LEGACY / t.format(s=s)
+            if p.exists():
+                fvm = json.loads(p.read_text()).get("final_val_metrics") or {}
+                if fvm.get("per_example_dist"):
+                    assert len(fvm["per_example_dist"]) == len(keys), p.name
+                    by[s] = {"gold": {"per_example_dist": fvm["per_example_dist"]}}
+        if by:
+            runs[v] = by
+    new = {}
+    for p in sorted(CTRL.glob("Dtoken_seed*_n1000_v200_mix-taps_and_swipes*.json")):
+        r = json.loads(p.read_text())
+        if r.get("action_lr"):
+            continue
+        k = [(m["ep_id"], m["step_id"]) for m in r["val_meta"]]
+        assert k == keys, f"{p.name}: control slice does not match the legacy control slice"
+        new[r["seed"]] = r
+    if new:
+        runs["Dtoken"] = new
+    if "A" not in runs:
+        return []
+    allm = np.ones(len(keys), dtype=bool)
+    S["control"] = {}
+    md = ["", "## Control: taps_and_swipes (n_train=1000, n_val=200, seeds 42-44)", "",
+          "| variant | seeds | hit@0.10 | mean L2 | Δhit@0.10 vs A | ΔL2 vs A |", "|---|---|---|---|---|---|"]
+    for v in [x for x in ("A", "B", "C", "Dhook", "Dtoken", "Dtext") if x in runs]:
+        rec = {m: cell(runs[v], m, allm) for m in METRICS}
+        if v != "A":
+            rec["vsA"] = {m: contrast(runs["A"], runs[v], m, allm, eps) for m in METRICS}
+        S["control"][v] = rec
+        va = rec.get("vsA", {})
+        md.append(f"| {PLAIN.get(v, v)} | {rec['hit_at_010']['n']} | {rec['hit_at_010']['mean']:.3f} | {rec['mean_l2']['mean']:.3f} | "
+                  f"{md_d(va.get('hit_at_010'))} | {md_d(va.get('mean_l2'))} |")
+    # same variant, two injection paths
+    slot = {}
+    for s in CTRL_SEEDS:
+        p = LEGACY / DSLOT.format(s=s)
+        if p.exists():
+            fvm = json.loads(p.read_text())["final_val_metrics"]
+            slot[s] = {"hit_at_010": fvm["hit_at_010"], "mean_l2": fvm["mean_normalized_l2"]}
+    if slot:
+        vals = [x["hit_at_010"] for x in slot.values()]
+        S["control_dslot"] = {"hit_at_010": {"mean": float(np.mean(vals)), "std": float(np.std(vals, ddof=1)), "n": len(vals)},
+                              "mean_l2": {"mean": float(np.mean([x["mean_l2"] for x in slot.values()]))}}
+    if slot and new:
+        from scipy import stats
+        seeds = sorted(set(slot) & set(new))
+        out = {}
+        for m in ("hit_at_010", "mean_l2"):
+            fixed = [float(per_example(new[s], m).mean()) for s in seeds]
+            old = [slot[s][m] for s in seeds]
+            out[m] = {"delta": float(np.mean(fixed) - np.mean(old)), "seeds": seeds,
+                      "per_seed_fixed": fixed, "per_seed_slot": old,
+                      "seed_p": float(stats.ttest_rel(fixed, old).pvalue) if len(seeds) >= 2 else math.nan}
+        S["control_fixed_minus_slot"] = out
+        d = out["hit_at_010"]
+        md.append(f"- Same prepended-token variant, input_ids path minus inputs_embeds path: {d['delta']:+.3f} hit@0.10 "
+                  f"(seed-level paired t p={d['seed_p']:.3f}; per seed fixed {[round(x, 3) for x in d['per_seed_fixed']]}, "
+                  f"slot {[round(x, 3) for x in d['per_seed_slot']]})")
+    return md
+
+
+# ---------------------------------------------------------------- macros for the paper text
+def _mname(*parts: str) -> str:
+    s = "".join(parts).replace("10x", "Ten").replace("Bprompt", "Bp")
+    s = "".join(ch for ch in s if ch.isalpha())
+    return "\\n" + s
+
+
+def _fmt(x: float, digits: int = 3, sign: bool = False) -> str:
+    return f"{x:+.{digits}f}" if sign else f"{x:.{digits}f}"
+
+
+def _pfmt(p: float) -> str:
+    if p is None or math.isnan(p):
+        return "p = \\text{n/a}"
+    return "p < 0.001" if p < 0.001 else f"p = {p:.3f}"
+
+
+MCODE = {"hit_at_005": "Hfive", "hit_at_010": "Hten", "hit_at_014": "Hfourteen", "hit_at_025": "Hquarter", "mean_l2": "Ltwo"}
+
+
+def write_macros(S: dict, sl: dict) -> None:
+    """aaai27/tables/numbers.tex: one \\newcommand per number the text cites, so prose and tables cannot drift.
+    For a contrast X: \\nX (delta), \\nXci (interval), \\nXp (seed-level p, as a relation), \\nXbp (bootstrap p)."""
+    L = ["% generated by scripts/p9_consolidate.py; do not edit"]
+
+    def put(name: str, val: str) -> None:
+        L.append(f"\\newcommand{{{name}}}{{\\ensuremath{{{val}}}}}")
+
+    def put_contrast(name: str, d: dict | None) -> None:
+        if not d:
+            return
+        put(name, _fmt(d["delta"], sign=True))
+        put(name + "ci", f"[{_fmt(d['ci_low'], sign=True)}, {_fmt(d['ci_high'], sign=True)}]")
+        put(name + "p", _pfmt(d.get("seed_p", math.nan)))
+        put(name + "bp", _pfmt(d.get("p", math.nan)))
+
+    def put_cell(name: str, c: dict) -> None:
+        if c and c.get("n"):
+            put(name, _fmt(c["mean"]))
+            put(name + "sd", f"{_fmt(c['mean'])} \\pm {_fmt(c['std'])}")
+
+    n = lambda x: f"{x:,}".replace(",", "{,}")
+    sl2 = S["slice"]
+    put("\\nSliceN", n(sl2["n"])); put("\\nSliceEps", n(sl2["n_episodes"]))
+    put("\\nSliceClick", n(sl2["n_click"])); put("\\nSliceScroll", n(sl2["n_scroll"]))
+    put("\\nSliceType", n(sl2["n_type"])); put("\\nSliceSpatial", n(sl2["n_click"] + sl2["n_scroll"]))
+    put("\\nSliceOverlap", n(sl2["n_overlap"])); put("\\nSliceFresh", n(sl2["n_fresh_spatial"]))
+    put("\\nSliceFreshEps", n(sl2["n_fresh_episodes"]))
+    for prefix, block in (("", S.get("mixed", {})), ("c", S.get("clean", {})), ("k", S.get("control", {}))):
+        for v, r in block.items():
+            for m, code in MCODE.items():
+                put_cell(_mname(prefix, v, code), r.get(m))
+                put_contrast(_mname(prefix, v, "vA", code), r.get("vsA", {}).get(m))
+            for cls in ("click", "scroll"):
+                put_cell(_mname(prefix, v, cls), r.get(cls))
+                put_contrast(_mname(prefix, v, "vA", cls), r.get(f"vsA_{cls}"))
+            for m in ("hit_at_010", "mean_l2"):
+                put_contrast(_mname(prefix, v, "vB", MCODE[m]), r.get("vsB", {}).get(m))
+            for m, code in MCODE.items():
+                put_contrast(_mname(prefix, v, "removal", code), r.get("removal", {}).get(m))
+            for m in ("hit_at_010", "mean_l2"):
+                put_contrast(_mname(prefix, v, "vAfresh", MCODE[m]), r.get("vsA_fresh", {}).get(m))
+                put_contrast(_mname(prefix, v, "removalfresh", MCODE[m]), r.get("removal_fresh", {}).get(m))
+    for key, nm in (("Bprompt_minus_B", "BpminusB"), ("Dhook10x_minus_Dhook", "DhookTenminusDhook")):
+        for m, code in MCODE.items():
+            put_contrast(_mname(nm, code), S.get(key, {}).get(m))
+    for v, r in S.get("e2e", {}).items():
+        put_cell(_mname("e", v, "gold"), r["gold"]); put_cell(_mname("e", v, "pred"), r["pred"])
+        put_contrast(_mname("e", v, "vA"), r["pred_minus_A"]); put_contrast(_mname("e", v, "vAL"), r["pred_minus_A_l2"])
+        put_contrast(_mname("e", v, "gap"), r["gold_minus_pred"])
+    if "stage1_accuracy" in S:
+        put("\\nSacc", _fmt(S["stage1_accuracy"]["mean"])); put("\\nSmaj", _fmt(S["stage1_accuracy"]["majority"]))
+    for v, x in S.get("rows", {}).items():
+        put(_mname("Rows", v), _fmt(x))
+    for v, x in S.get("origin_bias", {}).items():
+        put(_mname("Orig", v), f"{100 * x['frac_click_preds_within_0.10_of_origin']:.1f}\\%")
+    if "batch_check" in S:
+        b = S["batch_check"]
+        put("\\nBatchRuns", str(b["runs"])); put("\\nBatchIdent", f"{100 * b['frac_identical_mean']:.0f}\\%")
+        put("\\nBatchIdentMin", f"{100 * b['frac_identical_min']:.0f}\\%"); put("\\nBatchGap", _fmt(b["max_hit010_gap"]))
+    if "control_dslot" in S:
+        put("\\nkDslotHten", _fmt(S["control_dslot"]["hit_at_010"]["mean"]))
+        put("\\nkDslotHtensd", f"{_fmt(S['control_dslot']['hit_at_010']['mean'])} \\pm {_fmt(S['control_dslot']['hit_at_010']['std'])}")
+    if "control_fixed_minus_slot" in S:
+        d = S["control_fixed_minus_slot"]["hit_at_010"]
+        put("\\nkFixedMinusSlot", _fmt(d["delta"], sign=True)); put("\\nkFixedMinusSlotp", _pfmt(d["seed_p"]))
+    # duplicate names would be a LaTeX error; fail here instead
+    names = [l.split("}{")[0] for l in L[1:]]
+    dup = sorted({x for x in names if names.count(x) > 1})
+    assert not dup, f"duplicate macro names: {dup[:10]}"
+    TABLES.mkdir(parents=True, exist_ok=True)
+    (TABLES / "numbers.tex").write_text("\n".join(L) + "\n")
 
 
 # ---------------------------------------------------------------- LaTeX tables (two-column AAAI)
@@ -389,6 +596,41 @@ def write_tables(S: dict, sl: dict) -> None:
         L += ["\\bottomrule", "\\end{tabular}}", "\\end{table}"]
         (TABLES / "e2e.tex").write_text("\n".join(L) + "\n")
 
+    # Table: per class on the mixed stream (single column)
+    if S["mixed"]:
+        L = ["\\begin{table}[t]", "\\centering", "\\small",
+             "\\caption{Where the mixed-stream gain lives: \\hitat{0.10} by class, and the change against A with its "
+             "episode-cluster interval. Every model scores zero on the type events, whose raw target is off-screen.}",
+             "\\label{tab:perclass}", "\\resizebox{\\columnwidth}{!}{\\begin{tabular}{lcccc}", "\\toprule",
+             f"Variant & click ({sl['n_click']:,}) & scroll ({sl['n_scroll']:,}) & $\\Delta$ click & $\\Delta$ scroll \\\\".replace(",", "{,}"),
+             "\\midrule"]
+        for v, r in S["mixed"].items():
+            L.append(f"{NAMES[v]} & {r['click']['mean']:.3f} & {r['scroll']['mean']:.3f} & "
+                     f"{tex_d(r.get('vsA_click'))} & {tex_d(r.get('vsA_scroll'))} \\\\")
+        L += ["\\bottomrule", "\\end{tabular}}", "\\end{table}"]
+        (TABLES / "perclass.tex").write_text("\n".join(L) + "\n")
+
+    # Table: control stream with the fixed-path D-token row
+    if S.get("control"):
+        L = ["\\begin{table*}[t]", "\\centering", "\\small",
+             "\\caption{Control: AITW \\mix{taps\\_and\\_swipes}, a training stream with no degenerate class (1,000 training "
+             "and 200 held-out steps, three seeds, every model decoded one example at a time). D-token is new here and "
+             "uses the shared learning rate; the D-slot row is the same variant with its embedding injected through "
+             "\\texttt{inputs\\_embeds} (Section~\\ref{sec:mrope}), which logged only aggregates. Same statistics as "
+             "Table~\\ref{tab:headline}.}",
+             "\\label{tab:control}", "\\resizebox{\\textwidth}{!}{\\begin{tabular}{lcccccc}", "\\toprule",
+             "Variant & \\hitat{0.05} & \\hitat{0.10} & \\hitat{0.25} & mean L2 $\\downarrow$ & "
+             "$\\Delta$\\hitat{0.10} vs.\\ A & seed $p$ \\\\", "\\midrule"]
+        for v, r in S["control"].items():
+            a = r.get("vsA", {}).get("hit_at_010")
+            L.append(f"{NAMES[v]} & {tex_ms(r['hit_at_005'])} & {tex_ms(r['hit_at_010'])} & {tex_ms(r['hit_at_025'])} & "
+                     f"{tex_ms(r['mean_l2'])} & {tex_d(a)} & {tex_p(a)} \\\\")
+        if "control_dslot" in S:
+            c = S["control_dslot"]["hit_at_010"]
+            L += ["\\midrule", f"{NAMES['Dslot']} & -- & {tex_ms(c)} & -- & {S['control_dslot']['mean_l2']['mean']:.3f} & -- & -- \\\\"]
+        L += ["\\bottomrule", "\\end{tabular}}", "\\end{table*}"]
+        (TABLES / "control.tex").write_text("\n".join(L) + "\n")
+
     # Table: claims (single column)
     if S["claims"]:
         L = ["\\begin{table}[t]", "\\centering", "\\small",
@@ -396,7 +638,7 @@ def write_tables(S: dict, sl: dict) -> None:
              "$p<.05$).}", "\\label{tab:claims}", "\\resizebox{\\columnwidth}{!}{\\begin{tabular}{lcc}", "\\toprule",
              "Claim & $\\Delta$ [95\\% CI] & established \\\\", "\\midrule"]
         for c in S["claims"]:
-            L.append(f"{c['tex']} & {c['delta']:+.3f} [{c['ci'][0]:+.3f}, {c['ci'][1]:+.3f}] & {'yes' if c['established'] else 'no'} \\\\")
+            L.append(f"{c['tex']} & ${c['delta']:+.3f}$ $[{c['ci'][0]:+.3f}, {c['ci'][1]:+.3f}]$ & {'yes' if c['established'] else 'no'} \\\\")
         L += ["\\bottomrule", "\\end{tabular}}", "\\end{table}"]
         (TABLES / "claims.tex").write_text("\n".join(L) + "\n")
 

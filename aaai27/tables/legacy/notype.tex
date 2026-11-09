@@ -1,7 +1,7 @@
 \begin{table*}[t]
 \centering
 \small
-\caption{Removing \emph{type} events from the training slice only, scored on the identical headline validation slice (3 to 5 seeds; each contrast uses the seeds its two conditions share, given per row). Deltas are paired episode-cluster bootstraps (every step and seed of a sampled episode kept together); seed-level $p$ in parentheses.}
+\caption{Earlier study, on the 250-step validation slice. Removing \emph{type} events from the training slice only, scored on the identical headline validation slice (3 to 5 seeds; each contrast uses the seeds its two conditions share, given per row). Deltas are paired episode-cluster bootstraps (every step and seed of a sampled episode kept together); seed-level $p$ in parentheses.}
 \label{tab:legacy_notype}
 \resizebox{\textwidth}{!}{\begin{tabular}{llccccc}
 \toprule
@@ -10,15 +10,15 @@ Variant & Training stream & seeds & hit@0.10 & click hit@0.10 & scroll hit@0.10 
 A: flat & with type & 5 & 0.229 $\pm$ 0.043 & 0.256 $\pm$ 0.062 & 0.304 $\pm$ 0.034 &  \\
 A: flat & type removed & 5 & 0.296 $\pm$ 0.019 & 0.355 $\pm$ 0.031 & 0.304 $\pm$ 0.051 &  \\
 B: aux.\ loss & with type & 5 & 0.293 $\pm$ 0.021 & 0.357 $\pm$ 0.026 & 0.278 $\pm$ 0.018 &  \\
-B: aux.\ loss & type removed & 5 & 0.298 $\pm$ 0.038 & 0.368 $\pm$ 0.069 & 0.265 $\pm$ 0.058 & +0.002 [-0.014, +0.018] (0.926) \\
+B: aux.\ loss & type removed & 5 & 0.298 $\pm$ 0.038 & 0.368 $\pm$ 0.069 & 0.265 $\pm$ 0.058 & $+0.002$ $[-0.014, +0.018]$ (0.926) \\
 C: hard routing & with type & 5 & 0.264 $\pm$ 0.045 & 0.350 $\pm$ 0.061 & 0.148 $\pm$ 0.073 &  \\
-C: hard routing & type removed & 3 & 0.269 $\pm$ 0.033 & 0.355 $\pm$ 0.039 & 0.159 $\pm$ 0.126 & -0.028 [-0.071, +0.013] (0.118) \\
+C: hard routing & type removed & 3 & 0.269 $\pm$ 0.033 & 0.355 $\pm$ 0.039 & 0.159 $\pm$ 0.126 & $-0.028$ $[-0.071, +0.013]$ (0.118) \\
 D-hook: additive & with type & 5 & 0.282 $\pm$ 0.041 & 0.321 $\pm$ 0.064 & 0.357 $\pm$ 0.039 &  \\
-D-hook: additive & type removed & 5 & 0.297 $\pm$ 0.039 & 0.341 $\pm$ 0.061 & 0.361 $\pm$ 0.029 & +0.001 [-0.020, +0.022] (0.973) \\
+D-hook: additive & type removed & 5 & 0.297 $\pm$ 0.039 & 0.341 $\pm$ 0.061 & 0.361 $\pm$ 0.029 & $+0.001$ $[-0.020, +0.022]$ (0.973) \\
 D-token: prepended & with type & 5 & 0.238 $\pm$ 0.049 & 0.269 $\pm$ 0.069 & 0.304 $\pm$ 0.090 &  \\
-D-token: prepended & type removed & 3 & 0.273 $\pm$ 0.015 & 0.333 $\pm$ 0.028 & 0.261 $\pm$ 0.038 & -0.024 [-0.040, -0.008]$^{**}$ (0.402) \\
+D-token: prepended & type removed & 3 & 0.273 $\pm$ 0.015 & 0.333 $\pm$ 0.028 & 0.261 $\pm$ 0.038 & $-0.024$ $[-0.040, -0.008]^{**}$ (0.402) \\
 D-text: word in prompt & with type & 5 & 0.302 $\pm$ 0.028 & 0.348 $\pm$ 0.036 & 0.361 $\pm$ 0.036 &  \\
-D-text: word in prompt & type removed & 3 & 0.283 $\pm$ 0.017 & 0.318 $\pm$ 0.015 & 0.370 $\pm$ 0.038 & -0.015 [-0.064, +0.036] (0.490) \\
+D-text: word in prompt & type removed & 3 & 0.283 $\pm$ 0.017 & 0.318 $\pm$ 0.015 & 0.370 $\pm$ 0.038 & $-0.015$ $[-0.064, +0.036]$ (0.490) \\
 \bottomrule
 \end{tabular}}
 \end{table*}

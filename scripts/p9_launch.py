@@ -53,9 +53,10 @@ def jobs(group: str) -> list[tuple[str, dict]]:
         return [(S2, dict(variant="Dhook", seed=s, action_lr=TEN_X, check_batch_equivalence=chk(s))) for s in SEEDS]
     if group == "control_dtoken":         # P5: reviewer ask, prepended token on the taps-and-swipes control,
         # on the ORIGINAL 200-step slice so it sits in the same table as A/B/C/D-hook/D-text, at the shared LR
-        # so it is the same variant as the retracted inputs_embeds run on the fixed input_ids path
+        # so it is the same variant as the retracted inputs_embeds run on the fixed input_ids path;
+        # decoded one example at a time like the legacy control runs it is compared against
         return [(S2, dict(variant="Dtoken", seed=s, data_mix="taps_and_swipes", n_train=1000, n_val=200,
-                          skip_boundary=False, out_subdir="bigval_control")) for s in (42, 43, 44)]
+                          skip_boundary=False, eval_batch_size=1, out_subdir="bigval_control")) for s in (42, 43, 44)]
     raise SystemExit(f"unknown group {group}")
 
 

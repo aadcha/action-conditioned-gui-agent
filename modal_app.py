@@ -5531,7 +5531,9 @@ def _stage2_bigval_remote(
         batch_check = {"k": k, "identical_strings": same, "frac_identical": same / k,
                        "max_abs_dist_diff": max(dd) if dd else None,
                        "hit010_batched": sum(1 for a, t in zip(preds[:k], targets[:k]) if a and math.hypot(a[0]-t[0], a[1]-t[1]) <= 0.10) / k,
-                       "hit010_unbatched": sum(1 for a, t in zip(p1, targets[:k]) if a and math.hypot(a[0]-t[0], a[1]-t[1]) <= 0.10) / k}
+                       "hit010_unbatched": sum(1 for a, t in zip(p1, targets[:k]) if a and math.hypot(a[0]-t[0], a[1]-t[1]) <= 0.10) / k,
+                       "n_parsed_both": len(dd), "mean_abs_dist_diff": (sum(dd) / len(dd)) if dd else None,
+                       "raws_batched": raws[:k], "raws_unbatched": r1}
         print(f"{tag} batch check: {batch_check}", flush=True)
 
     m_e2e, s1_info = None, None
