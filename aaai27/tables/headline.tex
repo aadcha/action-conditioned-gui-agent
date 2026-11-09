@@ -1,0 +1,20 @@
+\begin{table*}[t]
+\centering
+\small
+\caption{Mechanism ranking on the mixed stream (2{,}000 held-out steps from 274 episodes; metrics on the 1{,}753 click and scroll steps). Mean $\pm$ std over five seeds; $\Delta$ vs.\ A with a 95\% episode-cluster bootstrap interval (stars from the same bootstrap, $^{*}p<.05$, $^{**}p<.01$, $^{***}p<.001$) and the seed-level paired $t$-test $p$. \emph{New steps}: the 1{,}542 click and scroll steps that were never in the earlier 250-step slice.}
+\label{tab:headline}
+\resizebox{\textwidth}{!}{\begin{tabular}{lcccccccc}
+\toprule
+Variant & \hitat{0.10} & \hitat{0.25} & mean L2 $\downarrow$ & $\Delta$\hitat{0.10} vs.\ A & seed $p$ & $\Delta$\hitat{0.10}, new steps & $\Delta$ mean L2 vs.\ A & seed $p$ \\
+\midrule
+A: flat & 0.333 $\pm$ 0.021 & 0.607 $\pm$ 0.037 & 0.249 $\pm$ 0.020 & -- & -- & -- & -- & -- \\
+B: aux.\ loss & 0.391 $\pm$ 0.024 & 0.657 $\pm$ 0.038 & 0.219 $\pm$ 0.014 & $+0.057$ $[+0.046, +0.069]^{***}$ & $<$0.001 & $+0.054$ $[+0.042, +0.066]^{***}$ & $-0.029$ $[-0.037, -0.022]^{***}$ & 0.031 \\
+B$'$: aux.\ loss, prompt-pooled & 0.390 $\pm$ 0.025 & 0.657 $\pm$ 0.032 & 0.219 $\pm$ 0.013 & $+0.057$ $[+0.045, +0.069]^{***}$ & $<$0.001 & $+0.054$ $[+0.042, +0.067]^{***}$ & $-0.030$ $[-0.037, -0.022]^{***}$ & 0.015 \\
+C: hard routing & 0.352 $\pm$ 0.029 & 0.598 $\pm$ 0.034 & 0.289 $\pm$ 0.021 & $+0.018$ $[+0.006, +0.031]^{**}$ & 0.368 & $+0.015$ $[+0.002, +0.028]^{*}$ & $+0.040$ $[+0.024, +0.056]^{***}$ & 0.009 \\
+D-hook: additive & 0.415 $\pm$ 0.026 & 0.693 $\pm$ 0.030 & 0.196 $\pm$ 0.010 & $+0.082$ $[+0.070, +0.094]^{***}$ & $<$0.001 & $+0.088$ $[+0.075, +0.101]^{***}$ & $-0.053$ $[-0.060, -0.046]^{***}$ & 0.002 \\
+D-hook, table LR $\times$10 & 0.429 $\pm$ 0.018 & 0.710 $\pm$ 0.022 & 0.188 $\pm$ 0.007 & $+0.096$ $[+0.082, +0.110]^{***}$ & $<$0.001 & $+0.098$ $[+0.084, +0.113]^{***}$ & $-0.061$ $[-0.070, -0.053]^{***}$ & 0.001 \\
+D-token: prepended, table LR $\times$10 & 0.412 $\pm$ 0.015 & 0.696 $\pm$ 0.017 & 0.195 $\pm$ 0.005 & $+0.078$ $[+0.067, +0.090]^{***}$ & $<$0.001 & $+0.081$ $[+0.070, +0.094]^{***}$ & $-0.054$ $[-0.062, -0.047]^{***}$ & 0.003 \\
+D-text: prompt word & 0.416 $\pm$ 0.019 & 0.707 $\pm$ 0.014 & 0.192 $\pm$ 0.005 & $+0.083$ $[+0.069, +0.097]^{***}$ & $<$0.001 & $+0.083$ $[+0.069, +0.097]^{***}$ & $-0.057$ $[-0.065, -0.049]^{***}$ & 0.002 \\
+\bottomrule
+\end{tabular}}
+\end{table*}

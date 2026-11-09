@@ -1,0 +1,63 @@
+\begin{table}[t]
+\centering
+\small
+\caption{Every contrast the paper reports, \hitat{0.10} unless marked L2 (mean distance, lower is better). $\Delta$ is the first model minus the second, with the episode-cluster interval and the seed-level $p$; \emph{established} means both tests give $p<.05$, in either direction. Predicted-type rows use Stage-1 types for the first model only.}
+\label{tab:claims}
+\resizebox{\columnwidth}{!}{\begin{tabular}{lccc}
+\toprule
+Contrast & $\Delta$ [95\% CI] & seed $p$ & established \\
+\midrule
+\multicolumn{4}{l}{\emph{Mixed stream}} \\
+\quad B $-$ A & $+0.057$ $[+0.046, +0.069]$ & $<$0.001 & yes \\
+\quad B$'$ $-$ A & $+0.057$ $[+0.045, +0.069]$ & $<$0.001 & yes \\
+\quad C $-$ A & $+0.018$ $[+0.006, +0.031]$ & 0.368 & no \\
+\quad D-hook $-$ A & $+0.082$ $[+0.070, +0.094]$ & $<$0.001 & yes \\
+\quad D-hook$\times$10 $-$ A & $+0.096$ $[+0.082, +0.110]$ & $<$0.001 & yes \\
+\quad D-token$\times$10 $-$ A & $+0.078$ $[+0.067, +0.090]$ & $<$0.001 & yes \\
+\quad D-text $-$ A & $+0.083$ $[+0.069, +0.097]$ & $<$0.001 & yes \\
+\quad D-hook $-$ B & $+0.025$ $[+0.013, +0.037]$ & 0.001 & yes \\
+\quad D-text $-$ B & $+0.025$ $[+0.011, +0.040]$ & 0.015 & yes \\
+\quad D-token$\times$10 $-$ B & $+0.021$ $[+0.009, +0.033]$ & 0.047 & yes \\
+\quad B$'$ $-$ B & $-0.000$ $[-0.004, +0.004]$ & 0.961 & no \\
+\quad D-hook$\times$10 $-$ D-hook & $+0.014$ $[+0.005, +0.023]$ & 0.091 & no \\
+\quad D-hook$\times$10 $-$ D-token$\times$10 & $+0.018$ $[+0.009, +0.027]$ & 0.003 & yes \\
+\midrule
+\multicolumn{4}{l}{\emph{Mixed stream, new steps only}} \\
+\quad B $-$ A & $+0.054$ $[+0.042, +0.066]$ & $<$0.001 & yes \\
+\quad D-hook $-$ A & $+0.088$ $[+0.075, +0.101]$ & $<$0.001 & yes \\
+\quad D-token$\times$10 $-$ A & $+0.081$ $[+0.070, +0.094]$ & $<$0.001 & yes \\
+\quad D-text $-$ A & $+0.083$ $[+0.069, +0.097]$ & $<$0.001 & yes \\
+\midrule
+\multicolumn{4}{l}{\emph{Clean stream}} \\
+\quad A clean $-$ A mixed & $+0.053$ $[+0.043, +0.063]$ & 0.008 & yes \\
+\quad B $-$ A & $+0.026$ $[+0.016, +0.037]$ & 0.021 & yes \\
+\quad D-hook $-$ A & $+0.036$ $[+0.027, +0.046]$ & $<$0.001 & yes \\
+\quad D-text $-$ A & $+0.015$ $[+0.002, +0.028]$ & 0.111 & no \\
+\quad B $-$ A (L2) & $-0.008$ $[-0.015, -0.002]$ & 0.134 & no \\
+\quad D-hook $-$ A (L2) & $-0.023$ $[-0.030, -0.017]$ & $<$0.001 & yes \\
+\quad D-text $-$ A (L2) & $-0.016$ $[-0.023, -0.009]$ & 0.018 & yes \\
+\midrule
+\multicolumn{4}{l}{\emph{Clean stream, new steps only}} \\
+\quad B $-$ A & $+0.029$ $[+0.017, +0.040]$ & 0.014 & yes \\
+\quad D-hook $-$ A & $+0.039$ $[+0.028, +0.050]$ & $<$0.001 & yes \\
+\quad D-text $-$ A & $+0.021$ $[+0.007, +0.035]$ & 0.081 & no \\
+\midrule
+\multicolumn{4}{l}{\emph{Predicted types}} \\
+\quad C $-$ A & $-0.012$ $[-0.024, +0.000]$ & 0.486 & no \\
+\quad D-hook $-$ A & $+0.039$ $[+0.027, +0.050]$ & 0.002 & yes \\
+\quad D-token$\times$10 $-$ A & $+0.039$ $[+0.028, +0.050]$ & 0.007 & yes \\
+\quad D-text $-$ A & $+0.039$ $[+0.026, +0.051]$ & 0.010 & yes \\
+\quad C $-$ B & $-0.069$ $[-0.083, -0.056]$ & 0.008 & yes \\
+\quad D-hook $-$ B & $-0.019$ $[-0.030, -0.008]$ & 0.005 & yes \\
+\quad D-token$\times$10 $-$ B & $-0.019$ $[-0.031, -0.006]$ & 0.110 & no \\
+\quad D-text $-$ B & $-0.019$ $[-0.032, -0.006]$ & 0.072 & no \\
+\midrule
+\multicolumn{4}{l}{\emph{Taps-and-swipes control}} \\
+\quad B $-$ A & $-0.013$ $[-0.042, +0.013]$ & 0.456 & no \\
+\quad C $-$ A & $-0.057$ $[-0.101, -0.011]$ & 0.215 & no \\
+\quad D-hook $-$ A & $-0.018$ $[-0.056, +0.019]$ & 0.334 & no \\
+\quad D-token $-$ A & $-0.050$ $[-0.083, -0.018]$ & 0.041 & yes \\
+\quad D-text $-$ A & $-0.047$ $[-0.094, +0.002]$ & 0.088 & no \\
+\bottomrule
+\end{tabular}}
+\end{table}
