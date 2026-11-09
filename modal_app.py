@@ -5127,3 +5127,474 @@ def stage2_qualitative(
         modal volume get stage1-cache <out_subdir>/render.json results/phase8/
     """
     _stage2_qualitative_remote.remote(n_train, n_val, epochs, lr, seed, 1000, out_subdir)
+
+
+# ---- Phase 9: large held-out validation slice, every variant in one remote ----
+#
+# Both VLM4RWD reviewers pointed at the same weakness: a 250-step validation
+# slice drawn from 42 episodes cannot establish small effects. The stream we
+# already read holds ~8,000 eligible steps across ~1,200 episodes, so this
+# remote re-trains any Stage-2 variant exactly as the per-variant remotes above
+# do and scores it on a far larger held-out slice:
+#   * train = the first `n_train` eligible steps (identical to every earlier run)
+#   * val   = the next `n_val` eligible steps, skipping the training slice's
+#             boundary episode so no episode straddles the split (set
+#             skip_boundary=False to reproduce an older slice exactly)
+#   * evaluation runs once, after the final epoch, batched with LEFT padding;
+#     `check_batch_equivalence` re-decodes the first K examples one at a time
+#     and records how often the two agree
+#   * conditioned variants can also be scored with Stage-1 PREDICTED types
+#     written by `_stage1_bigval_preds_remote` (the end-to-end pipeline)
+#   * the LoRA adapter plus any action table or aux head are saved, so later
+#     re-evaluations are inference-only
+# Variants: A flat, B aux loss, Bprompt (aux head pooled over prompt tokens
+# only, so it cannot read the type off the answer), C hard routing, Dhook
+# additive embedding, Dtoken prepended token, Dtext type as a prompt word.
+
+BIGVAL_DIR = "bigval"
+BIGVAL_VARIANTS = ("A", "B", "Bprompt", "C", "Dhook", "Dtoken", "Dtext")
+_MIX_LABELS = {
+    "taps_only": {"tap"},
+    "taps_and_swipes": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right"},
+    "all_with_coords": {"tap", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "type"},
+}
+
+
+def _bigval_load(data_mix: str, n_train: int, n_val: int, skip_boundary: bool = True,
+                 aitw_split: str = "train"):
+    """Deterministic train / val slices. Returns (train, val, val_meta, boundary_ep).
+
+    The training slice is the first `n_train` eligible steps in stored order,
+    byte-identical to every earlier Stage-2 run with the same mix and size."""
+    import sys
+    sys.path.insert(0, "/root/repo")
+    from src.data.aitw import iter_aitw_steps
+    from src.train.stage2 import Stage2Example
+
+    allowed = _MIX_LABELS[data_mix]
+    train, val, val_meta = [], [], []
+    boundary = None
+    for step in iter_aitw_steps(split=aitw_split, n_max=max((n_train + n_val) * 4, 1000), include_images=True):
+        if step.string_label not in allowed:
+            continue
+        ex = Stage2Example(image=step.open_image(), goal_info=step.goal_info,
+                           action_type_id=step.canonical_action_id,
+                           target_xy=(step.touch_yx[1], step.touch_yx[0]))
+        if len(train) < n_train:
+            train.append(ex)
+            boundary = step.ep_id
+            continue
+        if skip_boundary and step.ep_id == boundary:
+            continue
+        val.append(ex)
+        val_meta.append({"ep_id": step.ep_id, "step_id": step.step_id,
+                         "label": step.string_label, "action_id": step.canonical_action_id})
+        if len(val) >= n_val:
+            break
+    return train, val, val_meta, boundary
+
+
+def _bigval_run_name(variant, seed, data_mix, n_train, n_val, action_lr, drop_type, skip_boundary):
+    alr = f"_alr{action_lr:g}" if action_lr and action_lr > 0 else ""
+    nt = "_notype" if drop_type else ""
+    sb = "" if skip_boundary else "_keepboundary"
+    return f"{variant}{alr}{nt}_seed{seed}_n{n_train}_v{n_val}_mix-{data_mix}{sb}"
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret],
+    timeout=3 * 3600,
+)
+def _stage1_bigval_preds_remote(
+    seeds: list, data_mix: str = "all_with_coords", n_train: int = 1200, n_val: int = 2000,
+    feat_batch: int = 8, out_subdir: str = BIGVAL_DIR,
+) -> dict:
+    """Stage-1 predicted action types for the large validation slice.
+
+    Same recipe as `_stage2_e2e_remote`: frozen Qwen2-VL-2B (no adapter) over the
+    flat Stage-2 prompt, mean-pooled final hidden state, then a 1536-256-8 MLP
+    trained full-batch for 200 epochs with class weights on the training slice.
+    Features are seed-independent, so they are extracted once and one head is
+    fit per seed."""
+    import os, sys, json as _json, time
+    from collections import Counter
+    from pathlib import Path as _Path
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+    import torch, torch.nn as nn, torch.nn.functional as F
+    from qwen_vl_utils import process_vision_info
+    from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+    from sklearn.metrics import f1_score, accuracy_score
+
+    t0 = time.time()
+    train, val, val_meta, boundary = _bigval_load(data_mix, n_train, n_val)
+    print(f"[s1-big] train={len(train)} val={len(val)} boundary_ep={boundary} load={time.time()-t0:.0f}s", flush=True)
+    model = Qwen2VLForConditionalGeneration.from_pretrained(
+        "Qwen/Qwen2-VL-2B-Instruct", torch_dtype=torch.bfloat16, device_map="auto")
+    processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")
+    processor.tokenizer.padding_side = "left"
+    hf_cache.commit()
+    model.eval()
+    device = next(model.parameters()).device
+    hidden = model.get_input_embeddings().embedding_dim
+
+    def feats(examples):
+        out = []
+        for s in range(0, len(examples), feat_batch):
+            chunk = examples[s:s + feat_batch]
+            msgs = [[{"role": "user", "content": [
+                {"type": "image", "image": ex.image},
+                {"type": "text", "text": f"Goal: {ex.goal_info}\nPredict the action coordinate."}]}] for ex in chunk]
+            texts = [processor.apply_chat_template(m, tokenize=False, add_generation_prompt=True) for m in msgs]
+            ii, vi = process_vision_info(msgs)
+            inputs = processor(text=texts, images=ii, videos=vi, padding=True, return_tensors="pt").to(device)
+            with torch.inference_mode():
+                lh = model(**inputs, output_hidden_states=True).hidden_states[-1]
+                am = inputs["attention_mask"].unsqueeze(-1).to(lh.dtype)
+                out.append(((lh * am).sum(1) / am.sum(1).clamp(min=1)).float().cpu())
+            if (s // feat_batch) % 50 == 0:
+                print(f"[s1-big]   features {s}/{len(examples)}", flush=True)
+        return torch.cat(out, 0)
+
+    ftr, fva = feats(train), feats(val)
+    ytr = torch.tensor([e.action_type_id for e in train]); yva = torch.tensor([e.action_type_id for e in val])
+    majority = max(Counter(yva.tolist()).values()) / len(yva)
+    results = {}
+    cache_dir = _Path(STAGE1_CACHE_PATH) / out_subdir
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    torch.save({"train": ftr, "val": fva, "ytr": ytr, "yva": yva}, cache_dir / f"stage1_feats_n{n_train}_v{n_val}_mix-{data_mix}.pt")
+    for seed in seeds:
+        torch.manual_seed(seed)
+        s1 = nn.Sequential(nn.Linear(hidden, 256), nn.GELU(), nn.Dropout(0.1), nn.Linear(256, 8)).to(device)
+        counts = torch.bincount(ytr, minlength=8).float().clamp(min=1)
+        w = (counts.sum() / (8 * counts)).to(device)
+        opt = torch.optim.AdamW(s1.parameters(), lr=1e-3, weight_decay=1e-4)
+        xt, yt = ftr.to(device), ytr.to(device)
+        for _ in range(200):
+            s1.train(); opt.zero_grad()
+            F.cross_entropy(s1(xt), yt, weight=w).backward(); opt.step()
+        s1.eval()
+        with torch.inference_mode():
+            pred = s1(fva.to(device)).argmax(-1).cpu()
+        acc = float(accuracy_score(yva.numpy(), pred.numpy()))
+        mf1 = float(f1_score(yva.numpy(), pred.numpy(), average="macro", zero_division=0))
+        rec = {"seed": seed, "data_mix": data_mix, "n_train": n_train, "n_val": len(val),
+               "accuracy": acc, "macro_f1": mf1, "majority_baseline": majority,
+               "pred_action_ids": pred.tolist(), "gold_action_ids": yva.tolist(),
+               "val_keys": [[m["ep_id"], m["step_id"]] for m in val_meta]}
+        (cache_dir / f"stage1_preds_seed{seed}_n{n_train}_v{n_val}_mix-{data_mix}.json").write_text(_json.dumps(rec))
+        results[seed] = {"accuracy": acc, "macro_f1": mf1}
+        print(f"[s1-big] seed {seed}: acc={acc:.3f} macroF1={mf1:.3f} (majority {majority:.3f})", flush=True)
+    stage1_cache.commit()
+    return {"results": results, "n_val": len(val), "elapsed_s": time.time() - t0}
+
+
+@app.function(
+    image=image,
+    gpu="L4",
+    volumes={HF_CACHE_PATH: hf_cache, STAGE1_CACHE_PATH: stage1_cache},
+    secrets=[hf_secret],
+    timeout=5 * 3600,
+)
+def _stage2_bigval_remote(
+    variant: str, seed: int, data_mix: str = "all_with_coords", drop_type_from_train: bool = False,
+    n_train: int = 1200, n_val: int = 2000, epochs: int = 2, lr: float = 2e-5, action_lr: float = 0.0,
+    eval_batch_size: int = 16, check_batch_equivalence: int = 0, e2e: bool = False,
+    skip_boundary: bool = True, save_adapter: bool = True, coord_scale: int = 1000,
+    out_subdir: str = BIGVAL_DIR,
+) -> dict:
+    import os, sys, random, time, json as _json
+    from collections import Counter
+    from pathlib import Path as _Path
+    os.environ["HF_HOME"] = HF_CACHE_PATH
+    sys.path.insert(0, "/root/repo")
+    import torch, torch.nn as nn, torch.nn.functional as F
+    from peft import LoraConfig, get_peft_model
+    from qwen_vl_utils import process_vision_info
+    from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+    from src.data.taxonomy import ID_TO_ACTION, CANONICAL_ACTIONS
+    from src.train.stage2 import coord_to_string, string_to_coord, _metrics_from_predictions
+
+    assert variant in BIGVAL_VARIANTS, variant
+    run_name = _bigval_run_name(variant, seed, data_mix, n_train, n_val, action_lr, drop_type_from_train, skip_boundary)
+    tag = f"[big:{run_name}]"
+    timing = {}
+    t0 = time.time()
+    torch.manual_seed(seed); random.seed(seed)
+
+    train, val, val_meta, boundary = _bigval_load(data_mix, n_train, n_val, skip_boundary=skip_boundary)
+    if drop_type_from_train:
+        train = [e for e in train if e.action_type_id != CANONICAL_ACTIONS["type"]]
+    timing["data_s"] = time.time() - t0
+    print(f"{tag} train={len(train)} val={len(val)} val_episodes={len({m['ep_id'] for m in val_meta})} "
+          f"boundary={boundary} train_dist={dict(Counter(e.action_type_id for e in train))}", flush=True)
+
+    base = Qwen2VLForConditionalGeneration.from_pretrained(
+        "Qwen/Qwen2-VL-2B-Instruct", torch_dtype=torch.bfloat16, device_map="auto")
+    processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")
+    processor.tokenizer.padding_side = "left"   # training is batch 1, so this only affects batched decoding
+    SLOT = "<|action_slot|>"
+    slot_id = None
+    if variant == "Dtoken":
+        if processor.tokenizer.add_special_tokens({"additional_special_tokens": [SLOT]}):
+            base.resize_token_embeddings(len(processor.tokenizer))
+        slot_id = processor.tokenizer.convert_tokens_to_ids(SLOT)
+    model = get_peft_model(base, LoraConfig(r=16, lora_alpha=32,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], lora_dropout=0.05, task_type="CAUSAL_LM"))
+    hf_cache.commit()
+    device = next(model.parameters()).device
+    hidden = model.get_input_embeddings().embedding_dim
+
+    aux_head, action_embeddings = None, None
+    if variant in ("B", "Bprompt"):
+        aux_head = nn.Linear(hidden, 8).to(device=device, dtype=torch.bfloat16)
+    if variant in ("Dhook", "Dtoken"):
+        action_embeddings = nn.Embedding(8, hidden).to(device=device, dtype=torch.bfloat16)
+        if variant == "Dhook":
+            nn.init.zeros_(action_embeddings.weight)
+        else:
+            nn.init.normal_(action_embeddings.weight, mean=0.0, std=0.02)
+    init_rows = action_embeddings.weight.detach().float().clone() if action_embeddings is not None else None
+
+    _holder = {"aid": None}
+    if variant == "Dhook":
+        def _hook(module, args, output):
+            aid = _holder["aid"]
+            return output if aid is None else output + action_embeddings(aid).unsqueeze(1).to(output.dtype)
+        model.get_input_embeddings().register_forward_hook(_hook)
+    elif variant == "Dtoken":
+        def _hook(module, args, output):
+            aid = _holder["aid"]
+            if aid is None:
+                return output
+            slot_mask = (args[0] == slot_id)
+            if not bool(slot_mask.any()):
+                return output
+            out = output.clone()
+            for bt in slot_mask.nonzero(as_tuple=False):
+                b, t = int(bt[0]), int(bt[1])
+                out[b, t] = action_embeddings(aid[b]).to(out.dtype)
+            return out
+        model.get_input_embeddings().register_forward_hook(_hook)
+
+    def user_text(goal, aid):
+        if variant == "C":
+            return f"Goal: {goal}\nPredict the action type and coordinate."
+        if variant == "Dtoken":
+            return f"{SLOT} Goal: {goal}\nPredict the action coordinate."
+        if variant == "Dtext":
+            return f"Action: {ID_TO_ACTION[aid]}. Goal: {goal}\nPredict the action coordinate."
+        return f"Goal: {goal}\nPredict the action coordinate."
+
+    def answer(ex):
+        s = coord_to_string(ex.target_xy, coord_scale)
+        return f"{ID_TO_ACTION[ex.action_type_id]} {s}" if variant == "C" else s
+
+    im_start = processor.tokenizer.convert_tokens_to_ids("<|im_start|>")
+    assistant_id = processor.tokenizer.convert_tokens_to_ids("assistant")
+
+    def build_train(ex):
+        m = [{"role": "user", "content": [{"type": "image", "image": ex.image},
+                                          {"type": "text", "text": user_text(ex.goal_info, ex.action_type_id)}]},
+             {"role": "assistant", "content": [{"type": "text", "text": answer(ex)}]}]
+        text = processor.apply_chat_template(m, tokenize=False, add_generation_prompt=False)
+        ii, vi = process_vision_info([m])
+        inputs = processor(text=[text], images=ii, videos=vi, padding=True, return_tensors="pt").to(device)
+        labels = inputs["input_ids"].clone()
+        row = inputs["input_ids"][0]
+        starts = (row == im_start).nonzero(as_tuple=True)[0].tolist()
+        cut = 0
+        for idx in reversed(starts):
+            if idx + 1 < row.shape[0] and row[idx + 1].item() == assistant_id:
+                cut = idx + 2
+                if cut < row.shape[0]:
+                    cut += 1
+                break
+        labels[0, :cut] = -100
+        inputs["labels"] = labels
+        if variant == "Dtoken":
+            assert int((inputs["input_ids"] == slot_id).sum()) == 1
+        return inputs
+
+    def build_eval(chunk, aids):
+        msgs = [[{"role": "user", "content": [{"type": "image", "image": ex.image},
+                                              {"type": "text", "text": user_text(ex.goal_info, a)}]}]
+                for ex, a in zip(chunk, aids)]
+        texts = [processor.apply_chat_template(m, tokenize=False, add_generation_prompt=True) for m in msgs]
+        if variant == "C":   # hard routing: force the action word as the decode prefix
+            texts = [t + f"{ID_TO_ACTION[a]} " for t, a in zip(texts, aids)]
+        ii, vi = process_vision_info(msgs)
+        inputs = processor(text=texts, images=ii, videos=vi, padding=True, return_tensors="pt").to(device)
+        if variant == "Dtoken":
+            assert bool(((inputs["input_ids"] == slot_id).sum(1) == 1).all())
+        return inputs
+
+    def _generate(chunk, ach):
+        inputs = build_eval(chunk, ach)
+        _holder["aid"] = torch.tensor(ach, device=device) if action_embeddings is not None else None
+        plen = inputs["input_ids"].shape[1]
+        try:
+            with torch.inference_mode():
+                gen = model.generate(**inputs, max_new_tokens=16, do_sample=False,
+                                     pad_token_id=processor.tokenizer.eos_token_id)
+        finally:
+            _holder["aid"] = None
+        return processor.batch_decode(gen[:, plen:], skip_special_tokens=True)
+
+    def decode(examples, aids, bs):
+        """Batched greedy decoding; on CUDA OOM the batch is halved and retried, never dropped."""
+        model.eval()
+        preds, raws = [], []
+        s = 0
+        while s < len(examples):
+            chunk, ach = examples[s:s + bs], aids[s:s + bs]
+            try:
+                out = _generate(chunk, ach)
+            except torch.cuda.OutOfMemoryError:
+                torch.cuda.empty_cache()
+                if bs == 1:
+                    raise
+                bs = max(1, bs // 2)
+                print(f"{tag} OOM at batch {len(chunk)}; retrying with batch {bs}", flush=True)
+                continue
+            for raw in out:
+                raws.append(raw)
+                preds.append(string_to_coord(raw, scale=coord_scale))
+            s += len(chunk)
+        return preds, raws
+
+    # ---- train (identical schedule to the per-variant remotes) ----
+    lora_params = [p for p in model.parameters() if p.requires_grad]
+    extra = (list(aux_head.parameters()) if aux_head is not None else []) + \
+            (list(action_embeddings.parameters()) if action_embeddings is not None else [])
+    if action_embeddings is not None and action_lr and action_lr > 0:
+        optimizer = torch.optim.AdamW([{"params": lora_params, "lr": lr},
+                                       {"params": list(action_embeddings.parameters()), "lr": action_lr}],
+                                      weight_decay=0.01)
+    else:
+        optimizer = torch.optim.AdamW(lora_params + extra, lr=lr, weight_decay=0.01)
+    clip_params = lora_params + extra
+    t1 = time.time()
+    losses = []
+    for epoch in range(1, epochs + 1):
+        rng = random.Random(seed + epoch)
+        order = list(range(len(train))); rng.shuffle(order)
+        model.train(); ep_loss, n = 0.0, 0
+        for j in order:
+            ex = train[j]
+            inputs = build_train(ex)
+            aid_t = torch.tensor([ex.action_type_id], dtype=torch.long, device=device)
+            _holder["aid"] = aid_t if action_embeddings is not None else None
+            if aux_head is not None:
+                out = model(**inputs, output_hidden_states=True)
+                lh = out.hidden_states[-1]
+                mask = inputs["attention_mask"]
+                if variant == "Bprompt":
+                    mask = mask * (inputs["labels"] == -100).long()
+                mask = mask.unsqueeze(-1).to(lh.dtype)
+                pooled = (lh * mask).sum(1) / mask.sum(1).clamp(min=1)
+                loss = out.loss + 1.0 * F.cross_entropy(aux_head(pooled.to(aux_head.weight.dtype)).float(), aid_t)
+            else:
+                out = model(**inputs)
+                loss = out.loss
+            _holder["aid"] = None
+            optimizer.zero_grad(); loss.backward()
+            torch.nn.utils.clip_grad_norm_(clip_params, 1.0)
+            optimizer.step()
+            ep_loss += float(loss.item()); n += 1
+            if n % 200 == 0:
+                print(f"{tag} epoch {epoch} step {n}/{len(order)} loss={loss.item():.4f}", flush=True)
+        losses.append(ep_loss / max(n, 1))
+        print(f"{tag} epoch {epoch} avg loss {losses[-1]:.4f}", flush=True)
+    timing["train_s"] = time.time() - t1
+
+    # ---- evaluate once, batched ----
+    gold = [e.action_type_id for e in val]
+    targets = [e.target_xy for e in val]
+    t2 = time.time()
+    preds, raws = decode(val, gold, eval_batch_size)
+    timing["eval_s"] = time.time() - t2
+    m_gold = _metrics_from_predictions(targets, preds, gold)
+    print(f"{tag} GOLD hit@0.10={m_gold['hit_at_010']:.3f} parse={m_gold['parse_rate']:.3f} eval={timing['eval_s']:.0f}s", flush=True)
+
+    batch_check = None
+    if check_batch_equivalence and check_batch_equivalence > 0:
+        k = min(check_batch_equivalence, len(val))
+        p1, r1 = decode(val[:k], gold[:k], 1)
+        same = sum(a == b for a, b in zip(raws[:k], r1))
+        import math
+        dd = [abs(math.hypot(a[0] - t[0], a[1] - t[1]) - math.hypot(b[0] - t[0], b[1] - t[1]))
+              for a, b, t in zip(preds[:k], p1, targets[:k]) if a is not None and b is not None]
+        batch_check = {"k": k, "identical_strings": same, "frac_identical": same / k,
+                       "max_abs_dist_diff": max(dd) if dd else None,
+                       "hit010_batched": sum(1 for a, t in zip(preds[:k], targets[:k]) if a and math.hypot(a[0]-t[0], a[1]-t[1]) <= 0.10) / k,
+                       "hit010_unbatched": sum(1 for a, t in zip(p1, targets[:k]) if a and math.hypot(a[0]-t[0], a[1]-t[1]) <= 0.10) / k}
+        print(f"{tag} batch check: {batch_check}", flush=True)
+
+    m_e2e, s1_info = None, None
+    if e2e and variant in ("C", "Dhook", "Dtoken", "Dtext"):
+        pfile = _Path(STAGE1_CACHE_PATH) / out_subdir / f"stage1_preds_seed{seed}_n{n_train}_v{n_val}_mix-{data_mix}.json"
+        waited = 0
+        while not pfile.exists() and waited < 20 * 60:   # launch the Stage-1 job first; never idle a GPU for long
+            time.sleep(60); waited += 60
+            stage1_cache.reload()
+    if e2e and variant in ("C", "Dhook", "Dtoken", "Dtext") and not pfile.exists():
+        print(f"{tag} Stage-1 predictions missing after {waited}s; skipping end-to-end eval", flush=True)
+    elif e2e and variant in ("C", "Dhook", "Dtoken", "Dtext"):
+        rec = _json.loads(pfile.read_text())
+        assert rec["val_keys"] == [[m["ep_id"], m["step_id"]] for m in val_meta], "Stage-1 slice misaligned"
+        t3 = time.time()
+        p_e2e, r_e2e = decode(val, rec["pred_action_ids"], eval_batch_size)
+        timing["e2e_eval_s"] = time.time() - t3
+        m_e2e = _metrics_from_predictions(targets, p_e2e, gold)
+        m_e2e["pred_xy"] = [list(p) if p else None for p in p_e2e]
+        s1_info = {k: rec[k] for k in ("accuracy", "macro_f1", "majority_baseline")}
+        print(f"{tag} E2E (stage-1 acc {rec['accuracy']:.3f}) hit@0.10={m_e2e['hit_at_010']:.3f}", flush=True)
+
+    norms = None
+    if action_embeddings is not None:
+        present = sorted(set(gold))
+        W = action_embeddings.weight.detach().float()
+        norms = {ID_TO_ACTION[i]: {"norm_init": float(init_rows[i].norm()), "norm_trained": float(W[i].norm()),
+                                   "displacement": float((W[i] - init_rows[i]).norm())} for i in present}
+        norms["token_embedding_mean_norm"] = float(model.get_input_embeddings().weight[:20000].float().norm(dim=1).mean())
+
+    cache_dir = _Path(STAGE1_CACHE_PATH) / out_subdir
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    if save_adapter:
+        adir = _Path(STAGE1_CACHE_PATH) / "stage2_adapters" / run_name
+        adir.mkdir(parents=True, exist_ok=True)
+        model.save_pretrained(str(adir), save_embedding_layers=False)
+        if aux_head is not None:
+            torch.save(aux_head.state_dict(), adir / "aux_head.pt")
+        if action_embeddings is not None:
+            torch.save(action_embeddings.state_dict(), adir / "action_embeddings.pt")
+
+    m_gold["pred_xy"] = [list(p) if p else None for p in preds]
+    m_gold["raw_outputs"] = raws
+    summary = {
+        "variant": variant, "run_name": run_name, "seed": seed, "data_mix": data_mix,
+        "drop_type_from_train": drop_type_from_train, "n_train": len(train), "n_train_requested": n_train,
+        "n_val": len(val), "n_val_episodes": len({m["ep_id"] for m in val_meta}), "boundary_ep_skipped": skip_boundary,
+        "boundary_ep": boundary, "epochs": epochs, "lr": lr, "action_lr": action_lr, "eval_batch_size": eval_batch_size,
+        "train_action_distribution": dict(Counter(e.action_type_id for e in train)),
+        "val_action_distribution": dict(Counter(gold)), "train_loss_per_epoch": losses,
+        "val_meta": val_meta, "gold": m_gold, "e2e": m_e2e, "stage1": s1_info,
+        "batch_check": batch_check, "action_rows": norms, "timing": {**timing, "total_s": time.time() - t0},
+    }
+    (cache_dir / f"{run_name}.json").write_text(_json.dumps(summary))
+    stage1_cache.commit()
+    print(f"{tag} persisted {cache_dir / (run_name + '.json')}  total={summary['timing']['total_s']:.0f}s", flush=True)
+    return {"run_name": run_name, "hit_at_010": m_gold["hit_at_010"], "timing": summary["timing"],
+            "batch_check": batch_check, "e2e_hit_at_010": (m_e2e or {}).get("hit_at_010")}
+
+
+@app.function(image=image, volumes={STAGE1_CACHE_PATH: stage1_cache}, timeout=600)
+def _list_bigval(out_subdir: str = BIGVAL_DIR) -> dict:
+    """Return every bigval JSON on the volume as {filename: text}."""
+    from pathlib import Path as _Path
+    d = _Path(STAGE1_CACHE_PATH) / out_subdir
+    return {p.name: p.read_text() for p in sorted(d.glob("*.json"))} if d.exists() else {}

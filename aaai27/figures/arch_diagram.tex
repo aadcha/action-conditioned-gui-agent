@@ -1,0 +1,56 @@
+% Architecture figure: two-stage factorization + the six Stage-2 conditioning
+% mechanisms. \input from main.tex inside a figure environment.
+% Requires: \usepackage{tikz} with libraries arrows.meta, positioning, fit, calc.
+% Natural width is about 13.5 cm so that \resizebox{\linewidth} scales it by ~1.
+\begin{tikzpicture}[
+  font=\footnotesize,
+  >={Stealth[length=1.8mm]},
+  box/.style={draw, rounded corners=2pt, align=center, inner sep=2.5pt, minimum height=7mm},
+  inp/.style={box, fill=gray!12, text width=1.55cm},
+  model/.style={box, fill=blue!10, thick, text width=2.25cm},
+  head/.style={box, fill=orange!18, text width=1.35cm},
+  outp/.style={box, fill=green!14, text width=1.6cm},
+  mech/.style={box, fill=purple!8, text width=1.95cm, minimum height=11mm, font=\scriptsize},
+  lbl/.style={font=\scriptsize\itshape, text=black!65},
+  cond/.style={->, thick, purple!70!black},
+  node distance=3mm,
+]
+  % ---------------- pipeline row ----------------
+  \node[inp] (shot) {screenshot\\ + goal};
+  \node[model, right=4mm of shot] (vlm1) {Qwen2-VL-2B\\ \textit{frozen}, mean-pooled};
+  \node[head, right=of vlm1] (mlp) {MLP\\ (3 layers)};
+  \node[outp, right=of mlp] (atype) {action type\\ $\hat a$};
+  \node[model, right=10mm of atype] (vlm2) {Qwen2-VL-2B\\ + LoRA on q,k,v,o};
+  \node[outp, right=of vlm2] (coord) {\texttt{(x, y)}\\ 0--999 grid};
+  \node[draw, densely dotted, rounded corners, inner sep=3pt, fit=(vlm1)(mlp)(atype),
+        label={[lbl]below:{Stage 1: \textbf{what} (action type)}}] (s1) {};
+  \node[draw, densely dotted, rounded corners, inner sep=3pt, fit=(vlm2)(coord),
+        label={[lbl]below:{Stage 2: \textbf{where} (grounding)}}] (s2) {};
+  \draw[->] (shot) -- (vlm1);
+  \draw[->] (vlm1) -- (mlp);
+  \draw[->] (mlp) -- (atype);
+  \draw[->] (vlm2) -- (coord);
+  \draw[cond] (atype) -- node[above, font=\scriptsize, text=purple!70!black, align=center]
+    {gold type, or\\ $\hat a$ at test} (vlm2);
+  % the same inputs feed Stage 2, routed over the top
+  \draw[->] (shot.north) -- ++(0,6mm) -| (vlm2.north);
+  \node[lbl, anchor=south] at ($(shot.north)!0.5!(vlm2.north) + (0,6mm)$) {same screenshot + goal};
+
+  % ---------------- mechanism row ----------------
+  \coordinate (mid) at ($(shot.west)!0.5!(coord.east)$);
+  \node[mech, anchor=north east] (C) at ($(mid) + (-1mm,-13mm)$)
+    {\textbf{C} hard routing\\ emit \texttt{click (x, y)};\\ word forced at test};
+  \node[mech, anchor=north west] (Dh) at ($(mid) + (1mm,-13mm)$)
+    {\textbf{D-hook} additive\\ $E[a]$ added to text\\ embeddings; zero init};
+  \node[mech, left=2mm of C] (B)
+    {\textbf{B} aux.\ loss\\ linear head on pooled\\ state; training only};
+  \node[mech, left=2mm of B] (A)
+    {\textbf{A} flat\\ no type\\ (baseline)};
+  \node[mech, right=2mm of Dh] (Dt)
+    {\textbf{D-token} prepended\\ \texttt{<|action\_slot|>}\\ $\to E[a]$; random init};
+  \node[mech, right=2mm of Dt] (Dx)
+    {\textbf{D-text} prompt word\\ \texttt{Action: click.}\\ no new parameters};
+  \node[draw, densely dotted, rounded corners, inner sep=3pt, fit=(A)(B)(C)(Dh)(Dt)(Dx),
+        label={[lbl]below:{how the type enters Stage 2 (same data, optimizer, adapters, decoding)}}] (fitbox) {};
+  \draw[cond] (fitbox.north -| vlm2.south) -- (vlm2.south);
+\end{tikzpicture}
